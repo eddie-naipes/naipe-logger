@@ -1,0 +1,305 @@
+import React, { useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import { FiSave, FiCheck, FiLoader } from 'react-icons/fi';
+
+// Importar corretamente as funções do backend
+import { GetConfig, SaveConfig, TestConnection, GetCurrentUserId } from '../../wailsjs/go/backend/App';
+
+const Config = ({ onConfigSaved }) => {
+    const [config, setConfig] = useState({
+        authToken: '',
+        userID: 0,
+        apiHost: '',
+        minutosPorDia: 480, // 8 horas em minutos
+    });
+
+    const [isLoading, setIsLoading] = useState(true);
+    const [isTesting, setIsTesting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // Carrega as configurações atuais
+    useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                const savedConfig = await GetConfig();
+                if (savedConfig) {
+                    setConfig({
+                        authToken: savedConfig.authToken || '',
+                        userID: savedConfig.userID || 0,
+                        apiHost: savedConfig.apiHost || '',
+                        minutosPorDia: savedConfig.minutosPorDia || 480,
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configurações:', error);
+                toast.error('Erro ao carregar configurações.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadConfig();
+    }, []);
+
+    // Atualiza um campo no estado
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+
+        // Convertendo campos numéricos
+        if (name === 'userID' || name === 'minutosPorDia') {
+            setConfig({ ...config, [name]: parseInt(value) || 0 });
+        } else if (name === 'apiHost') {
+            // Remove o protocolo http:// ou https:// se estiver presente
+            let cleanedValue = value;
+            if (value.startsWith('http://')) {
+                cleanedValue = value.substring(7);
+            } else if (value.startsWith('https://')) {
+                cleanedValue = value.substring(8);
+            }
+            setConfig({ ...config, [name]: cleanedValue });
+        } else {
+            setConfig({ ...config, [name]: value });
+        }
+    };
+
+    // Salva a configuração
+    const handleSave = async (e) => {
+        e.preventDefault();
+
+        if (!config.authToken || !config.apiHost || config.userID <= 0) {
+            toast.warning('Preencha todos os campos obrigatórios.');
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            await SaveConfig(config);
+            toast.success('Configurações salvas com sucesso!');
+
+            // Notifica o componente pai que a configuração foi salva
+            if (onConfigSaved) {
+                onConfigSaved();
+            }
+        } catch (error) {
+            console.error('Erro ao salvar configurações:', error);
+            toast.error('Erro ao salvar configurações.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Testa a conexão com o Teamwork
+// Substitua a função testConnection no arquivo Config.jsx por esta versão:
+
+    const testConnection = async () => {
+        if (!config.authToken || !config.apiHost) {
+            toast.warning('Preencha o Token de Autenticação e o Host da API.');
+            return;
+        }
+
+        setIsTesting(true);
+
+        try {
+            // A função retorna um array com [success, message]
+            const result = await window.go.backend.App.TestConnection(config);
+
+            // Verificar se o resultado é um array com pelo menos dois elementos
+            if (Array.isArray(result) && result.length >= 2) {
+                const [success, message] = result;
+
+                if (success) {
+                    toast.success(message || "Conexão estabelecida com sucesso!");
+                } else {
+                    toast.error(message || "Falha ao conectar com o Teamwork. Verifique suas credenciais.");
+                }
+            } else {
+                // Caso não seja um array como esperado
+                if (result === true) {
+                    toast.success("Conexão estabelecida com sucesso!");
+                } else {
+                    toast.error("Falha ao conectar com o Teamwork. Verifique suas credenciais.");
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao testar conexão:', error);
+            toast.error('Erro ao testar conexão com o Teamwork.');
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    // Obtém o ID do usuário automaticamente
+    const fetchUserId = async () => {
+        if (!config.authToken || !config.apiHost) {
+            toast.warning("Preencha o Token de Autenticação e o Host da API primeiro.");
+            return;
+        }
+
+        setIsTesting(true);
+
+        try {
+            const userId = await GetCurrentUserId();
+
+            if (userId) {
+                setConfig({...config, userID: userId});
+                toast.success(`ID do usuário obtido com sucesso: ${userId}`);
+            }
+        } catch (error) {
+            console.error("Erro ao obter ID do usuário:", error);
+            toast.error("Erro ao obter ID do usuário. Verifique suas credenciais.");
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin-slow w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className="mb-6">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Configurações</h1>
+                <p className="text-gray-600 dark:text-gray-400">Configure sua conexão com o Teamwork</p>
+            </div>
+
+            <div className="card max-w-3xl">
+                <form onSubmit={handleSave}>
+                    <div className="space-y-6">
+                        {/* Token de Autenticação */}
+                        <div>
+                            <label htmlFor="authToken" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Token de Autenticação *
+                            </label>
+                            <input
+                                type="text"
+                                id="authToken"
+                                name="authToken"
+                                value={config.authToken}
+                                onChange={handleChange}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                placeholder="Seu token de API do Teamwork"
+                                required
+                            />
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Encontre seu token em Configurações → API do Teamwork.
+                            </p>
+                        </div>
+
+                        {/* ID do Usuário */}
+                        <div>
+                            <label htmlFor="userID" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                ID do Usuário *
+                            </label>
+                            <input
+                                type="number"
+                                id="userID"
+                                name="userID"
+                                value={config.userID}
+                                onChange={handleChange}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                placeholder="ID do seu usuário no Teamwork"
+                                required
+                            />
+                            <div className="mt-2">
+                                <button
+                                    type="button"
+                                    onClick={fetchUserId}
+                                    className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+                                >
+                                    Obter ID Automaticamente
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Host da API */}
+                        <div>
+                            <label htmlFor="apiHost" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Host da API *
+                            </label>
+                            <input
+                                type="text"
+                                id="apiHost"
+                                name="apiHost"
+                                value={config.apiHost}
+                                onChange={handleChange}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                placeholder="Ex: teamwork.empresa.com.br"
+                                required
+                            />
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Host da sua instância do Teamwork, sem http/https.
+                            </p>
+                        </div>
+
+                        {/* Minutos por Dia */}
+                        <div>
+                            <label htmlFor="minutosPorDia" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Minutos por Dia
+                            </label>
+                            <input
+                                type="number"
+                                id="minutosPorDia"
+                                name="minutosPorDia"
+                                value={config.minutosPorDia}
+                                onChange={handleChange}
+                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                placeholder="480"
+                            />
+                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                Quantidade padrão de minutos por dia (480 = 8 horas).
+                            </p>
+                        </div>
+
+                        {/* Ações */}
+                        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+                            <button
+                                type="button"
+                                onClick={testConnection}
+                                disabled={isTesting || isSaving}
+                                className="btn-secondary flex items-center justify-center"
+                            >
+                                {isTesting ? (
+                                    <>
+                                        <FiLoader className="w-4 h-4 mr-2 animate-spin" />
+                                        Testando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiCheck className="w-4 h-4 mr-2" />
+                                        Testar Conexão
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                type="submit"
+                                disabled={isSaving || isTesting}
+                                className="btn-primary flex items-center justify-center"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <FiLoader className="w-4 h-4 mr-2 animate-spin" />
+                                        Salvando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiSave className="w-4 h-4 mr-2" />
+                                        Salvar Configurações
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+export default Config;

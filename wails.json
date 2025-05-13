@@ -1,0 +1,50 @@
+{
+  "name": "TeamworkLogger",
+  "outputfilename": "teamwork-logger",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "author": {
+    "name": "Edmilson Dias",
+    "email": "eddiasdev@gmail.com"
+  },
+  "info": {
+    "companyName": "Naipe Sync Solutions",
+    "productName": "Teamwork Logger",
+    "productVersion": "1.0.0",
+    "copyright": "© 2025 Naipe Sync Solutions",
+    "comments": "Aplicativo para lançamento de horas no Teamwork"
+  },
+  "nsisType": "installable",
+  "resources": [
+    {
+      "path": "./build/windows/icon.ico",
+      "target": "icon.ico"
+    }
+  ],
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "./frontend/src/wailsjs",
+  "debounceMS": 100,
+  "nsis": {
+    "installMode": "currentUser",
+    "name": "Teamwork Logger",
+    "shortcutName": "Teamwork Logger",
+    "guid": "e8746e80-0124-4bbd-9f44-705845a975d7",
+    "artifactName": "teamwork-logger-setup.exe",
+    "uninstallDisplayName": "Teamwork Logger",
+    "menuCategory": "Teamwork Tools",
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "runAfterFinish": true,
+    "installerIcon": "./build/windows/icon.ico",
+    "uninstallerIcon": "./build/windows/icon.ico",
+    "installerHeader": "./build/windows/icon.ico",
+    "installerSidebar": "",
+    "uninstallerSidebar": "",
+    "allowToChangeInstallationDirectory": true,
+    "oneClick": false,
+    "perMachine": false,
+    "unicode": true,
+    "displayLanguageSelector": false
+  }
+}
