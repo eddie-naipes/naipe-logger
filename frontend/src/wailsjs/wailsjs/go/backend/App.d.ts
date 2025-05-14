@@ -15,6 +15,8 @@ export function GetConfig():Promise<api.Config>;
 
 export function GetCurrentUserId():Promise<number>;
 
+export function GetCurrentUserIdWithConfig(arg1:api.Config):Promise<number>;
+
 export function GetProjects():Promise<Array<api.Project>>;
 
 export function GetSavedTasks():Promise<Array<api.Task>>;

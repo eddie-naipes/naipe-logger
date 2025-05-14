@@ -26,6 +26,10 @@ export function GetCurrentUserId() {
   return window['go']['backend']['App']['GetCurrentUserId']();
 }
 
+export function GetCurrentUserIdWithConfig(arg1) {
+  return window['go']['backend']['App']['GetCurrentUserIdWithConfig'](arg1);
+}
+
 export function GetProjects() {
   return window['go']['backend']['App']['GetProjects']();
 }

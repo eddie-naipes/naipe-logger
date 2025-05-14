@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiSave, FiCheck, FiLoader, FiEye, FiEyeOff } from 'react-icons/fi';
 
-import { GetConfig, SaveConfig, TestConnection, GetCurrentUserId } from '../../wailsjs/go/backend/App';
+import { GetConfig, SaveConfig, TestConnection } from '../../wailsjs/go/backend/App';
 
 const Config = ({ onConfigSaved }) => {
     const [config, setConfig] = useState({
@@ -126,11 +126,31 @@ const Config = ({ onConfigSaved }) => {
         setIsTesting(true);
 
         try {
-            const userId = await GetCurrentUserId();
+            const tempConfig = {
+                authToken: config.authToken,
+                apiHost: config.apiHost,
+                userID: 0,
+                minutosPorDia: config.minutosPorDia || 480
+            };
+
+            const userId = await window.go.backend.App.GetCurrentUserIdWithConfig(tempConfig);
 
             if (userId) {
-                setConfig({...config, userID: userId});
-                toast.success(`ID do usuário obtido com sucesso: ${userId}`);
+                // Cria uma configuração atualizada com o ID obtido
+                const updatedConfig = {...config, userID: userId};
+
+                // Atualiza o estado local
+                setConfig(updatedConfig);
+
+                // Salva a configuração no backend automaticamente
+                await SaveConfig(updatedConfig);
+
+                toast.success(`ID do usuário (${userId}) obtido e configuração salva com sucesso!`);
+
+                // Informa ao componente pai que a configuração foi salva
+                if (onConfigSaved) {
+                    onConfigSaved();
+                }
             }
         } catch (error) {
             console.error("Erro ao obter ID do usuário:", error);

@@ -28,7 +28,7 @@ func NewTeamworkAPI(config Config) *TeamworkAPI {
 }
 
 func (t *TeamworkAPI) IsConfigured() bool {
-	return t.Config.AuthToken != "" && t.Config.UserID > 0 && t.Config.ApiHost != ""
+	return t.Config.AuthToken != "" && t.Config.ApiHost != ""
 }
 
 func (t *TeamworkAPI) GetTasks() ([]TeamworkTask, error) {
@@ -621,8 +621,9 @@ func (t *TeamworkAPI) TestConnection(config Config) (bool, string) {
 }
 
 func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
-	if !t.IsConfigured() {
-		return 0, fmt.Errorf("API não configurada")
+	// Mudança aqui: verificar apenas se temos o básico para fazer a requisição
+	if t.Config.AuthToken == "" || t.Config.ApiHost == "" {
+		return 0, fmt.Errorf("API não configurada (falta token ou host)")
 	}
 
 	var url string
@@ -631,6 +632,9 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 	} else {
 		url = fmt.Sprintf("https://%s/projects/api/v3/me.json", t.Config.ApiHost)
 	}
+
+	// Debug: Imprimir a URL para verificação
+	fmt.Printf("Consultando API do Teamwork em: %s\n", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -653,11 +657,15 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 		return 0, fmt.Errorf("erro ao ler resposta: %v", err)
 	}
 
+	// Debug: Imprimir os primeiros 500 caracteres da resposta para diagnóstico
+	fmt.Printf("Resposta da API (primeiros 500 caracteres): %s\n", string(body[:m(len(body), 500)]))
+
 	if resp.StatusCode != 200 {
 		return 0, fmt.Errorf("erro ao obter informações do usuário: %d %s - %s",
 			resp.StatusCode, resp.Status, string(body))
 	}
 
+	// Tentativa 1: formato padrão da resposta
 	var response struct {
 		Person struct {
 			ID int `json:"id"`
@@ -665,11 +673,83 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 	}
 
 	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return 0, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	if err != nil || response.Person.ID == 0 {
+		// Tentativa 2: formato alternativo para API v3
+		var responseV3 struct {
+			User struct {
+				ID int `json:"id"`
+			} `json:"user"`
+		}
+
+		err = json.Unmarshal(body, &responseV3)
+		if err != nil || responseV3.User.ID == 0 {
+			// Tentativa 3: outro formato possível
+			var responseAlt map[string]interface{}
+			err = json.Unmarshal(body, &responseAlt)
+			if err != nil {
+				return 0, fmt.Errorf("erro ao decodificar resposta: %v", err)
+			}
+
+			// Tenta localizar o ID navegando pela estrutura JSON
+			fmt.Printf("Estrutura da resposta: %+v\n", responseAlt)
+
+			// Verifica diferentes caminhos possíveis para encontrar o ID
+			if userId, found := findUserIdInMap(responseAlt); found {
+				return userId, nil
+			}
+
+			return 0, fmt.Errorf("não foi possível encontrar o ID do usuário na resposta")
+		}
+
+		return responseV3.User.ID, nil
 	}
 
 	return response.Person.ID, nil
+}
+
+func findUserIdInMap(data map[string]interface{}) (int, bool) {
+	// Tenta encontrar o campo "id" diretamente no primeiro nível
+	if id, ok := data["id"]; ok {
+		if idInt, ok := id.(float64); ok {
+			return int(idInt), true
+		}
+	}
+
+	// Tenta encontrar em "person" -> "id"
+	if person, ok := data["person"].(map[string]interface{}); ok {
+		if id, ok := person["id"]; ok {
+			if idInt, ok := id.(float64); ok {
+				return int(idInt), true
+			}
+		}
+	}
+
+	// Tenta encontrar em "user" -> "id"
+	if user, ok := data["user"].(map[string]interface{}); ok {
+		if id, ok := user["id"]; ok {
+			if idInt, ok := id.(float64); ok {
+				return int(idInt), true
+			}
+		}
+	}
+
+	// Tenta encontrar em "me" -> "id"
+	if me, ok := data["me"].(map[string]interface{}); ok {
+		if id, ok := me["id"]; ok {
+			if idInt, ok := id.(float64); ok {
+				return int(idInt), true
+			}
+		}
+	}
+
+	return 0, false
+}
+
+func m(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (t *TeamworkAPI) GetProjects() ([]Project, error) {

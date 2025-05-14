@@ -163,3 +163,20 @@ func (a *App) GetProjects() ([]api.Project, error) {
 func (a *App) GetTasksByProject(projectID int) ([]api.TeamworkTask, error) {
 	return a.teamworkAPI.GetTasksByProject(projectID)
 }
+
+func (a *App) GetCurrentUserIdWithConfig(config api.Config) (int, error) {
+	if config.AuthToken == "" || config.ApiHost == "" {
+		return 0, fmt.Errorf("configuração incompleta: token ou host da API ausentes")
+	}
+
+	tempAPI := api.NewTeamworkAPI(config)
+	userId, err := tempAPI.GetCurrentUserId()
+
+	if err != nil {
+		fmt.Printf("Erro ao obter ID do usuário: %v\n", err)
+		return 0, err
+	}
+
+	fmt.Printf("ID do usuário obtido com sucesso: %d\n", userId)
+	return userId, nil
+}
