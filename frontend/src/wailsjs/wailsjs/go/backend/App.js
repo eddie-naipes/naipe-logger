@@ -66,6 +66,10 @@ export function LogTime(arg1, arg2) {
   return window['go']['backend']['App']['LogTime'](arg1, arg2);
 }
 
+export function LoginWithCredentials(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['LoginWithCredentials'](arg1, arg2, arg3);
+}
+
 export function ObterDiasUteis(arg1, arg2) {
   return window['go']['backend']['App']['ObterDiasUteis'](arg1, arg2);
 }

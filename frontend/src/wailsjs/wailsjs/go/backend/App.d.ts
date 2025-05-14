@@ -35,6 +35,8 @@ export function LogMultipleTimes(arg1:Array<api.WorkDay>):Promise<Array<api.Time
 
 export function LogTime(arg1:number,arg2:api.TimeEntry):Promise<api.TimeLogResult>;
 
+export function LoginWithCredentials(arg1:string,arg2:string,arg3:string):Promise<api.LoginResponse>;
+
 export function ObterDiasUteis(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function RemoveTask(arg1:number):Promise<void>;

@@ -120,3 +120,16 @@ type ProjectsResponse struct {
 	TotalItems  int       `json:"totalItems"`
 	ItemsOnPage int       `json:"itemsOnPage"`
 }
+
+type LoginResponse struct {
+	Success    bool   `json:"success"`
+	Message    string `json:"message"`
+	Token      string `json:"token"`
+	UserID     int    `json:"userId"`
+	InstanceID string `json:"instanceId"`
+}
+
+type TaskListItem struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}

@@ -72,6 +72,26 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class LoginResponse {
+	    success: boolean;
+	    message: string;
+	    token: string;
+	    userId: number;
+	    instanceId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoginResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.token = source["token"];
+	        this.userId = source["userId"];
+	        this.instanceId = source["instanceId"];
+	    }
+	}
 	export class Project {
 	    id: number;
 	    name: string;

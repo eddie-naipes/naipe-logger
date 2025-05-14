@@ -180,3 +180,29 @@ func (a *App) GetCurrentUserIdWithConfig(config api.Config) (int, error) {
 	fmt.Printf("ID do usuário obtido com sucesso: %d\n", userId)
 	return userId, nil
 }
+
+func (a *App) LoginWithCredentials(email, password, host string) (*api.LoginResponse, error) {
+	if email == "" || password == "" || host == "" {
+		return nil, fmt.Errorf("email, senha e host são obrigatórios")
+	}
+
+	loginResponse, err := api.GetTokenWithCredentials(email, password, host)
+	if err != nil {
+		return nil, fmt.Errorf("erro na autenticação: %v", err)
+	}
+
+	if loginResponse.Success && loginResponse.Token != "" {
+		config := a.configManager.GetTeamworkConfig()
+		config.AuthToken = loginResponse.Token
+		config.ApiHost = host
+		config.UserID = loginResponse.UserID
+
+		if err := a.configManager.SetTeamworkConfig(config); err != nil {
+			return nil, fmt.Errorf("erro ao salvar configuração: %v", err)
+		}
+
+		a.teamworkAPI = api.NewTeamworkAPI(config)
+	}
+
+	return loginResponse, nil
+}
