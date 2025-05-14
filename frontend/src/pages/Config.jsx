@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiCheck, FiLoader } from 'react-icons/fi';
+import { FiSave, FiCheck, FiLoader, FiEye, FiEyeOff } from 'react-icons/fi';
 
-// Importar corretamente as funções do backend
 import { GetConfig, SaveConfig, TestConnection, GetCurrentUserId } from '../../wailsjs/go/backend/App';
 
 const Config = ({ onConfigSaved }) => {
@@ -10,14 +9,14 @@ const Config = ({ onConfigSaved }) => {
         authToken: '',
         userID: 0,
         apiHost: '',
-        minutosPorDia: 480, // 8 horas em minutos
+        minutosPorDia: 480,
     });
 
     const [isLoading, setIsLoading] = useState(true);
     const [isTesting, setIsTesting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showToken, setShowToken] = useState(false);
 
-    // Carrega as configurações atuais
     useEffect(() => {
         const loadConfig = async () => {
             try {
@@ -41,15 +40,12 @@ const Config = ({ onConfigSaved }) => {
         loadConfig();
     }, []);
 
-    // Atualiza um campo no estado
     const handleChange = (e) => {
         const { name, value } = e.target;
 
-        // Convertendo campos numéricos
         if (name === 'userID' || name === 'minutosPorDia') {
             setConfig({ ...config, [name]: parseInt(value) || 0 });
         } else if (name === 'apiHost') {
-            // Remove o protocolo http:// ou https:// se estiver presente
             let cleanedValue = value;
             if (value.startsWith('http://')) {
                 cleanedValue = value.substring(7);
@@ -62,7 +58,6 @@ const Config = ({ onConfigSaved }) => {
         }
     };
 
-    // Salva a configuração
     const handleSave = async (e) => {
         e.preventDefault();
 
@@ -77,7 +72,6 @@ const Config = ({ onConfigSaved }) => {
             await SaveConfig(config);
             toast.success('Configurações salvas com sucesso!');
 
-            // Notifica o componente pai que a configuração foi salva
             if (onConfigSaved) {
                 onConfigSaved();
             }
@@ -89,9 +83,6 @@ const Config = ({ onConfigSaved }) => {
         }
     };
 
-    // Testa a conexão com o Teamwork
-// Substitua a função testConnection no arquivo Config.jsx por esta versão:
-
     const testConnection = async () => {
         if (!config.authToken || !config.apiHost) {
             toast.warning('Preencha o Token de Autenticação e o Host da API.');
@@ -101,10 +92,8 @@ const Config = ({ onConfigSaved }) => {
         setIsTesting(true);
 
         try {
-            // A função retorna um array com [success, message]
-            const result = await window.go.backend.App.TestConnection(config);
+            const result = await TestConnection(config);
 
-            // Verificar se o resultado é um array com pelo menos dois elementos
             if (Array.isArray(result) && result.length >= 2) {
                 const [success, message] = result;
 
@@ -114,7 +103,6 @@ const Config = ({ onConfigSaved }) => {
                     toast.error(message || "Falha ao conectar com o Teamwork. Verifique suas credenciais.");
                 }
             } else {
-                // Caso não seja um array como esperado
                 if (result === true) {
                     toast.success("Conexão estabelecida com sucesso!");
                 } else {
@@ -129,7 +117,6 @@ const Config = ({ onConfigSaved }) => {
         }
     };
 
-    // Obtém o ID do usuário automaticamente
     const fetchUserId = async () => {
         if (!config.authToken || !config.apiHost) {
             toast.warning("Preencha o Token de Autenticação e o Host da API primeiro.");
@@ -176,16 +163,29 @@ const Config = ({ onConfigSaved }) => {
                             <label htmlFor="authToken" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Token de Autenticação *
                             </label>
-                            <input
-                                type="text"
-                                id="authToken"
-                                name="authToken"
-                                value={config.authToken}
-                                onChange={handleChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="Seu token de API do Teamwork"
-                                required
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showToken ? "text" : "password"}
+                                    id="authToken"
+                                    name="authToken"
+                                    value={config.authToken}
+                                    onChange={handleChange}
+                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 pr-10 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                    placeholder="Seu token de API do Teamwork"
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowToken(!showToken)}
+                                    className="absolute inset-y-0 right-0 px-3 flex items-center"
+                                >
+                                    {showToken ? (
+                                        <FiEyeOff className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                    ) : (
+                                        <FiEye className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                    )}
+                                </button>
+                            </div>
                             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                                 Encontre seu token em Configurações → API do Teamwork.
                             </p>

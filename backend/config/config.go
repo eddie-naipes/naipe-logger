@@ -1,10 +1,10 @@
-// backend/config/config.go
 package config
 
 import (
 	"encoding/json"
 	"fmt"
 	"logTime-go/backend/api"
+	"logTime-go/backend/security"
 	"os"
 	"path/filepath"
 	"sync"
@@ -59,7 +59,13 @@ func NewManager() (*Manager, error) {
 		templates: make(map[string]api.Template),
 	}
 
+	// Carregar configurações existentes
 	m.Load()
+
+	// Tentar migrar dados inseguros para formato seguro, com tratamento de erros
+	if err := m.MigrateToSecureStorage(); err != nil {
+		fmt.Printf("Aviso: Erro ao migrar para armazenamento seguro: %v\n", err)
+	}
 
 	return m, nil
 }
@@ -69,6 +75,8 @@ func getConfigDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("erro ao obter diretório do usuário: %v", err)
 	}
+
+	// Usar o mesmo diretório para manter compatibilidade com versões anteriores
 	return filepath.Join(homeDir, ".teamwork-logger"), nil
 }
 
@@ -167,6 +175,27 @@ func (m *Manager) DeleteTemplate(name string) error {
 	return m.SaveTemplates()
 }
 
+func (m *Manager) MigrateToSecureStorage() error {
+	// Se não há token, não há nada para migrar
+	if m.appConfig.TeamworkConfig.AuthToken == "" {
+		return nil
+	}
+
+	// Verificar se o token já parece estar criptografado
+	// Tokens criptografados em base64 tendem a ser longos
+	if len(m.appConfig.TeamworkConfig.AuthToken) > 100 {
+		// Tenta descriptografar para verificar
+		_, err := security.Decrypt(m.appConfig.TeamworkConfig.AuthToken)
+		if err == nil {
+			// Parece que já está criptografado e é válido
+			return nil
+		}
+	}
+
+	// O token não está criptografado ou não é válido, então vamos criptografá-lo agora
+	return m.Save()
+}
+
 func (m *Manager) Load() error {
 	if _, err := os.Stat(m.configFile); err == nil {
 		data, err := os.ReadFile(m.configFile)
@@ -174,9 +203,24 @@ func (m *Manager) Load() error {
 			return fmt.Errorf("erro ao ler arquivo de configuração: %v", err)
 		}
 
-		if err := json.Unmarshal(data, m.appConfig); err != nil {
+		var loadedConfig AppConfig
+		if err := json.Unmarshal(data, &loadedConfig); err != nil {
 			return fmt.Errorf("erro ao decodificar configurações: %v", err)
 		}
+
+		// Tenta descriptografar o token se existir
+		if loadedConfig.TeamworkConfig.AuthToken != "" {
+			decryptedToken, err := security.Decrypt(loadedConfig.TeamworkConfig.AuthToken)
+			if err != nil {
+				// Se falhar ao descriptografar, mantém o valor original
+				// Isso permite compatibilidade com versões anteriores
+				fmt.Printf("Aviso: não foi possível descriptografar o token. Assumindo que está em texto simples.\n")
+			} else {
+				loadedConfig.TeamworkConfig.AuthToken = decryptedToken
+			}
+		}
+
+		*m.appConfig = loadedConfig
 	}
 
 	if _, err := os.Stat(m.templatesFile); err == nil {
@@ -194,11 +238,28 @@ func (m *Manager) Load() error {
 }
 
 func (m *Manager) Save() error {
-	data, err := json.MarshalIndent(m.appConfig, "", "  ")
+	// Criar uma cópia da configuração para não alterar o objeto original
+	configToSave := *m.appConfig
+
+	// Criptografar o token apenas se existir
+	if configToSave.TeamworkConfig.AuthToken != "" {
+		// Primeiro, verificar se já não está criptografado
+		if len(configToSave.TeamworkConfig.AuthToken) < 100 { // Tokens criptografados tendem a ser longos
+			encryptedToken, err := security.Encrypt(configToSave.TeamworkConfig.AuthToken)
+			if err != nil {
+				return fmt.Errorf("erro ao criptografar token: %v", err)
+			}
+			configToSave.TeamworkConfig.AuthToken = encryptedToken
+		}
+	}
+
+	// Serializar a configuração
+	data, err := json.MarshalIndent(configToSave, "", "  ")
 	if err != nil {
 		return fmt.Errorf("erro ao serializar configurações: %v", err)
 	}
 
+	// Salvar no arquivo
 	if err := os.WriteFile(m.configFile, data, 0644); err != nil {
 		return fmt.Errorf("erro ao salvar configurações: %v", err)
 	}
@@ -214,6 +275,62 @@ func (m *Manager) SaveTemplates() error {
 
 	if err := os.WriteFile(m.templatesFile, data, 0644); err != nil {
 		return fmt.Errorf("erro ao salvar templates: %v", err)
+	}
+
+	return nil
+}
+
+func CheckAndMoveConfigFromExecDir() error {
+	execPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	execDir := filepath.Dir(execPath)
+	oldConfigPath := filepath.Join(execDir, "config.json")
+	oldTemplatesPath := filepath.Join(execDir, "templates.json")
+
+	if _, err := os.Stat(oldConfigPath); err == nil {
+		configDir, err := getConfigDir()
+		if err != nil {
+			return err
+		}
+
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return err
+		}
+
+		data, err := os.ReadFile(oldConfigPath)
+		if err != nil {
+			return err
+		}
+
+		newConfigPath := filepath.Join(configDir, "config.json")
+		if err := os.WriteFile(newConfigPath, data, 0644); err != nil {
+			return err
+		}
+
+		// Tenta remover, mas não trata como erro se falhar
+		os.Remove(oldConfigPath)
+	}
+
+	if _, err := os.Stat(oldTemplatesPath); err == nil {
+		configDir, err := getConfigDir()
+		if err != nil {
+			return err
+		}
+
+		data, err := os.ReadFile(oldTemplatesPath)
+		if err != nil {
+			return err
+		}
+
+		newTemplatesPath := filepath.Join(configDir, "templates.json")
+		if err := os.WriteFile(newTemplatesPath, data, 0644); err != nil {
+			return err
+		}
+
+		os.Remove(oldTemplatesPath)
 	}
 
 	return nil

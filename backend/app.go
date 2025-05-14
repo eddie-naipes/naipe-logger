@@ -32,83 +32,72 @@ func NewApp(ctx context.Context) (*App, error) {
 	}, nil
 }
 
-// Startup é chamado quando a aplicação inicia
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	a.teamworkAPI = api.NewTeamworkAPI(a.configManager.GetTeamworkConfig())
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Erro crítico durante a inicialização: %v\n", r)
+		}
+	}()
+
+	if err := a.configManager.MigrateToSecureStorage(); err != nil {
+		fmt.Printf("Aviso: não foi possível migrar para armazenamento seguro: %v\n", err)
+	}
+
+	if err := config.CheckAndMoveConfigFromExecDir(); err != nil {
+		fmt.Printf("Aviso: não foi possível verificar/mover configurações: %v\n", err)
+	}
 }
 
-// Shutdown é chamado quando a aplicação é encerrada
 func (a *App) Shutdown(ctx context.Context) {
-	// Salva as configurações ao fechar
 	_ = a.configManager.Save()
 }
 
-//
-// API de configuração para o frontend
-//
-
-// GetConfig retorna as configurações atuais do Teamwork
 func (a *App) GetConfig() api.Config {
 	return a.configManager.GetTeamworkConfig()
 }
 
-// SaveConfig salva as configurações do Teamwork
 func (a *App) SaveConfig(config api.Config) error {
-	// Atualiza a API com as novas configurações
 	a.teamworkAPI = api.NewTeamworkAPI(config)
 	return a.configManager.SetTeamworkConfig(config)
 }
 
-// TestConnection testa a conexão com o Teamwork
 func (a *App) TestConnection(config api.Config) ([]interface{}, error) {
 	success, message := a.teamworkAPI.TestConnection(config)
 	return []interface{}{success, message}, nil
 }
 
-// GetAppSettings retorna as configurações da aplicação
 func (a *App) GetAppSettings() config.AppSettings {
 	return a.configManager.GetAppSettings()
 }
 
-// SaveAppSettings salva as configurações da aplicação
 func (a *App) SaveAppSettings(settings config.AppSettings) error {
 	return a.configManager.SetAppSettings(settings)
 }
 
-//
-// API de gerenciamento de tarefas
-//
-
-// GetTasks obtém as tarefas atribuídas ao usuário
 func (a *App) GetTasks() ([]api.TeamworkTask, error) {
 	return a.teamworkAPI.GetTasks()
 }
 
-// GetSavedTasks retorna as tarefas salvas
 func (a *App) GetSavedTasks() []api.Task {
 	return a.configManager.GetSavedTasks()
 }
 
-// SaveTask salva uma tarefa para uso futuro
 func (a *App) SaveTask(task api.Task) error {
 	return a.configManager.AddSavedTask(task)
 }
 
-// RemoveTask remove uma tarefa da lista de tarefas salvas
 func (a *App) RemoveTask(taskID int) error {
 	return a.configManager.RemoveSavedTask(taskID)
 }
 
-// GetTaskDetails obtém detalhes de uma tarefa específica
 func (a *App) GetTaskDetails(taskID int) (api.TeamworkTask, error) {
 	return a.teamworkAPI.GetTaskDetails(taskID)
 }
 
-//
-// API de gerenciamento de templates
-//
-
-// GetTemplates retorna todos os templates salvos
 func (a *App) GetTemplates() map[string]api.Template {
 	return a.configManager.GetTemplates()
 }
