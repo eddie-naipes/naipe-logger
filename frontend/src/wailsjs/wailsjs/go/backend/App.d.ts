@@ -3,11 +3,13 @@
 import {api} from '../models';
 import {config} from '../models';
 
-export function CalcularTotalMinutos(arg1:Array<api.Task>):Promise<number>;
+export function CalculateTotalMinutes(arg1:Array<api.Task>):Promise<number>;
 
-export function CriarPlanoDistribuicao(arg1:Array<string>,arg2:Array<api.Task>):Promise<Array<api.WorkDay>>;
+export function CreateDistributionPlan(arg1:Array<string>,arg2:Array<api.Task>):Promise<Array<api.WorkDay>>;
 
 export function DeleteTemplate(arg1:string):Promise<void>;
+
+export function DownloadCurrentMonthReport():Promise<string>;
 
 export function GetAppSettings():Promise<config.AppSettings>;
 
@@ -17,7 +19,11 @@ export function GetCurrentUserId():Promise<number>;
 
 export function GetCurrentUserIdWithConfig(arg1:api.Config):Promise<number>;
 
+export function GetDashboardStats():Promise<Record<string, any>>;
+
 export function GetProjects():Promise<Array<api.Project>>;
+
+export function GetRecentActivities():Promise<Array<Record<string, any>>>;
 
 export function GetSavedTasks():Promise<Array<api.Task>>;
 
@@ -27,9 +33,13 @@ export function GetTasks():Promise<Array<api.TeamworkTask>>;
 
 export function GetTasksByProject(arg1:number):Promise<Array<api.TeamworkTask>>;
 
+export function GetTasksWithUpcomingDeadlines():Promise<Array<Record<string, any>>>;
+
 export function GetTemplate(arg1:string):Promise<api.Template|boolean>;
 
 export function GetTemplates():Promise<Record<string, api.Template>>;
+
+export function GetWorkingDays(arg1:string,arg2:string):Promise<Array<string>>;
 
 export function LogMultipleTimes(arg1:Array<api.WorkDay>):Promise<Array<api.TimeLogResult>>;
 
@@ -37,7 +47,7 @@ export function LogTime(arg1:number,arg2:api.TimeEntry):Promise<api.TimeLogResul
 
 export function LoginWithCredentials(arg1:string,arg2:string,arg3:string):Promise<api.LoginResponse>;
 
-export function ObterDiasUteis(arg1:string,arg2:string):Promise<Array<string>>;
+export function OpenDirectoryPath(arg1:string):Promise<void>;
 
 export function RemoveTask(arg1:number):Promise<void>;
 

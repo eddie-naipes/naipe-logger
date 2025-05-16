@@ -39,13 +39,10 @@ type EntryTask struct {
 	Entry  TimeEntry `json:"entry"`
 }
 
-// Estruturas de resposta da API Teamwork
-// Modifique essa estrutura no arquivo types.go
-
 type TeamworkTask struct {
 	ID           int    `json:"id"`
 	Content      string `json:"content"`
-	Name         string `json:"name,omitempty"` // Adicionando campo Name para compatibilidade com a API v3
+	Name         string `json:"name,omitempty"`
 	Description  string `json:"description,omitempty"`
 	ProjectID    int    `json:"projectId"`
 	ProjectName  string `json:"projectName"`
@@ -64,7 +61,7 @@ type TeamworkTask struct {
 		ID   int    `json:"id"`
 		Type string `json:"type"`
 	} `json:"assignees,omitempty"`
-	LoggedMinutes int `json:"loggedMinutes,omitempty"` // Adicionando campo para tempo registrado
+	LoggedMinutes int `json:"loggedMinutes,omitempty"`
 }
 
 type TasksResponse struct {

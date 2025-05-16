@@ -1,275 +1,108 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiCheck, FiLoader, FiEye, FiEyeOff, FiUser, FiInfo } from 'react-icons/fi';
-
-// Remova LoginWithCredentials da importação direta
-import { GetConfig, SaveConfig, TestConnection } from '../../wailsjs/go/backend/App';
+import { FiSave, FiLoader, FiEye, FiEyeOff, FiUser, FiInfo, FiLogOut, FiBriefcase } from 'react-icons/fi';
+import whaleTeamLogo from '../assets/whaleTeam.png';
+import { GetConfig } from '../../wailsjs/go/backend/App';
 
 const Config = ({ onConfigSaved }) => {
-    const [config, setConfig] = useState({
-        authToken: '',
-        userID: 0,
-        apiHost: '',
-        minutosPorDia: 480,
-    });
-
     const [isLoading, setIsLoading] = useState(true);
-    const [isTesting, setIsTesting] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
-    const [showToken, setShowToken] = useState(false);
+    const [isConfigured, setIsConfigured] = useState(false);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
-    const [showLoginForm, setShowLoginForm] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [credentials, setCredentials] = useState({
         email: '',
         password: '',
-        host: ''
+        companyName: 'onebrain'
     });
     const [showPassword, setShowPassword] = useState(false);
-    const [loginResponse, setLoginResponse] = useState(null);
-    const [debugInfo, setDebugInfo] = useState(null); // Para debugging
+    const [debugMode, setDebugMode] = useState(false);
+    const [debugInfo, setDebugInfo] = useState(null);
+    const [configuredHost, setConfiguredHost] = useState("");
 
-    // Carregar configurações ao inicializar
     useEffect(() => {
-        const loadConfig = async () => {
+        const checkExistingConfig = async () => {
             try {
                 const savedConfig = await GetConfig();
-                if (savedConfig) {
-                    setConfig({
-                        authToken: savedConfig.authToken || '',
-                        userID: savedConfig.userID || 0,
-                        apiHost: savedConfig.apiHost || '',
-                        minutosPorDia: savedConfig.minutosPorDia || 480,
-                    });
-
-                    if (savedConfig.apiHost) {
-                        setCredentials(prev => ({
-                            ...prev,
-                            host: savedConfig.apiHost
-                        }));
-                    }
+                if (savedConfig && savedConfig.authToken && savedConfig.apiHost) {
+                    setIsConfigured(true);
+                    setConfiguredHost(savedConfig.apiHost);
                 }
             } catch (error) {
-                console.error('Erro ao carregar configurações:', error);
-                toast.error('Erro ao carregar configurações.');
+                console.error('Erro ao verificar configuração existente:', error);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        loadConfig();
+        checkExistingConfig();
     }, []);
 
-    // Monitorar mudanças no objeto config para debug
-    useEffect(() => {
-        console.log("Estado config atualizado:", config);
-    }, [config]);
-
-    // Monitorar mudanças no objeto loginResponse para debug
-    useEffect(() => {
-        if (loginResponse) {
-            console.log("Login Response atualizado:", loginResponse);
-            setDebugInfo(JSON.stringify(loginResponse, null, 2));
+    const extractCompanyName = (host) => {
+        let cleanHost = host;
+        if (cleanHost.startsWith('http://')) {
+            cleanHost = cleanHost.substring(7);
+        } else if (cleanHost.startsWith('https://')) {
+            cleanHost = cleanHost.substring(8);
         }
-    }, [loginResponse]);
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-
-        if (name === 'userID' || name === 'minutosPorDia') {
-            setConfig({ ...config, [name]: parseInt(value) || 0 });
-        } else if (name === 'apiHost') {
-            let cleanedValue = value;
-            if (value.startsWith('http://')) {
-                cleanedValue = value.substring(7);
-            } else if (value.startsWith('https://')) {
-                cleanedValue = value.substring(8);
+        if (cleanHost.startsWith('teamwork.')) {
+            const parts = cleanHost.split('.');
+            if (parts.length >= 3) {
+                return parts[1];
             }
-            setConfig({ ...config, [name]: cleanedValue });
-
-            setCredentials(prev => ({ ...prev, host: cleanedValue }));
-        } else {
-            setConfig({ ...config, [name]: value });
         }
+
+        return cleanHost;
+    };
+
+    const formatCompanyNameToHost = (companyName) => {
+        if (!companyName) return '';
+        const formattedName = companyName.trim().toLowerCase();
+        return `teamwork.${formattedName}.com.br`;
     };
 
     const handleCredentialsChange = (e) => {
         const { name, value } = e.target;
-
-        if (name === 'host') {
-            let cleanedValue = value;
-            if (value.startsWith('http://')) {
-                cleanedValue = value.substring(7);
-            } else if (value.startsWith('https://')) {
-                cleanedValue = value.substring(8);
-            }
-            setCredentials({ ...credentials, [name]: cleanedValue });
-
-            setConfig(prev => ({ ...prev, apiHost: cleanedValue }));
-        } else {
-            setCredentials({ ...credentials, [name]: value });
-        }
-    };
-
-    const handleSave = async (e) => {
-        e.preventDefault();
-
-        if (!config.authToken || !config.apiHost || config.userID <= 0) {
-            toast.warning('Preencha todos os campos obrigatórios.');
-            return;
-        }
-
-        setIsSaving(true);
-
-        try {
-            await SaveConfig(config);
-            toast.success('Configurações salvas com sucesso!');
-
-            if (onConfigSaved) {
-                onConfigSaved();
-            }
-        } catch (error) {
-            console.error('Erro ao salvar configurações:', error);
-            toast.error('Erro ao salvar configurações.');
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const testConnection = async () => {
-        if (!config.authToken || !config.apiHost) {
-            toast.warning('Preencha o Token de Autenticação e o Host da API.');
-            return;
-        }
-
-        setIsTesting(true);
-
-        try {
-            const result = await TestConnection(config);
-
-            if (Array.isArray(result) && result.length >= 2) {
-                const [success, message] = result;
-
-                if (success) {
-                    toast.success(message || "Conexão estabelecida com sucesso!");
-                } else {
-                    toast.error(message || "Falha ao conectar com o Teamwork. Verifique suas credenciais.");
-                }
-            } else {
-                if (result === true) {
-                    toast.success("Conexão estabelecida com sucesso!");
-                } else {
-                    toast.error("Falha ao conectar com o Teamwork. Verifique suas credenciais.");
-                }
-            }
-        } catch (error) {
-            console.error('Erro ao testar conexão:', error);
-            toast.error('Erro ao testar conexão com o Teamwork.');
-        } finally {
-            setIsTesting(false);
-        }
-    };
-
-    const fetchUserId = async () => {
-        if (!config.authToken || !config.apiHost) {
-            toast.warning("Preencha o Token de Autenticação e o Host da API primeiro.");
-            return;
-        }
-
-        setIsTesting(true);
-
-        try {
-            const tempConfig = {
-                authToken: config.authToken,
-                apiHost: config.apiHost,
-                userID: 0,
-                minutosPorDia: config.minutosPorDia || 480
-            };
-
-            const userId = await window.go.backend.App.GetCurrentUserIdWithConfig(tempConfig);
-
-            if (userId) {
-                const updatedConfig = {...config, userID: userId};
-                setConfig(updatedConfig);
-                await SaveConfig(updatedConfig);
-                toast.success(`ID do usuário (${userId}) obtido e configuração salva com sucesso!`);
-
-                if (onConfigSaved) {
-                    onConfigSaved();
-                }
-            }
-        } catch (error) {
-            console.error("Erro ao obter ID do usuário:", error);
-            toast.error("Erro ao obter ID do usuário. Verifique suas credenciais.");
-        } finally {
-            setIsTesting(false);
-        }
+        setCredentials({ ...credentials, [name]: value });
     };
 
     const handleLogin = async (e) => {
         e.preventDefault();
 
-        if (!credentials.email || !credentials.password || !credentials.host) {
+        if (!credentials.email || !credentials.password) {
             toast.warning("Preencha todos os campos de login.");
             return;
         }
 
         setIsLoggingIn(true);
-        setLoginResponse(null);
         setDebugInfo(null);
 
-        try {
-            console.log("Enviando requisição de login para:", credentials.host);
+        const formattedHost = formatCompanyNameToHost(credentials.companyName);
 
-            // Usar diretamente o método LoginWithCredentials
+        try {
+            console.log("Enviando requisição de login para:", formattedHost);
+
             const result = await window.go.backend.App.LoginWithCredentials(
                 credentials.email,
                 credentials.password,
-                credentials.host
+                formattedHost
             );
 
-            // Armazenar resultado para debugging
-            setLoginResponse(result);
-            console.log("Resultado do login:", result);
+            if (debugMode) {
+                setDebugInfo(JSON.stringify(result, null, 2));
+            }
 
             if (result && result.success) {
-                // Atualizar configuração com os dados recebidos
-                const newConfig = {
-                    authToken: result.token || "",
-                    userID: result.userId || 0,
-                    apiHost: credentials.host,
-                    minutosPorDia: config.minutosPorDia || 480
-                };
+                toast.success("Login realizado com sucesso! Configuração concluída.");
 
-                console.log("Nova configuração após login:", newConfig);
+                setCredentials(prev => ({ ...prev, password: '' }));
 
-                // Garantir que o token tenha sido recebido
-                if (!result.token) {
-                    console.error("Token não recebido na resposta de login");
-                    toast.warning("Login bem-sucedido, mas o token não foi recebido.");
-                    return;
-                }
-
-                // Garantir que o ID do usuário tenha sido recebido
-                if (!result.userId) {
-                    console.warn("ID do usuário não recebido na resposta de login");
-                }
-
-                // Atualizar o estado local
-                setConfig(newConfig);
-
-                // Atualizar as configurações e notificar o componente pai
-                await SaveConfig(newConfig);
-                toast.success("Login bem-sucedido! Token obtido e configurações atualizadas.");
+                setIsConfigured(true);
+                setConfiguredHost(formattedHost);
 
                 if (onConfigSaved) {
                     onConfigSaved();
                 }
-
-                // Limpar senha por segurança
-                setCredentials(prev => ({ ...prev, password: '' }));
-
-                // Fechar o formulário de login
-                setShowLoginForm(false);
             } else {
                 const errorMessage = result && result.message
                     ? result.message
@@ -280,14 +113,58 @@ const Config = ({ onConfigSaved }) => {
         } catch (error) {
             console.error("Erro ao fazer login:", error);
             toast.error("Erro ao tentar login: " + (error.message || error));
-            setDebugInfo(JSON.stringify(error, null, 2));
+            if (debugMode) {
+                setDebugInfo(JSON.stringify(error, null, 2));
+            }
         } finally {
             setIsLoggingIn(false);
         }
     };
 
-    const toggleDebugInfo = () => {
-        setDebugInfo(prev => prev ? null : "Clique em Login para ver informações de debug");
+    const handleLogout = async () => {
+        if (!window.confirm("Tem certeza que deseja sair? Esta ação removerá sua configuração atual.")) {
+            return;
+        }
+
+        setIsLoggingOut(true);
+        try {
+            const emptyConfig = {
+                authToken: "",
+                userID: 0,
+                apiHost: "",
+                minutosPorDia: 480,
+            };
+
+            await window.go.backend.App.SaveConfig(emptyConfig);
+
+            setIsConfigured(false);
+            setConfiguredHost("");
+            setCredentials({
+                email: '',
+                password: '',
+                companyName: 'onebrain'
+            });
+
+            toast.success("Logout realizado com sucesso. Configuração removida.");
+
+            if (onConfigSaved) {
+                onConfigSaved();
+            }
+        } catch (error) {
+            console.error("Erro ao fazer logout:", error);
+            toast.error("Erro ao remover configuração: " + (error.message || error));
+        } finally {
+            setIsLoggingOut(false);
+        }
+    };
+
+    const toggleDebugMode = () => {
+        setDebugMode(!debugMode);
+        if (!debugMode) {
+            setDebugInfo("Modo de depuração ativado. Os detalhes da resposta de login serão exibidos aqui.");
+        } else {
+            setDebugInfo(null);
+        }
     };
 
     if (isLoading) {
@@ -301,27 +178,35 @@ const Config = ({ onConfigSaved }) => {
     return (
         <div>
             <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Configurações</h1>
-                <p className="text-gray-600 dark:text-gray-400">Configure sua conexão com o Teamwork</p>
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Configuração do Teamwork</h1>
+                <p className="text-gray-600 dark:text-gray-400">
+                    {isConfigured
+                        ? "Sua conta está configurada e pronta para uso."
+                        : "Configure sua conexão para começar a usar o aplicativo"}
+                </p>
             </div>
 
-            <div className="card max-w-3xl mb-6">
+            <div className="card max-w-md mx-auto">
+                <div className="flex justify-center mb-6">
+                    <img
+                        src={whaleTeamLogo}
+                        alt="Whale Team Logo"
+                        className="h-32 object-contain"
+                    />
+                </div>
+
                 <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Login com Email/Senha</h2>
-                    <div className="flex">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {isConfigured ? "Status da Conta" : "Login no Teamwork"}
+                    </h2>
+                    <div className="flex items-center">
                         <button
                             type="button"
-                            onClick={toggleDebugInfo}
-                            className="mr-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                            onClick={toggleDebugMode}
+                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                            title="Informações de Depuração"
                         >
                             <FiInfo className="w-5 h-5" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setShowLoginForm(!showLoginForm)}
-                            className="text-primary-600 hover:text-primary-700 dark:text-primary-500 dark:hover:text-primary-400"
-                        >
-                            {showLoginForm ? 'Ocultar' : 'Mostrar'}
                         </button>
                     </div>
                 </div>
@@ -332,46 +217,72 @@ const Config = ({ onConfigSaved }) => {
                     </div>
                 )}
 
-                {showLoginForm && (
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <div>
-                            <label htmlFor="loginHost" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Host do Teamwork *
-                            </label>
-                            <input
-                                type="text"
-                                id="loginHost"
-                                name="host"
-                                value={credentials.host}
-                                onChange={handleCredentialsChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="Ex: teamwork.empresa.com.br"
-                                required
-                            />
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Host da sua instância do Teamwork, sem http/https.
-                            </p>
+                {isConfigured ? (
+                    <div>
+                        <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-lg border-l-4 border-green-500 dark:border-green-700 mb-6">
+                            <div className="flex items-start">
+                                <FiUser className="mt-0.5 w-5 h-5 text-green-500 dark:text-green-400 mr-3" />
+                                <div>
+                                    <h3 className="text-md font-medium text-green-800 dark:text-green-400">
+                                        Configuração Ativa
+                                    </h3>
+                                    <p className="mt-2 text-sm text-green-700 dark:text-green-300">
+                                        Você está conectado ao servidor <strong>{configuredHost}</strong> e pode usar todos os recursos do aplicativo.
+                                    </p>
+                                    <p className="mt-2 text-sm text-green-700 dark:text-green-300">
+                                        Para alterar sua configuração, faça logout e reconfigure sua conta.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
 
+                        <div className="flex justify-center">
+                            <button
+                                type="button"
+                                onClick={handleLogout}
+                                disabled={isLoggingOut}
+                                className="btn flex items-center justify-center px-5 py-2.5 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg"
+                            >
+                                {isLoggingOut ? (
+                                    <>
+                                        <FiLoader className="w-5 h-5 mr-2 animate-spin" />
+                                        Saindo...
+                                    </>
+                                ) : (
+                                    <>
+                                        <FiLogOut className="w-5 h-5 mr-2" />
+                                        Fazer Logout
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <form onSubmit={handleLogin} className="space-y-4">
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Email *
+                                Email <span className="text-red-500">*</span>
                             </label>
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                value={credentials.email}
-                                onChange={handleCredentialsChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="seu.email@empresa.com"
-                                required
-                            />
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <FiUser className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    value={credentials.email}
+                                    onChange={handleCredentialsChange}
+                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+                                    placeholder="seu.email@empresa.com"
+                                    required
+                                />
+                            </div>
                         </div>
 
                         <div>
                             <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Senha *
+                                Senha <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
                                 <input
@@ -398,165 +309,31 @@ const Config = ({ onConfigSaved }) => {
                             </div>
                         </div>
 
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-sm text-blue-700 dark:text-blue-300">
+                                Conectando ao servidor: <strong>teamwork.onebrain.com.br</strong>
+                            </p>
+                        </div>
+
                         <button
                             type="submit"
                             disabled={isLoggingIn}
-                            className="btn-primary flex items-center justify-center"
+                            className="w-full btn-primary flex items-center justify-center"
                         >
                             {isLoggingIn ? (
                                 <>
-                                    <FiLoader className="w-4 h-4 mr-2 animate-spin" />
-                                    Autenticando...
+                                    <FiLoader className="w-5 h-5 mr-2 animate-spin" />
+                                    Conectando...
                                 </>
                             ) : (
                                 <>
-                                    <FiUser className="w-4 h-4 mr-2" />
-                                    Fazer Login
+                                    <FiSave className="w-5 h-5 mr-2" />
+                                    Conectar ao Teamwork
                                 </>
                             )}
                         </button>
                     </form>
                 )}
-            </div>
-
-            <div className="card max-w-3xl">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Configuração Manual</h2>
-                <form onSubmit={handleSave}>
-                    <div className="space-y-6">
-                        <div>
-                            <label htmlFor="authToken" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Token de Autenticação *
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={showToken ? "text" : "password"}
-                                    id="authToken"
-                                    name="authToken"
-                                    value={config.authToken}
-                                    onChange={handleChange}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 pr-10 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                    placeholder="Seu token de API do Teamwork"
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowToken(!showToken)}
-                                    className="absolute inset-y-0 right-0 px-3 flex items-center"
-                                >
-                                    {showToken ? (
-                                        <FiEyeOff className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                    ) : (
-                                        <FiEye className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                                    )}
-                                </button>
-                            </div>
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Encontre seu token em Configurações → API do Teamwork.
-                            </p>
-                        </div>
-
-                        <div>
-                            <label htmlFor="userID" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                ID do Usuário *
-                            </label>
-                            <input
-                                type="number"
-                                id="userID"
-                                name="userID"
-                                value={config.userID}
-                                onChange={handleChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="ID do seu usuário no Teamwork"
-                                required
-                            />
-                            <div className="mt-2">
-                                <button
-                                    type="button"
-                                    onClick={fetchUserId}
-                                    className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
-                                >
-                                    Obter ID Automaticamente
-                                </button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label htmlFor="apiHost" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Host da API *
-                            </label>
-                            <input
-                                type="text"
-                                id="apiHost"
-                                name="apiHost"
-                                value={config.apiHost}
-                                onChange={handleChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="Ex: teamwork.empresa.com.br"
-                                required
-                            />
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Host da sua instância do Teamwork, sem http/https.
-                            </p>
-                        </div>
-
-                        <div>
-                            <label htmlFor="minutosPorDia" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Minutos por Dia
-                            </label>
-                            <input
-                                type="number"
-                                id="minutosPorDia"
-                                name="minutosPorDia"
-                                value={config.minutosPorDia}
-                                onChange={handleChange}
-                                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
-                                placeholder="480"
-                            />
-                            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                Quantidade padrão de minutos por dia (480 = 8 horas).
-                            </p>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-                            <button
-                                type="button"
-                                onClick={testConnection}
-                                disabled={isTesting || isSaving}
-                                className="btn-secondary flex items-center justify-center"
-                            >
-                                {isTesting ? (
-                                    <>
-                                        <FiLoader className="w-4 h-4 mr-2 animate-spin" />
-                                        Testando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <FiCheck className="w-4 h-4 mr-2" />
-                                        Testar Conexão
-                                    </>
-                                )}
-                            </button>
-
-                            <button
-                                type="submit"
-                                disabled={isSaving || isTesting}
-                                className="btn-primary flex items-center justify-center"
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <FiLoader className="w-4 h-4 mr-2 animate-spin" />
-                                        Salvando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <FiSave className="w-4 h-4 mr-2" />
-                                        Salvar Configurações
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </form>
             </div>
         </div>
     );

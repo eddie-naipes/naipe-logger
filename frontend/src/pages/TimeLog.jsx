@@ -1,10 +1,8 @@
-// Versão completa e otimizada do componente TimeLog.jsx
-
-import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import { FiAlertCircle, FiCalendar, FiCheck, FiCheckCircle, FiClock, FiList, FiLoader, FiPlay } from 'react-icons/fi';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import React, {useEffect, useState} from 'react';
+import {toast} from 'react-toastify';
+import {FiAlertCircle, FiCalendar, FiCheck, FiCheckCircle, FiClock, FiList, FiLoader, FiPlay} from 'react-icons/fi';
+import {format, parseISO} from 'date-fns';
+import {ptBR} from 'date-fns/locale';
 
 const TimeLog = () => {
     const [isLoading, setIsLoading] = useState(true);
@@ -20,13 +18,13 @@ const TimeLog = () => {
     const [results, setResults] = useState([]);
     const [showResults, setShowResults] = useState(false);
     const [error, setError] = useState(null);
+    const [processingProgress, setProcessingProgress] = useState(0);
 
-    // Carrega as tarefas salvas
     useEffect(() => {
         const loadSavedTasks = async () => {
             try {
+                setIsLoading(true);
                 const tasks = await window.go.backend.App.GetSavedTasks();
-                console.log("Tarefas carregadas:", tasks);
                 setSavedTasks(tasks);
             } catch (error) {
                 console.error('Erro ao carregar tarefas salvas:', error);
@@ -40,7 +38,6 @@ const TimeLog = () => {
         loadSavedTasks();
     }, []);
 
-    // Atualiza o estado das tarefas selecionadas
     const toggleTaskSelection = (taskId) => {
         if (selectedTasks.includes(taskId)) {
             setSelectedTasks(selectedTasks.filter(id => id !== taskId));
@@ -49,7 +46,6 @@ const TimeLog = () => {
         }
     };
 
-    // Seleciona todas as tarefas
     const selectAllTasks = () => {
         if (selectedTasks.length === savedTasks.length) {
             setSelectedTasks([]);
@@ -58,7 +54,6 @@ const TimeLog = () => {
         }
     };
 
-    // Gera o plano de lançamento
     const generatePlan = async () => {
         if (selectedTasks.length === 0) {
             toast.warning('Selecione pelo menos uma tarefa para lançar horas.');
@@ -75,15 +70,10 @@ const TimeLog = () => {
         setError(null);
 
         try {
-            console.log("Gerando plano para as datas:", dateRange.startDate, "até", dateRange.endDate);
-
-            // Obtém dias úteis no intervalo
-            const workingDays = await window.go.backend.App.ObterDiasUteis(
+            const workingDays = await window.go.backend.App.GetWorkingDays(
                 dateRange.startDate,
                 dateRange.endDate
             );
-
-            console.log("Dias úteis obtidos:", workingDays);
 
             if (!workingDays || workingDays.length === 0) {
                 toast.warning('Não foram encontrados dias úteis no período selecionado.');
@@ -91,20 +81,14 @@ const TimeLog = () => {
                 return;
             }
 
-            // Filtra as tarefas selecionadas
             const filteredTasks = savedTasks.filter(task =>
                 selectedTasks.includes(task.taskId)
             );
 
-            console.log("Tarefas filtradas:", filteredTasks);
-
-            // Gera o plano de distribuição
-            const plan = await window.go.backend.App.CriarPlanoDistribuicao(
+            const plan = await window.go.backend.App.CreateDistributionPlan(
                 workingDays,
                 filteredTasks
             );
-
-            console.log("Plano gerado:", plan);
 
             if (!plan || plan.length === 0) {
                 toast.warning('Não foi possível gerar um plano de lançamento.');
@@ -122,7 +106,6 @@ const TimeLog = () => {
         }
     };
 
-    // Submete o plano de lançamento
     const submitPlan = async () => {
         if (workDays.length === 0) {
             toast.warning('Gere um plano antes de lançar horas.');
@@ -133,13 +116,22 @@ const TimeLog = () => {
         setResults([]);
         setShowResults(false);
         setError(null);
+        setProcessingProgress(0);
 
         try {
-            console.log("Enviando plano de lançamento:", workDays);
+            const totalEntries = workDays.reduce((sum, day) => sum + day.entries.length, 0);
 
+            // Inicia um toast de progresso
+            const toastId = toast.info('Processando lançamentos...', {
+                autoClose: false,
+                closeButton: false
+            });
+
+            // Faz o lançamento
             const results = await window.go.backend.App.LogMultipleTimes(workDays);
 
-            console.log("Resultados do lançamento:", results);
+            // Atualiza o toast
+            toast.dismiss(toastId);
 
             if (!results || results.length === 0) {
                 toast.error('Não foram recebidos resultados do lançamento.');
@@ -150,7 +142,6 @@ const TimeLog = () => {
             setResults(results);
             setShowResults(true);
 
-            // Conta sucessos e falhas
             const successes = results.filter(r => r.success).length;
             const failures = results.length - successes;
 
@@ -167,20 +158,18 @@ const TimeLog = () => {
             setError("Erro ao lançar horas: " + (error.message || error));
         } finally {
             setIsSubmitting(false);
+            setProcessingProgress(100);
         }
     };
 
-    // Formata uma data para exibição
     const formatDate = (dateString) => {
         try {
             return format(parseISO(dateString), 'dd/MM/yyyy (EEEE)', {locale: ptBR});
         } catch (error) {
-            console.error("Erro ao formatar data:", error, dateString);
             return dateString || "Data inválida";
         }
     };
 
-    // Calcula o total de horas no plano
     const calculateTotalHours = () => {
         if (!workDays || workDays.length === 0) return {days: 0, hours: 0, minutes: 0, totalMinutes: 0};
 
@@ -201,7 +190,8 @@ const TimeLog = () => {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full">
-                <div className="animate-spin-slow w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+                <div
+                    className="animate-spin-slow w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full"></div>
             </div>
         );
     }
@@ -216,7 +206,7 @@ const TimeLog = () => {
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">
                     <div className="flex items-start">
-                        <FiAlertCircle className="mt-0.5 w-5 h-5 text-red-500 dark:text-red-600 mr-2" />
+                        <FiAlertCircle className="mt-0.5 w-5 h-5 text-red-500 dark:text-red-600 mr-2"/>
                         <div>
                             <h3 className="text-sm font-medium text-red-800 dark:text-red-400">Erro</h3>
                             <p className="mt-1 text-sm text-red-700 dark:text-red-200">{error}</p>
@@ -225,19 +215,18 @@ const TimeLog = () => {
                 </div>
             )}
 
-            {/* Painel superior */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                {/* Seleção de tarefas */}
                 <div className="card lg:col-span-2">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <FiList className="w-5 h-5 mr-2" />
+                        <FiList className="w-5 h-5 mr-2"/>
                         Tarefas para Lançamento
                     </h2>
 
                     {savedTasks.length === 0 ? (
-                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 dark:bg-yellow-900/20 dark:border-yellow-600">
+                        <div
+                            className="bg-yellow-50 border-l-4 border-yellow-400 p-4 dark:bg-yellow-900/20 dark:border-yellow-600">
                             <div className="flex items-start">
-                                <FiAlertCircle className="mt-0.5 w-5 h-5 text-yellow-500 dark:text-yellow-600 mr-2" />
+                                <FiAlertCircle className="mt-0.5 w-5 h-5 text-yellow-500 dark:text-yellow-600 mr-2"/>
                                 <div>
                                     <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-400">
                                         Nenhuma tarefa salva
@@ -299,16 +288,16 @@ const TimeLog = () => {
                     )}
                 </div>
 
-                {/* Seleção de datas */}
                 <div className="card">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <FiCalendar className="w-5 h-5 mr-2" />
+                        <FiCalendar className="w-5 h-5 mr-2"/>
                         Período
                     </h2>
 
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="startDate"
+                                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Data Inicial
                             </label>
                             <input
@@ -321,7 +310,8 @@ const TimeLog = () => {
                         </div>
 
                         <div>
-                            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <label htmlFor="endDate"
+                                   className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Data Final
                             </label>
                             <input
@@ -341,12 +331,12 @@ const TimeLog = () => {
                         >
                             {isGenerating ? (
                                 <>
-                                    <FiLoader className="w-5 h-5 mr-2 animate-spin" />
+                                    <FiLoader className="w-5 h-5 mr-2 animate-spin"/>
                                     Gerando...
                                 </>
                             ) : (
                                 <>
-                                    <FiPlay className="w-5 h-5 mr-2" />
+                                    <FiPlay className="w-5 h-5 mr-2"/>
                                     Gerar Plano
                                 </>
                             )}
@@ -355,12 +345,11 @@ const TimeLog = () => {
                 </div>
             </div>
 
-            {/* Plano de lançamento */}
             {workDays && workDays.length > 0 && (
                 <div className="card mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                            <FiClock className="w-5 h-5 mr-2" />
+                            <FiClock className="w-5 h-5 mr-2"/>
                             Plano de Lançamento
                         </h2>
 
@@ -376,7 +365,8 @@ const TimeLog = () => {
                     <div className="overflow-y-auto max-h-96">
                         <div className="space-y-4">
                             {workDays.map((day, dayIndex) => (
-                                <div key={dayIndex} className="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
+                                <div key={dayIndex}
+                                     className="border border-gray-200 rounded-lg p-4 dark:border-gray-700">
                                     <h3 className="text-md font-medium text-gray-900 dark:text-white mb-2">
                                         {formatDate(day.date)}
                                     </h3>
@@ -423,6 +413,18 @@ const TimeLog = () => {
                     </div>
 
                     <div className="mt-4">
+                        {isSubmitting && (
+                            <div className="mb-4">
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-2">
+                                    <div className="bg-primary-600 h-2.5 rounded-full dark:bg-primary-500"
+                                         style={{width: `${processingProgress}%`}}></div>
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                                    Processando lançamentos...
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             type="button"
                             onClick={submitPlan}
@@ -431,12 +433,12 @@ const TimeLog = () => {
                         >
                             {isSubmitting ? (
                                 <>
-                                    <FiLoader className="w-5 h-5 mr-2 animate-spin" />
+                                    <FiLoader className="w-5 h-5 mr-2 animate-spin"/>
                                     Enviando...
                                 </>
                             ) : (
                                 <>
-                                    <FiCheck className="w-5 h-5 mr-2" />
+                                    <FiCheck className="w-5 h-5 mr-2"/>
                                     Executar Lançamento
                                 </>
                             )}
@@ -445,11 +447,10 @@ const TimeLog = () => {
                 </div>
             )}
 
-            {/* Resultados */}
             {showResults && results && results.length > 0 && (
                 <div className="card">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                        <FiCheckCircle className="w-5 h-5 mr-2" />
+                        <FiCheckCircle className="w-5 h-5 mr-2"/>
                         Resultados do Lançamento
                     </h2>
 
@@ -472,7 +473,7 @@ const TimeLog = () => {
                                                     : 'bg-red-100 text-red-600 dark:bg-red-800 dark:text-red-200'
                                             }`}
                                         >
-                                            {result.success ? <FiCheck size={12} /> : <FiAlertCircle size={12} />}
+                                            {result.success ? <FiCheck size={12}/> : <FiAlertCircle size={12}/>}
                                         </div>
                                         <div className="ml-3">
                                             <p className={`text-sm ${
@@ -494,18 +495,19 @@ const TimeLog = () => {
                         </div>
                     </div>
 
-                    {/* Resumo dos resultados */}
                     <div className="mt-4 bg-gray-50 p-3 rounded-md dark:bg-gray-800">
                         <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Resumo</h3>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-green-50 p-2 rounded dark:bg-green-900/20">
                                 <p className="text-xs text-green-800 dark:text-green-200">
-                                    <span className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
+                                    <span
+                                        className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
                                 </p>
                             </div>
                             <div className="bg-red-50 p-2 rounded dark:bg-red-900/20">
                                 <p className="text-xs text-red-800 dark:text-red-200">
-                                    <span className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
+                                    <span
+                                        className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
                                 </p>
                             </div>
                         </div>

@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     FiHome,
@@ -8,13 +8,18 @@ import {
     FiSave,
     FiX,
     FiSun,
-    FiMoon
+    FiMoon,
+    FiFileText,
+    FiLoader,
+    FiDownload
 } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
 import clsx from 'clsx';
 
 const Sidebar = ({ isOpen, onClose, isConfigured }) => {
     const { darkMode, toggleDarkMode } = useContext(ThemeContext);
+    const [isExporting, setIsExporting] = useState(false);
 
     const navItems = [
         {
@@ -53,6 +58,32 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
     const filteredNavItems = isConfigured
         ? navItems
         : navItems.filter(item => !item.requiresConfig);
+
+    const handleExportReport = async () => {
+        if (!isConfigured) {
+            toast.warning("Configure sua conta antes de exportar relatórios.");
+            return;
+        }
+
+        setIsExporting(true);
+
+        try {
+            // Chamar a API de backend para baixar o relatório
+            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
+
+            // Mostrar mensagem de sucesso com o caminho do arquivo
+            toast.success(`Relatório exportado com sucesso para: ${filePath}`);
+
+            // Abrir o diretório que contém o arquivo (opcional)
+            await window.go.backend.App.OpenDirectoryPath(filePath);
+
+        } catch (error) {
+            console.error("Erro ao exportar relatório:", error);
+            toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <>
@@ -102,6 +133,23 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                                 <span className="ml-3">{item.label}</span>
                             </NavLink>
                         ))}
+
+                        {isConfigured && (
+                            <button
+                                onClick={handleExportReport}
+                                disabled={isExporting}
+                                className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            >
+                                {isExporting ? (
+                                    <FiLoader className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <FiDownload className="w-5 h-5" />
+                                )}
+                                <span className="ml-3">
+                                    {isExporting ? "Exportando..." : "Relatório Mensal"}
+                                </span>
+                            </button>
+                        )}
                     </nav>
 
                     {/* Rodapé com toggle de tema */}

@@ -1,0 +1,485 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	if taskID <= 0 {
+		return nil, fmt.Errorf("ID de tarefa inválido: %d", taskID)
+	}
+
+	if entry.Date == "" {
+		return nil, fmt.Errorf("data não especificada para o lançamento")
+	}
+
+	if entry.Minutes <= 0 {
+		return nil, fmt.Errorf("minutos devem ser maiores que zero: %d", entry.Minutes)
+	}
+
+	taskIDStr := strconv.Itoa(taskID)
+	path := fmt.Sprintf("/projects/api/v3/tasks/%s/time.json", taskIDStr)
+	url := t.buildURL(path)
+
+	if t.Config.UserID <= 0 {
+		return nil, fmt.Errorf("ID do usuário não configurado")
+	}
+
+	entry.UserID = t.Config.UserID
+
+	t.logDebug("Lançando tempo para tarefa #%d: %s %s - %d minutos - %s",
+		taskID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+
+	reqBody := TimelogRequest{
+		Timelog: entry,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter para JSON: %v", err)
+	}
+
+	t.logDebug("JSON do lançamento: %s", string(jsonData))
+
+	req, err := t.createRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	t.logDebug("Resposta do servidor (%d): %s", resp.StatusCode, string(body))
+
+	result := &TimeLogResult{
+		TaskID: taskID,
+		Date:   entry.Date,
+	}
+
+	if resp.StatusCode == 201 {
+		result.Success = true
+		result.Message = fmt.Sprintf("Entrada de tempo enviada com sucesso: %s %s",
+			entry.Date, entry.Time)
+
+		var successResponse struct {
+			ID     int    `json:"id"`
+			Status string `json:"status"`
+		}
+
+		if err := json.Unmarshal(body, &successResponse); err == nil && successResponse.ID > 0 {
+			result.Message += fmt.Sprintf(" (ID: %d)", successResponse.ID)
+		}
+
+		return result, nil
+	} else {
+		result.Success = false
+
+		var errorResponse struct {
+			Errors []string `json:"errors"`
+		}
+
+		if err := json.Unmarshal(body, &errorResponse); err == nil && len(errorResponse.Errors) > 0 {
+			result.Message = fmt.Sprintf("Erro ao enviar entrada: %s", strings.Join(errorResponse.Errors, ", "))
+		} else {
+			result.Message = fmt.Sprintf("Erro ao enviar entrada: %d %s - %s",
+				resp.StatusCode, resp.Status, string(body))
+		}
+
+		return result, fmt.Errorf(result.Message)
+	}
+}
+
+func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, error) {
+	if len(workDays) == 0 {
+		return nil, fmt.Errorf("nenhum dia de trabalho fornecido para lançamento")
+	}
+
+	t.logDebug("Iniciando lançamento de horas para %d dias", len(workDays))
+
+	totalEntries := 0
+	for _, day := range workDays {
+		totalEntries += len(day.Entries)
+	}
+
+	results := make([]*TimeLogResult, 0, totalEntries)
+	resultChan := make(chan *TimeLogResult, totalEntries)
+	errorChan := make(chan error, totalEntries)
+
+	var wg sync.WaitGroup
+	// Limitar processamento paralelo a 3 para não sobrecarregar a API
+	semaphore := make(chan struct{}, 3)
+
+	for _, dia := range workDays {
+		if len(dia.Entries) == 0 {
+			continue
+		}
+
+		for _, alocacao := range dia.Entries {
+			wg.Add(1)
+			go func(d string, a EntryTask) {
+				defer wg.Done()
+				semaphore <- struct{}{}
+				defer func() { <-semaphore }()
+
+				entrada := a.Entry
+				entrada.Date = d
+
+				if a.TaskID <= 0 {
+					resultChan <- &TimeLogResult{
+						Success: false,
+						Message: fmt.Sprintf("ID de tarefa inválido: %d", a.TaskID),
+						Date:    d,
+						TaskID:  a.TaskID,
+					}
+					return
+				}
+
+				result, err := t.LogTime(a.TaskID, entrada)
+				if err != nil {
+					if result == nil {
+						resultChan <- &TimeLogResult{
+							Success: false,
+							Message: err.Error(),
+							Date:    d,
+							TaskID:  a.TaskID,
+						}
+					} else {
+						resultChan <- result
+					}
+					errorChan <- err
+				} else {
+					resultChan <- result
+				}
+
+				// Pequena pausa para não sobrecarregar a API
+				time.Sleep(500 * time.Millisecond)
+			}(dia.Date, alocacao)
+		}
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+		close(errorChan)
+	}()
+
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	if len(results) == 0 {
+		if len(errorChan) > 0 {
+			return nil, <-errorChan
+		}
+		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
+	}
+
+	return results, nil
+}
+
+func (t *TeamworkAPI) GetWorkingDays(inicio, fim string) ([]string, error) {
+	inicioDate, err := time.Parse("2006-01-02", inicio)
+	if err != nil {
+		return nil, fmt.Errorf("data inicial inválida: %v", err)
+	}
+
+	fimDate, err := time.Parse("2006-01-02", fim)
+	if err != nil {
+		return nil, fmt.Errorf("data final inválida: %v", err)
+	}
+
+	if fimDate.Before(inicioDate) {
+		return nil, fmt.Errorf("a data final deve ser igual ou posterior à data inicial")
+	}
+
+	diasUteis := make([]string, 0)
+
+	atual := inicioDate
+	for !atual.After(fimDate) {
+		if isWorkDay(atual) {
+			diasUteis = append(diasUteis, formatDate(atual))
+		}
+		atual = atual.AddDate(0, 0, 1)
+	}
+
+	if len(diasUteis) == 0 {
+		return nil, fmt.Errorf("não foram encontrados dias úteis no período especificado")
+	}
+
+	return diasUteis, nil
+}
+
+func isWorkDay(data time.Time) bool {
+	diaSemana := data.Weekday()
+	return diaSemana != time.Saturday && diaSemana != time.Sunday
+}
+
+func formatDate(data time.Time) string {
+	return data.Format("2006-01-02")
+}
+
+func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task) []WorkDay {
+	planoDistribuicao := make([]WorkDay, 0, len(diasUteis))
+
+	for _, dia := range diasUteis {
+		workDay := WorkDay{
+			Date:     dia,
+			Entries:  []EntryTask{},
+			TotalMin: 0,
+		}
+
+		for _, tarefa := range tarefas {
+			for _, entrada := range tarefa.Entries {
+				workDay.Entries = append(workDay.Entries, EntryTask{
+					TaskID: tarefa.TaskID,
+					Entry:  entrada,
+				})
+				workDay.TotalMin += entrada.Minutes
+			}
+		}
+
+		planoDistribuicao = append(planoDistribuicao, workDay)
+	}
+
+	return planoDistribuicao
+}
+
+func (t *TeamworkAPI) CalculateTotalMinutes(tarefas []Task) int {
+	total := 0
+	for _, tarefa := range tarefas {
+		for _, entrada := range tarefa.Entries {
+			total += entrada.Minutes
+		}
+	}
+	return total
+}
+
+func (t *TeamworkAPI) GetHoursLoggedInPeriod(startDate, endDate string) (float64, error) {
+	userID := strconv.Itoa(t.Config.UserID)
+	path := fmt.Sprintf("/projects/api/v3/time.json?userId=%s&fromDate=%s&toDate=%s",
+		userID, startDate, endDate)
+	url := t.buildURL(path)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return 0, err
+	}
+
+	if resp.StatusCode != 200 {
+		return 0, fmt.Errorf("erro ao obter registros de tempo: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	var response struct {
+		TimeEntries []struct {
+			Minutes float64 `json:"minutes"`
+		} `json:"timeEntries"`
+	}
+
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return t.GetHoursLoggedInPeriodLegacy(startDate, endDate)
+	}
+
+	totalMinutos := 0.0
+	for _, entry := range response.TimeEntries {
+		totalMinutos += entry.Minutes
+	}
+
+	return totalMinutos / 60.0, nil
+}
+
+func (t *TeamworkAPI) GetHoursLoggedInPeriodLegacy(startDate, endDate string) (float64, error) {
+	userID := strconv.Itoa(t.Config.UserID)
+	path := fmt.Sprintf("/time/total.json?userId=%s&fromDate=%s&toDate=%s",
+		userID, startDate, endDate)
+	url := t.buildURL(path)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return 0, err
+	}
+
+	if resp.StatusCode != 200 {
+		return 0, fmt.Errorf("erro ao obter registros de tempo legado: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
+		return 0, err
+	}
+
+	totalMinutos := 0.0
+
+	if timeEntriesRaw, ok := rawResponse["time-entries"]; ok {
+		if timeEntriesArr, ok := timeEntriesRaw.([]interface{}); ok {
+			for _, entryRaw := range timeEntriesArr {
+				if entry, ok := entryRaw.(map[string]interface{}); ok {
+					if mins, ok := entry["minutes"].(float64); ok {
+						totalMinutos += mins
+					}
+				}
+			}
+		}
+	}
+
+	return totalMinutos / 60.0, nil
+}
+
+func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[string]interface{}, float64, map[string]interface{}, error) {
+	userID := strconv.Itoa(t.Config.UserID)
+	path := fmt.Sprintf("/time/total.json?userId=%s&fromDate=%s&toDate=%s&includeTaskInfo=true",
+		userID, startDate, endDate)
+	url := t.buildURL(path)
+
+	t.logDebug("Obtendo registros de tempo: %s", url)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, 0, nil, fmt.Errorf("erro ao obter registros de tempo: %d %s - %s",
+			resp.StatusCode, resp.Status, string(body))
+	}
+
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
+		return nil, 0, nil, err
+	}
+
+	var entries []map[string]interface{}
+	totalMinutos := 0.0
+
+	if timeEntriesRaw, ok := rawResponse["time-entries"]; ok {
+		if timeEntriesArr, ok := timeEntriesRaw.([]interface{}); ok {
+			for _, entryRaw := range timeEntriesArr {
+				if entry, ok := entryRaw.(map[string]interface{}); ok {
+					entries = append(entries, entry)
+
+					if mins, ok := entry["minutes"].(float64); ok {
+						totalMinutos += mins
+					}
+				}
+			}
+		}
+	}
+
+	totalHoras := totalMinutos / 60.0
+
+	var ultimoLancamento map[string]interface{}
+	if len(entries) > 0 {
+		ultimoLancamento = entries[0]
+
+		for _, entry := range entries {
+			if dataAtual, ok := entry["date"].(string); ok {
+				if dataUltimo, ok := ultimoLancamento["date"].(string); ok {
+					if dataAtual > dataUltimo {
+						ultimoLancamento = entry
+					}
+				}
+			}
+		}
+	}
+
+	return entries, totalHoras, ultimoLancamento, nil
+}
+
+func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
+	now := time.Now()
+	ultimosDias := now.AddDate(0, 0, -7).Format("2006-01-02")
+
+	path := fmt.Sprintf("/projects/api/v3/time.json?userId=%d&fromDate=%s&include=projects",
+		t.Config.UserID, ultimosDias)
+	url := t.buildURL(path)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("erro ao obter atividades recentes: %d", resp.StatusCode)
+	}
+
+	var responseData struct {
+		TimeEntries []struct {
+			ID          int     `json:"id"`
+			Description string  `json:"description"`
+			Minutes     float64 `json:"minutes"`
+			Date        string  `json:"date"`
+			ProjectID   int     `json:"projectId"`
+			TaskID      int     `json:"taskId"`
+		} `json:"timeEntries"`
+		Included struct {
+			Projects map[string]struct {
+				Name string `json:"name"`
+			} `json:"projects"`
+		} `json:"included"`
+	}
+
+	if err := json.Unmarshal(body, &responseData); err != nil {
+		return nil, err
+	}
+
+	atividades := make([]map[string]interface{}, 0)
+
+	for i, entry := range responseData.TimeEntries {
+		if i >= 5 {
+			break
+		}
+
+		projectName := ""
+		projectIDStr := strconv.Itoa(entry.ProjectID)
+		if project, ok := responseData.Included.Projects[projectIDStr]; ok {
+			projectName = project.Name
+		}
+
+		atividadeInfo := map[string]interface{}{
+			"id":          entry.ID,
+			"type":        "time",
+			"description": entry.Description,
+			"minutes":     entry.Minutes,
+			"date":        entry.Date,
+			"projectId":   entry.ProjectID,
+			"projectName": projectName,
+			"taskId":      entry.TaskID,
+		}
+
+		atividades = append(atividades, atividadeInfo)
+	}
+
+	return atividades, nil
+}

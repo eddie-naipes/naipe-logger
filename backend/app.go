@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 )
 
-// App é a estrutura principal da aplicação
 type App struct {
 	ctx           context.Context
 	configManager *config.Manager
 	teamworkAPI   *api.TeamworkAPI
 }
 
-// NewApp cria uma nova instância da aplicação
 func NewApp(ctx context.Context) (*App, error) {
 	configManager, err := config.NewManager()
 	if err != nil {
@@ -117,23 +118,17 @@ func (a *App) DeleteTemplate(name string) error {
 	return a.configManager.DeleteTemplate(name)
 }
 
-//
-// API de gerenciamento de tempo
-//
-
-// CalcularTotalMinutos calcula o total de minutos de um conjunto de tarefas
-func (a *App) CalcularTotalMinutos(tarefas []api.Task) int {
-	return a.teamworkAPI.CalcularTotalMinutos(tarefas)
+func (a *App) CalculateTotalMinutes(tarefas []api.Task) int {
+	return a.teamworkAPI.CalculateTotalMinutes(tarefas)
 }
 
-// ObterDiasUteis retorna os dias úteis entre duas datas
-func (a *App) ObterDiasUteis(inicio, fim string) ([]string, error) {
-	return a.teamworkAPI.ObterDiasUteis(inicio, fim)
+func (a *App) GetWorkingDays(inicio, fim string) ([]string, error) {
+	return a.teamworkAPI.GetWorkingDays(inicio, fim)
 }
 
-// CriarPlanoDistribuicao cria um plano de distribuição para os dias úteis com base nas tarefas padrão
-func (a *App) CriarPlanoDistribuicao(diasUteis []string, tarefas []api.Task) []api.WorkDay {
-	return a.teamworkAPI.CriarPlanoDistribuicao(diasUteis, tarefas)
+// CreateDistributionPlan cria um plano de distribuição para os dias úteis com base nas tarefas padrão
+func (a *App) CreateDistributionPlan(diasUteis []string, tarefas []api.Task) []api.WorkDay {
+	return a.teamworkAPI.CreateDistributionPlan(diasUteis, tarefas)
 }
 
 // LogMultipleTimes registra múltiplas entradas de tempo para diferentes tarefas e dias
@@ -195,7 +190,20 @@ func (a *App) LoginWithCredentials(email, password, host string) (*api.LoginResp
 		config := a.configManager.GetTeamworkConfig()
 		config.AuthToken = loginResponse.Token
 		config.ApiHost = host
-		config.UserID = loginResponse.UserID
+
+		if loginResponse.UserID <= 0 {
+			tempAPI := api.NewTeamworkAPI(config)
+			userID, err := tempAPI.GetCurrentUserId()
+			if err != nil {
+				fmt.Printf("Erro ao obter ID do usuário após login: %v\n", err)
+				config.UserID = loginResponse.UserID
+			} else {
+				config.UserID = userID
+				loginResponse.UserID = userID
+			}
+		} else {
+			config.UserID = loginResponse.UserID
+		}
 
 		if err := a.configManager.SetTeamworkConfig(config); err != nil {
 			return nil, fmt.Errorf("erro ao salvar configuração: %v", err)
@@ -205,4 +213,63 @@ func (a *App) LoginWithCredentials(email, password, host string) (*api.LoginResp
 	}
 
 	return loginResponse, nil
+}
+
+func (a *App) DownloadCurrentMonthReport() (string, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
+	}
+
+	filePath, err := a.teamworkAPI.DownloadCurrentMonthReport()
+	if err != nil {
+		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) OpenDirectoryPath(filePath string) error {
+	dirPath := filepath.Dir(filePath)
+
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", dirPath)
+	case "darwin":
+		cmd = exec.Command("open", dirPath)
+	case "linux":
+		cmd = exec.Command("xdg-open", dirPath)
+	default:
+		return fmt.Errorf("sistema operacional não suportado: %s", runtime.GOOS)
+	}
+
+	return cmd.Start()
+}
+
+func (a *App) GetDashboardStats() (map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada. Configure sua conta antes de visualizar o dashboard")
+	}
+
+	stats, err := a.teamworkAPI.GetDashboardStats()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao obter estatísticas do dashboard: %v", err)
+	}
+
+	return stats, nil
+}
+
+func (a *App) GetRecentActivities() ([]map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+	return a.teamworkAPI.GetRecentActivities()
+}
+
+func (a *App) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+	return a.teamworkAPI.GetTasksWithUpcomingDeadlines()
 }
