@@ -1,4 +1,3 @@
-// backend/app.go
 package backend
 
 import (
@@ -9,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 )
 
 type App struct {
@@ -103,17 +104,14 @@ func (a *App) GetTemplates() map[string]api.Template {
 	return a.configManager.GetTemplates()
 }
 
-// GetTemplate retorna um template específico
 func (a *App) GetTemplate(name string) (api.Template, bool) {
 	return a.configManager.GetTemplate(name)
 }
 
-// SaveTemplate salva um novo template ou atualiza um existente
 func (a *App) SaveTemplate(template api.Template) error {
 	return a.configManager.SaveTemplate(template)
 }
 
-// DeleteTemplate remove um template
 func (a *App) DeleteTemplate(name string) error {
 	return a.configManager.DeleteTemplate(name)
 }
@@ -126,31 +124,22 @@ func (a *App) GetWorkingDays(inicio, fim string) ([]string, error) {
 	return a.teamworkAPI.GetWorkingDays(inicio, fim)
 }
 
-// CreateDistributionPlan cria um plano de distribuição para os dias úteis com base nas tarefas padrão
 func (a *App) CreateDistributionPlan(diasUteis []string, tarefas []api.Task) []api.WorkDay {
 	return a.teamworkAPI.CreateDistributionPlan(diasUteis, tarefas)
 }
 
-// LogMultipleTimes registra múltiplas entradas de tempo para diferentes tarefas e dias
 func (a *App) LogMultipleTimes(workDays []api.WorkDay) ([]*api.TimeLogResult, error) {
 	return a.teamworkAPI.LogMultipleTimes(workDays)
 }
 
-// LogTime registra uma entrada de tempo para uma tarefa
 func (a *App) LogTime(taskID int, entry api.TimeEntry) (*api.TimeLogResult, error) {
 	return a.teamworkAPI.LogTime(taskID, entry)
 }
 
-// Adicione esta função ao arquivo backend/app.go
-
-// GetCurrentUserId obtém o ID do usuário atual autenticado
 func (a *App) GetCurrentUserId() (int, error) {
 	return a.teamworkAPI.GetCurrentUserId()
 }
 
-// Adicione estas funções ao arquivo backend/app.go
-
-// GetProjects obtém a lista de projetos
 func (a *App) GetProjects() ([]api.Project, error) {
 	return a.teamworkAPI.GetProjects()
 }
@@ -220,7 +209,8 @@ func (a *App) DownloadCurrentMonthReport() (string, error) {
 		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
 	}
 
-	filePath, err := a.teamworkAPI.DownloadCurrentMonthReport()
+	// Usar o método DownloadCurrentMonthTimeReport em vez de DownloadCurrentMonthReport
+	filePath, err := a.teamworkAPI.DownloadCurrentMonthTimeReport()
 	if err != nil {
 		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
 	}
@@ -249,12 +239,21 @@ func (a *App) OpenDirectoryPath(filePath string) error {
 
 func (a *App) GetDashboardStats() (map[string]interface{}, error) {
 	if !a.teamworkAPI.IsConfigured() {
-		return nil, fmt.Errorf("API não configurada. Configure sua conta antes de visualizar o dashboard")
+		return nil, fmt.Errorf("API não configurada")
 	}
 
 	stats, err := a.teamworkAPI.GetDashboardStats()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter estatísticas do dashboard: %v", err)
+	}
+
+	now := time.Now()
+	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+	endDate := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+
+	timeTotal, err := a.teamworkAPI.GetTimeTotalsForPeriod(startDate, endDate)
+	if err == nil && timeTotal != nil && timeTotal.TimeTotals.Minutes > 0 {
+		stats["horasLogadas"] = float64(timeTotal.TimeTotals.Minutes) / 60.0
 	}
 
 	return stats, nil
@@ -272,4 +271,82 @@ func (a *App) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) 
 		return nil, fmt.Errorf("API não configurada")
 	}
 	return a.teamworkAPI.GetTasksWithUpcomingDeadlines()
+}
+
+func (a *App) DownloadCurrentMonthTimeReport() (string, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
+	}
+
+	filePath, err := a.teamworkAPI.DownloadCurrentMonthTimeReport()
+	if err != nil {
+		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) DownloadTimeReport(startDate, endDate string) (string, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
+	}
+
+	filePath, err := a.teamworkAPI.GetDefaultReportPath()
+	if err != nil {
+		return "", fmt.Errorf("erro ao obter caminho padrão de relatório: %v", err)
+	}
+
+	filePath = strings.TrimSuffix(filePath, filepath.Ext(filePath)) + "_" + startDate + "_" + endDate + ".pdf"
+
+	err = a.teamworkAPI.DownloadTimeReport(startDate, endDate, filePath)
+	if err != nil {
+		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	timeTotal, err := a.teamworkAPI.GetTimeTotalsForPeriod(startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao obter totais de tempo: %v", err)
+	}
+
+	return timeTotal, nil
+}
+
+func (a *App) GetTimeEntriesForPeriod(startDate, endDate string) ([]api.TimeEntryReport, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetTimeEntriesForPeriod(startDate, endDate)
+}
+
+func (a *App) GetLoggedTimeFromCalendarAPI(month, year int) (*api.LoggedTimeResponse, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetLoggedTimeFromCalendarAPI(month, year)
+}
+
+func (a *App) CreateDistributionPlanFromLoggedTime(month, year int, tasks []api.Task) ([]api.WorkDay, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.CreateDistributionPlanFromLoggedTime(month, year, tasks)
+}
+
+func (a *App) GetEntriesFromLoggedTime(month, year int) ([]map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetEntriesFromLoggedTime(month, year)
 }

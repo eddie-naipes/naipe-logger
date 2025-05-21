@@ -54,7 +54,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
         },
     ];
 
-    // Filtra itens que requerem configuração se não estiver configurado
     const filteredNavItems = isConfigured
         ? navItems
         : navItems.filter(item => !item.requiresConfig);
@@ -68,15 +67,9 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
         setIsExporting(true);
 
         try {
-            // Chamar a API de backend para baixar o relatório
-            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
-
-            // Mostrar mensagem de sucesso com o caminho do arquivo
+            const filePath = await window.go.backend.App.DownloadCurrentMonthTimeReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
-
-            // Abrir o diretório que contém o arquivo (opcional)
             await window.go.backend.App.OpenDirectoryPath(filePath);
-
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
             toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
@@ -87,7 +80,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
 
     return (
         <>
-            {/* Overlay para mobile */}
             {isOpen && (
                 <div
                     className="fixed inset-0 z-10 bg-gray-900 bg-opacity-50 lg:hidden"
@@ -95,7 +87,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                 />
             )}
 
-            {/* Sidebar */}
             <aside
                 className={clsx(
                     "fixed top-0 left-0 z-20 h-full w-64 transform bg-white border-r border-gray-200 transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-full dark:bg-gray-800 dark:border-gray-700",
@@ -103,7 +94,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                 )}
             >
                 <div className="flex flex-col h-full">
-                    {/* Cabeçalho */}
                     <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                         <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
                             Teamwork Logger
@@ -116,7 +106,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         </button>
                     </div>
 
-                    {/* Links de navegação */}
                     <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                         {filteredNavItems.map((item) => (
                             <NavLink
@@ -152,7 +141,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         )}
                     </nav>
 
-                    {/* Rodapé com toggle de tema */}
                     <div className="p-4 border-t border-gray-200 dark:border-gray-700">
                         <button
                             onClick={toggleDarkMode}

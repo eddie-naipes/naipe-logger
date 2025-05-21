@@ -3,6 +3,7 @@ import {toast} from 'react-toastify';
 import {FiAlertCircle, FiCalendar, FiCheck, FiCheckCircle, FiClock, FiList, FiLoader, FiPlay} from 'react-icons/fi';
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
+import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 
 const TimeLog = () => {
     const [isLoading, setIsLoading] = useState(true);
@@ -37,6 +38,30 @@ const TimeLog = () => {
 
         loadSavedTasks();
     }, []);
+
+    const handleDaySelection = (day, entries) => {
+        const formattedDate = day.toISOString().split('T')[0];
+
+        setDateRange({
+            startDate: formattedDate,
+            endDate: formattedDate
+        });
+
+        if (entries && entries.length > 0) {
+            const taskIdsFromEntries = entries.map(entry => entry.taskId);
+            const existingTasks = savedTasks.filter(task =>
+                taskIdsFromEntries.includes(task.taskId)
+            );
+
+            if (existingTasks.length > 0) {
+                setSelectedTasks(existingTasks.map(task => task.taskId));
+            }
+        }
+
+        setTimeout(() => {
+            generatePlan();
+        }, 100);
+    };
 
     const toggleTaskSelection = (taskId) => {
         if (selectedTasks.includes(taskId)) {
@@ -121,16 +146,13 @@ const TimeLog = () => {
         try {
             const totalEntries = workDays.reduce((sum, day) => sum + day.entries.length, 0);
 
-            // Inicia um toast de progresso
             const toastId = toast.info('Processando lançamentos...', {
                 autoClose: false,
                 closeButton: false
             });
 
-            // Faz o lançamento
             const results = await window.go.backend.App.LogMultipleTimes(workDays);
 
-            // Atualiza o toast
             toast.dismiss(toastId);
 
             if (!results || results.length === 0) {
@@ -202,6 +224,8 @@ const TimeLog = () => {
                 <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Lançar Horas</h1>
                 <p className="text-gray-600 dark:text-gray-400">Registre horas trabalhadas em múltiplos dias</p>
             </div>
+
+            <MonthlyTimeCalendar onDayClick={handleDaySelection} />
 
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">

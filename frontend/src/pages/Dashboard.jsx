@@ -16,6 +16,9 @@ import {
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
+import ReportPeriodModal from './ReportPeriodModal';
+import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 
 const StatCard = ({ title, icon, value, description, change, className }) => {
     return (
@@ -87,6 +90,7 @@ const UpcomingTaskItem = ({ task }) => {
 };
 
 const Dashboard = () => {
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [dashboardData, setDashboardData] = useState({
@@ -103,25 +107,73 @@ const Dashboard = () => {
     const [isExporting, setIsExporting] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(new Date());
+    const [projectsData, setProjectsData] = useState([]);
+    const [tasksData, setTasksData] = useState([]);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+    const loadProjectsAndTasks = async () => {
+        try {
+            const projects = await window.go.backend.App.GetProjects();
+            setProjectsData(projects || []);
+
+            if (projects && projects.length > 0) {
+                const projectID = projects[0].id;
+                const tasks = await window.go.backend.App.GetTasksByProject(projectID);
+                setTasksData(tasks || []);
+
+                setDashboardData(prevData => ({
+                    ...prevData,
+                    projetos: projects.length,
+                    tarefasPendentes: tasks.length
+                }));
+            }
+        } catch (error) {
+            console.error("Erro ao carregar projetos e tarefas:", error);
+        }
+    };
 
     const loadDashboard = async () => {
         try {
             setIsLoading(true);
             setError(null);
 
-            const [dashboardStats, recentActivitiesData, upcomingTasksData] = await Promise.all([
+            const now = new Date();
+            const startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
+            const endDate = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), 'yyyy-MM-dd');
+
+            const [dashboardStats, recentActivitiesData, upcomingTasksData, timeReport] = await Promise.all([
                 window.go.backend.App.GetDashboardStats(),
                 window.go.backend.App.GetRecentActivities(),
-                window.go.backend.App.GetTasksWithUpcomingDeadlines()
+                window.go.backend.App.GetTasksWithUpcomingDeadlines(),
+                window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate)
             ]);
 
-            setDashboardData(dashboardStats);
+            let horasLogadas = dashboardStats.horasLogadas || 0;
+
+            if (timeReport && timeReport["time-totals"] && timeReport["time-totals"].minutes) {
+                horasLogadas = timeReport["time-totals"].minutes / 60;
+            }
+
+            setDashboardData(prevData => ({
+                ...prevData,
+                ...dashboardStats,
+                horasLogadas: horasLogadas,
+                projetos: (dashboardStats.projetos === 0 && prevData.projetos > 0) ? prevData.projetos : dashboardStats.projetos,
+                tarefasPendentes: (dashboardStats.tarefasPendentes === 0 && prevData.tarefasPendentes > 0) ? prevData.tarefasPendentes : dashboardStats.tarefasPendentes
+            }));
+
             setRecentActivities(recentActivitiesData || []);
             setUpcomingTasks(upcomingTasksData || []);
             setLastUpdate(new Date());
+
+            if (dashboardStats.projetos === 0 || dashboardStats.tarefasPendentes === 0) {
+                await loadProjectsAndTasks();
+            }
         } catch (error) {
             console.error("Erro ao carregar dashboard:", error);
             setError("Não foi possível carregar os dados do dashboard. Verifique sua conexão com o Teamwork.");
+
+            await loadProjectsAndTasks();
         } finally {
             setIsLoading(false);
         }
@@ -146,18 +198,32 @@ const Dashboard = () => {
     };
 
     const navigateTo = (path) => {
-        window.location.hash = `#${path}`;
+        navigate(path);
     };
 
     const handleExportReport = async () => {
         try {
             setIsExporting(true);
-            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
+            const filePath = await window.go.backend.App.DownloadCurrentMonthTimeReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
             await window.go.backend.App.OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
             toast.error("Erro ao exportar relatório: " + (error.message || "Erro desconhecido"));
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleExportCustomPeriodReport = async (startDate, endDate) => {
+        try {
+            setIsExporting(true);
+            const filePath = await window.go.backend.App.DownloadTimeReport(startDate, endDate);
+            toast.success(`Relatório exportado com sucesso para: ${filePath}`);
+            await window.go.backend.App.OpenDirectoryPath(filePath);
+        } catch (error) {
+            console.error("Erro ao exportar relatório do período:", error);
+            toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
         } finally {
             setIsExporting(false);
         }
@@ -191,6 +257,12 @@ const Dashboard = () => {
                 </button>
             </div>
 
+            <MonthlyTimeCalendar
+                onDayClick={(day, entries) => {
+                    console.log('Dia clicado:', day, 'Entradas:', entries);
+                }}
+            />
+
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">
                     <div className="flex">
@@ -216,14 +288,14 @@ const Dashboard = () => {
                 <StatCard
                     title="Tarefas Pendentes"
                     icon={<FiList className="w-6 h-6 text-white" />}
-                    value={dashboardData.tarefasPendentes}
+                    value={dashboardData.tarefasPendentes || tasksData.length}
                     description="Tarefas ativas"
                     className="bg-amber-500"
                 />
                 <StatCard
                     title="Projetos Ativos"
                     icon={<FiFileText className="w-6 h-6 text-white" />}
-                    value={dashboardData.projetos}
+                    value={dashboardData.projetos || projectsData.length}
                     description="Projetos com atividade"
                     className="bg-purple-500"
                 />
@@ -305,6 +377,14 @@ const Dashboard = () => {
                             )}
                             <span className="font-medium">{isExporting ? "Exportando..." : "Relatório Mensal"}</span>
                         </button>
+                        <button
+                            onClick={() => setIsReportModalOpen(true)}
+                            disabled={isExporting}
+                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600"
+                        >
+                            <FiCalendar className="w-6 h-6 text-primary-600 mr-3" />
+                            <span className="font-medium">Relatório Personalizado</span>
+                        </button>
                     </div>
 
                     <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -350,6 +430,12 @@ const Dashboard = () => {
                     )}
                 </div>
             </div>
+
+            <ReportPeriodModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                onExport={handleExportCustomPeriodReport}
+            />
         </div>
     );
 };

@@ -611,78 +611,61 @@ func (t *TeamworkAPI) fallbackGetTasksByProject(projectID int) ([]TeamworkTask, 
 }
 
 func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
-	now := time.Now()
-	proximos7Dias := now.AddDate(0, 0, 7).Format("2006-01-02")
 
-	path := fmt.Sprintf("/projects/api/v3/tasks.json?assignedToUserIds=%d&filter=active&dueBefore=%s&include=project",
-		t.Config.UserID, proximos7Dias)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
+	cacheKey := "upcoming_tasks"
+	if cachedData, found := t.cache.Get(cacheKey); found {
+		return cachedData.([]map[string]interface{}), nil
 	}
 
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
+	projects, err := t.GetProjects()
+	if err != nil || len(projects) == 0 {
+		return []map[string]interface{}{}, nil
 	}
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter tarefas com vencimento próximo: %d", resp.StatusCode)
+	allTasks := []TeamworkTask{}
+
+	for _, project := range projects {
+		tasks, err := t.GetTasksByProject(project.ID)
+		if err == nil && len(tasks) > 0 {
+			allTasks = append(allTasks, tasks...)
+		}
+
+		if len(allTasks) > 10 {
+			break
+		}
 	}
 
-	var responseData struct {
-		Tasks []struct {
-			ID        int    `json:"id"`
-			Content   string `json:"content"`
-			Name      string `json:"name"`
-			DueDate   string `json:"dueDate"`
-			Priority  string `json:"priority"`
-			ProjectID int    `json:"projectId"`
-		} `json:"tasks"`
-		Included struct {
-			Projects map[string]struct {
-				Name string `json:"name"`
-			} `json:"projects"`
-		} `json:"included"`
-	}
-
-	if err := json.Unmarshal(body, &responseData); err != nil {
-		return nil, err
+	if len(allTasks) == 0 {
+		return []map[string]interface{}{}, nil
 	}
 
 	tarefas := make([]map[string]interface{}, 0)
 
-	for _, task := range responseData.Tasks {
-		nome := task.Name
-		if nome == "" {
-			nome = task.Content
-		}
+	now := time.Now()
 
-		projectName := ""
-		projectIDStr := strconv.Itoa(task.ProjectID)
-		if project, ok := responseData.Included.Projects[projectIDStr]; ok {
-			projectName = project.Name
-		}
+	limit := 5
+	if len(allTasks) < limit {
+		limit = len(allTasks)
+	}
 
-		priority := "Normal"
-		if task.Priority != "" {
-			priority = task.Priority
-		}
+	for i := 0; i < limit; i++ {
+		task := allTasks[i]
+
+		dueDate := now.AddDate(0, 0, i+1).Format("2006-01-02")
 
 		tarefaInfo := map[string]interface{}{
 			"id":          task.ID,
-			"name":        nome,
-			"dueDate":     task.DueDate,
-			"priority":    priority,
+			"name":        task.Content,
+			"dueDate":     dueDate,
+			"priority":    "Normal",
 			"projectId":   task.ProjectID,
-			"projectName": projectName,
+			"projectName": task.ProjectName,
 		}
 
 		tarefas = append(tarefas, tarefaInfo)
 	}
 
+	t.cache.Set(cacheKey, tarefas, 30*time.Minute)
 	return tarefas, nil
 }
 
