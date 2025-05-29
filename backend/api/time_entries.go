@@ -390,7 +390,7 @@ func (t *TeamworkAPI) GetWorkingDays(inicio, fim string) ([]string, error) {
 
 	atual := inicioDate
 	for !atual.After(fimDate) {
-		if isWorkDay(atual) {
+		if t.IsWorkDay(atual) {
 			diasUteis = append(diasUteis, formatDate(atual))
 		}
 		atual = atual.AddDate(0, 0, 1)
@@ -403,9 +403,15 @@ func (t *TeamworkAPI) GetWorkingDays(inicio, fim string) ([]string, error) {
 	return diasUteis, nil
 }
 
-func isWorkDay(data time.Time) bool {
+func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 	diaSemana := data.Weekday()
-	return diaSemana != time.Saturday && diaSemana != time.Sunday
+
+	if diaSemana == time.Saturday || diaSemana == time.Sunday {
+		return false
+	}
+
+	isHoliday, _, _ := t.IsHoliday(data)
+	return !isHoliday
 }
 
 func formatDate(data time.Time) string {
@@ -648,4 +654,49 @@ func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 
 	t.cache.Set(cacheKey, atividades, 30*time.Minute)
 	return atividades, nil
+}
+
+func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
+
+	var endDate time.Time
+	if month == 12 {
+		endDate = time.Date(year+1, 1, 0, 0, 0, 0, 0, time.Local)
+	} else {
+		endDate = time.Date(year, time.Month(month+1), 0, 0, 0, 0, 0, time.Local)
+	}
+
+	holidays, err := t.GetHolidaysForMonth(year, month)
+	if err != nil {
+		return nil, err
+	}
+
+	nonWorkingDays := make([]map[string]interface{}, 0)
+
+	current := startDate
+	for !current.After(endDate) {
+		if current.Weekday() == time.Saturday || current.Weekday() == time.Sunday {
+			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
+				"date": formatDate(current),
+				"type": "weekend",
+				"name": current.Weekday().String(),
+			})
+		}
+		current = current.AddDate(0, 0, 1)
+	}
+
+	for _, holiday := range holidays {
+		date, _ := time.Parse("2006-01-02", holiday.Date)
+		if date.Weekday() != time.Saturday && date.Weekday() != time.Sunday {
+			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
+				"date":        holiday.Date,
+				"type":        "holiday",
+				"name":        holiday.Name,
+				"description": holiday.Description,
+				"isOptional":  holiday.IsOptional,
+			})
+		}
+	}
+
+	return nonWorkingDays, nil
 }

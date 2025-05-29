@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
+import UserProfile from './UserProfile';
 import clsx from 'clsx';
 
 const Sidebar = ({ isOpen, onClose, isConfigured }) => {
@@ -141,10 +142,10 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         )}
                     </nav>
 
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="border-t border-gray-200 dark:border-gray-700">
                         <button
                             onClick={toggleDarkMode}
-                            className="flex items-center w-full px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                            className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                         >
                             {darkMode ? (
                                 <>
@@ -158,6 +159,8 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                                 </>
                             )}
                         </button>
+
+                        {isConfigured && <UserProfile />}
                     </div>
                 </div>
             </aside>

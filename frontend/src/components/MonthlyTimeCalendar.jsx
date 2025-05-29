@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle, FiCheckCircle, FiX, FiLoader } from 'react-icons/fi';
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle, FiCheckCircle, FiX, FiLoader, FiCalendar } from 'react-icons/fi';
+import { toast } from 'react-toastify';
 
-const MonthlyTimeCalendar = ({ onDayClick }) => {
+const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [timeEntries, setTimeEntries] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -9,8 +10,8 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
     const [dayDetails, setDayDetails] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [error, setError] = useState(null);
+    const [holidays, setHolidays] = useState([]);
 
-    // Definindo o objetivo diário como 8h (480 minutos)
     const dailyGoal = 480;
 
     const formatDate = (date) => {
@@ -52,9 +53,31 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
         return days;
     };
 
+    useImperativeHandle(ref, () => ({
+        refresh: () => {
+            loadTimeEntries();
+            loadHolidays();
+        }
+    }));
+
     useEffect(() => {
         loadTimeEntries();
+        loadHolidays();
     }, [currentMonth]);
+
+    const loadHolidays = async () => {
+        try {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth() + 1;
+
+            const nonWorkingDays = await window.go.backend.App.GetAllNonWorkingDays(year, month);
+
+            const monthHolidays = nonWorkingDays.filter(day => day.type === 'holiday');
+            setHolidays(monthHolidays);
+        } catch (error) {
+            console.error('Erro ao carregar feriados:', error);
+        }
+    };
 
     const loadTimeEntries = async () => {
         setLoading(true);
@@ -65,224 +88,63 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
 
             console.log(`Obtendo dados de tempo para o período: ${startDate} a ${endDate}`);
 
-            // Primeiro - Vamos pegar os dados de horas registradas do GetTimeTotalsForPeriod
-            const timeReport = await window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate);
+            const monthNum = currentMonth.getMonth() + 1;
+            const yearNum = currentMonth.getFullYear();
 
-            // Vamos tentar usar o formato LoggedTimeResponse se possível
-            let loggedTimeData = null;
             try {
-                // Vamos tentar o endpoint do calendário
-                const monthNum = currentMonth.getMonth() + 1; // JavaScript meses começam em 0
-                const yearNum = currentMonth.getFullYear();
-
-                // Primeiro tentamos usar o método específico
-                // Essa será uma tentativa que pode falhar e vamos ter fallback
-                loggedTimeData = await window.go.backend.App.GetLoggedTimeFromCalendarAPI(monthNum, yearNum);
+                const loggedTimeData = await window.go.backend.App.GetLoggedTimeFromCalendarAPI(monthNum, yearNum);
                 console.log('Dados do calendário obtidos com sucesso:', loggedTimeData);
+
+                if (loggedTimeData && loggedTimeData.STATUS === "OK" && loggedTimeData.user) {
+                    const processedEntries = processCalendarData(loggedTimeData);
+                    setTimeEntries(processedEntries);
+                    setLoading(false);
+                    return;
+                }
             } catch (calendarErr) {
                 console.log('Endpoint de calendário não disponível, usando dados alternativos:', calendarErr);
             }
 
-            // Agora, baseado nos dados que temos, vamos criar as entradas de tempo
-            let processedEntries = [];
+            try {
+                const timeEntries = await window.go.backend.App.GetTimeEntriesForPeriod(startDate, endDate);
+                if (timeEntries && timeEntries.length > 0) {
+                    const processedEntries = timeEntries.map(entry => ({
+                        date: entry.date,
+                        minutes: entry.minutes || 0,
+                        hours: (entry.minutes || 0) / 60,
+                        description: entry.description || "Tempo registrado",
+                        projectName: entry.projectName || "Teamwork",
+                        isBillable: entry.isBillable !== undefined ? entry.isBillable : true,
+                        taskId: entry.taskId || 0
+                    }));
 
-            // Opção 1: Se temos dados do LoggedTimeResponse, usamos eles
-            if (loggedTimeData && loggedTimeData.user &&
-                (loggedTimeData.user.billable || loggedTimeData.user.nonbillable)) {
-
-                // Processar entradas "billable"
-                if (loggedTimeData.user.billable && Array.isArray(loggedTimeData.user.billable)) {
-                    loggedTimeData.user.billable.forEach(entry => {
-                        if (entry.length >= 3) {
-                            const timestamp = entry[0];
-                            const hours = parseFloat(entry[1]) || 0;
-                            const minutes = parseInt(entry[2]) || 0;
-
-                            if (timestamp && !isNaN(minutes) && minutes > 0) {
-                                const date = new Date(parseInt(timestamp));
-                                const dateStr = formatDate(date);
-
-                                processedEntries.push({
-                                    date: dateStr,
-                                    minutes,
-                                    hours,
-                                    description: "Tempo registrado (cobrável)",
-                                    projectName: "Teamwork",
-                                    isBillable: true
-                                });
-                            }
-                        }
-                    });
+                    setTimeEntries(processedEntries);
+                    setLoading(false);
+                    return;
                 }
-
-                // Processar entradas "nonbillable" se houver minutos registrados
-                if (loggedTimeData.user.nonbillable && Array.isArray(loggedTimeData.user.nonbillable)) {
-                    loggedTimeData.user.nonbillable.forEach(entry => {
-                        if (entry.length >= 3) {
-                            const timestamp = entry[0];
-                            const hours = parseFloat(entry[1]) || 0;
-                            const minutes = parseInt(entry[2]) || 0;
-
-                            if (timestamp && minutes > 0) {
-                                const date = new Date(parseInt(timestamp));
-                                const dateStr = formatDate(date);
-
-                                processedEntries.push({
-                                    date: dateStr,
-                                    minutes,
-                                    hours,
-                                    description: "Tempo registrado (não cobrável)",
-                                    projectName: "Teamwork",
-                                    isBillable: false
-                                });
-                            }
-                        }
-                    });
-                }
-            }
-            // Opção 2: Se não temos dados LoggedTime, mas temos TimeTotal, geramos dados sintéticos
-            else if (timeReport && timeReport["time-totals"] && timeReport["time-totals"].minutes > 0) {
-                try {
-                    // Obter dias úteis do mês para distribuição
-                    const workingDays = await window.go.backend.App.GetWorkingDays(startDate, endDate);
-
-                    if (workingDays && workingDays.length > 0) {
-                        // Verificar se temos dados de GetTimeEntriesForPeriod
-                        let timeEntries = [];
-                        try {
-                            timeEntries = await window.go.backend.App.GetTimeEntriesForPeriod(startDate, endDate);
-                            if (timeEntries && timeEntries.length > 0) {
-                                // Se temos entradas reais, usamos elas
-                                timeEntries.forEach(entry => {
-                                    processedEntries.push({
-                                        date: entry.date,
-                                        minutes: entry.minutes || 0,
-                                        hours: (entry.minutes || 0) / 60,
-                                        description: entry.description || "Tempo registrado",
-                                        projectName: entry.projectName || "Teamwork",
-                                        isBillable: entry.isBillable !== undefined ? entry.isBillable : true
-                                    });
-                                });
-                            } else {
-                                throw new Error("Sem entradas detalhadas disponíveis");
-                            }
-                        } catch (entriesErr) {
-                            console.log('Sem dados detalhados, usando distribuição por dias úteis:', entriesErr);
-
-                            // Usamos atividades recentes para ajudar na distribuição se disponíveis
-                            const recentActivities = await window.go.backend.App.GetRecentActivities();
-                            const minutesByDay = {};
-
-                            // Primeiro, distribuir com base nas atividades recentes
-                            if (recentActivities && recentActivities.length > 0) {
-                                recentActivities.forEach(activity => {
-                                    if (activity.date && activity.date >= startDate && activity.date <= endDate) {
-                                        if (!minutesByDay[activity.date]) {
-                                            minutesByDay[activity.date] = 0;
-                                        }
-                                        minutesByDay[activity.date] += activity.minutes || 0;
-                                    }
-                                });
-                            }
-
-                            // Calcular minutos restantes
-                            const totalRecentMinutes = Object.values(minutesByDay).reduce((sum, min) => sum + min, 0);
-                            const totalReportMinutes = timeReport["time-totals"].minutes;
-                            const remainingMinutes = totalReportMinutes - totalRecentMinutes;
-
-                            // Se ainda temos minutos para distribuir
-                            if (remainingMinutes > 0) {
-                                // Distribuir o restante igualmente pelos dias úteis
-                                const minutesPerWorkDay = Math.floor(remainingMinutes / workingDays.length);
-
-                                workingDays.forEach(workDay => {
-                                    if (!minutesByDay[workDay]) {
-                                        minutesByDay[workDay] = 0;
-                                    }
-                                    minutesByDay[workDay] += minutesPerWorkDay;
-                                });
-                            }
-
-                            // Converter para o formato de entradas
-                            Object.entries(minutesByDay).forEach(([date, minutes]) => {
-                                if (minutes > 0) {
-                                    processedEntries.push({
-                                        date,
-                                        minutes,
-                                        hours: minutes / 60,
-                                        description: "Tempo registrado",
-                                        projectName: "Teamwork",
-                                        isBillable: true
-                                    });
-                                }
-                            });
-                        }
-                    }
-                } catch (workDaysErr) {
-                    console.error('Erro ao obter dias úteis:', workDaysErr);
-
-                    // Sem dias úteis, distribuímos igualmente pelo mês
-                    const daysInMonth = endOfMonth(currentMonth).getDate();
-                    const minutesPerDay = Math.floor(timeReport["time-totals"].minutes / daysInMonth);
-
-                    // Criar entradas para cada dia do mês
-                    for (let day = 1; day <= daysInMonth; day++) {
-                        const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-
-                        // Pular fins de semana
-                        if (isWeekend(date)) continue;
-
-                        const dateStr = formatDate(date);
-                        processedEntries.push({
-                            date: dateStr,
-                            minutes: minutesPerDay,
-                            hours: minutesPerDay / 60,
-                            description: "Tempo registrado (estimado)",
-                            projectName: "Teamwork",
-                            isBillable: true
-                        });
-                    }
-                }
-            } else {
-                // Sem dados de tempo registrado
-                console.log('Sem tempo registrado para este período');
+            } catch (entriesErr) {
+                console.log('Erro ao obter entradas detalhadas:', entriesErr);
             }
 
-            // Consolidar entradas por dia (somar minutos de múltiplas entradas no mesmo dia)
-            const consolidatedEntries = [];
-            const entriesByDay = {};
+            const timeReport = await window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate);
+            if (timeReport && timeReport["time-totals"] && timeReport["time-totals"].minutes > 0) {
+                const workingDays = await window.go.backend.App.GetWorkingDays(startDate, endDate);
 
-            processedEntries.forEach(entry => {
-                const { date, minutes, hours, description, projectName, isBillable } = entry;
+                if (workingDays && workingDays.length > 0) {
+                    const minutesPerDay = Math.floor(timeReport["time-totals"].minutes / workingDays.length);
 
-                if (!entriesByDay[date]) {
-                    entriesByDay[date] = {
-                        date,
-                        minutes,
-                        hours,
-                        description,
-                        projectName,
-                        isBillable,
-                        isConsolidated: false
-                    };
-                } else {
-                    // Se já existe uma entrada para este dia, somamos os minutos
-                    entriesByDay[date].minutes += minutes;
-                    entriesByDay[date].hours += hours;
-                    entriesByDay[date].isConsolidated = true;
-                    if (entriesByDay[date].description.indexOf('múltiplas entradas') === -1) {
-                        entriesByDay[date].description = 'Consolidado (múltiplas entradas)';
-                    }
+                    const syntheticEntries = workingDays.map(day => ({
+                        date: day,
+                        minutes: minutesPerDay,
+                        hours: minutesPerDay / 60,
+                        description: "Tempo registrado (estimado)",
+                        projectName: "Teamwork",
+                        isBillable: true
+                    }));
+
+                    setTimeEntries(syntheticEntries);
                 }
-            });
-
-            // Converter o objeto em array
-            Object.values(entriesByDay).forEach(entry => {
-                consolidatedEntries.push(entry);
-            });
-
-            setTimeEntries(consolidatedEntries);
-            console.log('Entradas de tempo processadas:', consolidatedEntries);
+            }
 
         } catch (error) {
             console.error('Erro ao carregar entradas de tempo:', error);
@@ -293,6 +155,87 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
         }
     };
 
+    const processCalendarData = (loggedTimeData) => {
+        const processedEntries = [];
+
+        if (loggedTimeData.user.billable && Array.isArray(loggedTimeData.user.billable)) {
+            loggedTimeData.user.billable.forEach(entry => {
+                if (entry.length >= 3) {
+                    const timestamp = parseInt(entry[0]);
+                    const hours = parseFloat(entry[1]) || 0;
+                    const minutes = parseInt(entry[2]) || 0;
+
+                    if (!isNaN(timestamp) && minutes > 0) {
+                        const date = new Date(timestamp);
+                        const dateStr = formatDate(date);
+
+                        processedEntries.push({
+                            date: dateStr,
+                            minutes,
+                            hours,
+                            description: "Tempo registrado (cobrável)",
+                            projectName: "Teamwork",
+                            isBillable: true,
+                            timestamp
+                        });
+                    }
+                }
+            });
+        }
+
+        if (loggedTimeData.user.nonbillable && Array.isArray(loggedTimeData.user.nonbillable)) {
+            loggedTimeData.user.nonbillable.forEach(entry => {
+                if (entry.length >= 3) {
+                    const timestamp = parseInt(entry[0]);
+                    const hours = parseFloat(entry[1]) || 0;
+                    const minutes = parseInt(entry[2]) || 0;
+
+                    if (!isNaN(timestamp) && minutes > 0) {
+                        const date = new Date(timestamp);
+                        const dateStr = formatDate(date);
+
+                        processedEntries.push({
+                            date: dateStr,
+                            minutes,
+                            hours,
+                            description: "Tempo registrado (não cobrável)",
+                            projectName: "Teamwork",
+                            isBillable: false,
+                            timestamp
+                        });
+                    }
+                }
+            });
+        }
+
+        const consolidatedEntries = [];
+        const entriesByDay = {};
+
+        processedEntries.forEach(entry => {
+            if (!entriesByDay[entry.date]) {
+                entriesByDay[entry.date] = {
+                    date: entry.date,
+                    minutes: entry.minutes,
+                    hours: entry.hours,
+                    description: entry.description,
+                    projectName: entry.projectName,
+                    isBillable: entry.isBillable,
+                    isConsolidated: false,
+                    taskId: 0,
+                    entries: [entry]
+                };
+            } else {
+                entriesByDay[entry.date].minutes += entry.minutes;
+                entriesByDay[entry.date].hours += entry.hours;
+                entriesByDay[entry.date].isConsolidated = true;
+                entriesByDay[entry.date].description = 'Consolidado (múltiplas entradas)';
+                entriesByDay[entry.date].entries.push(entry);
+            }
+        });
+
+        return Object.values(entriesByDay);
+    };
+
     const getMinutesForDay = (day) => {
         const dayStr = formatDate(day);
         return timeEntries
@@ -300,8 +243,17 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
             .reduce((total, entry) => total + entry.minutes, 0);
     };
 
+    const getEntriesForDay = (day) => {
+        const dayStr = formatDate(day);
+        return timeEntries.filter(entry => entry.date === dayStr);
+    };
+
     const getDayStatus = (day) => {
         if (isWeekend(day)) return 'weekend';
+
+        const dayStr = formatDate(day);
+        const isHoliday = holidays.some(holiday => holiday.date === dayStr);
+        if (isHoliday) return 'holiday';
 
         const minutes = getMinutesForDay(day);
 
@@ -315,6 +267,7 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
             case 'complete': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700';
             case 'incomplete': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700';
             case 'missing': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700';
+            case 'holiday': return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-700';
             case 'weekend': return 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700';
             default: return 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-700';
         }
@@ -331,11 +284,17 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
     const handleDayClick = (day) => {
         if (isWeekend(day)) return;
 
+        const dayStr = formatDate(day);
+        const isHoliday = holidays.some(holiday => holiday.date === dayStr);
+        if (isHoliday) {
+            const holiday = holidays.find(h => h.date === dayStr);
+            toast.info(`Feriado: ${holiday.name}. Não é possível lançar horas em feriados.`);
+            return;
+        }
+
         setSelectedDay(day);
 
-        const dayStr = formatDate(day);
-        const dayEntries = timeEntries.filter(entry => entry.date === dayStr);
-
+        const dayEntries = getEntriesForDay(day);
         const minutesLogged = dayEntries.reduce((total, entry) => total + entry.minutes, 0);
         const hoursLogged = (minutesLogged / 60).toFixed(1);
 
@@ -370,19 +329,32 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
 
         const isSelected = selectedDay && isSameDay(day, selectedDay);
 
+        const dayStr = formatDate(day);
+        const holiday = holidays.find(h => h.date === dayStr);
+        const isHoliday = holiday !== undefined;
+
         return (
             <div
                 key={day.toString()}
                 onClick={() => handleDayClick(day)}
                 className={`relative p-2 border ${statusClass} ${isToday ? 'ring-2 ring-primary-500 dark:ring-primary-400' : ''} 
                 ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''} 
-                ${!isWeekend(day) ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col`}
+                ${!isWeekend(day) && !isHoliday ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col`}
             >
                 <div className="text-sm font-medium mb-1">
                     {dayNum}
                 </div>
 
-                {!isWeekend(day) && (
+                {isHoliday && (
+                    <div className="text-xs text-purple-700 dark:text-purple-300 mt-auto overflow-hidden text-ellipsis">
+                        <FiCalendar className="inline mr-1 w-3 h-3" />
+                        <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+                            {holiday.name}
+                        </span>
+                    </div>
+                )}
+
+                {!isWeekend(day) && !isHoliday && (
                     <>
                         <div className="text-xs mt-auto">
                             {minutes > 0 ? (
@@ -493,6 +465,10 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded-full mr-1"></div>
                     <span className="text-xs text-gray-600 dark:text-gray-400">Sem Registro</span>
+                </div>
+                <div className="flex items-center">
+                    <div className="w-3 h-3 bg-purple-500 dark:bg-purple-400 rounded-full mr-1"></div>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Feriado</span>
                 </div>
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-gray-400 dark:bg-gray-500 rounded-full mr-1"></div>
@@ -607,6 +583,8 @@ const MonthlyTimeCalendar = ({ onDayClick }) => {
             )}
         </div>
     );
-};
+});
+
+MonthlyTimeCalendar.displayName = 'MonthlyTimeCalendar';
 
 export default MonthlyTimeCalendar;

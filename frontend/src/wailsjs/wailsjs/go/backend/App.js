@@ -10,6 +10,10 @@ export function CreateDistributionPlan(arg1, arg2) {
   return window['go']['backend']['App']['CreateDistributionPlan'](arg1, arg2);
 }
 
+export function CreateDistributionPlanFromLoggedTime(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['CreateDistributionPlanFromLoggedTime'](arg1, arg2, arg3);
+}
+
 export function DeleteTemplate(arg1) {
   return window['go']['backend']['App']['DeleteTemplate'](arg1);
 }
@@ -18,8 +22,24 @@ export function DownloadCurrentMonthReport() {
   return window['go']['backend']['App']['DownloadCurrentMonthReport']();
 }
 
+export function DownloadCurrentMonthTimeReport() {
+  return window['go']['backend']['App']['DownloadCurrentMonthTimeReport']();
+}
+
+export function DownloadTimeReport(arg1, arg2) {
+  return window['go']['backend']['App']['DownloadTimeReport'](arg1, arg2);
+}
+
+export function GetAllNonWorkingDays(arg1, arg2) {
+  return window['go']['backend']['App']['GetAllNonWorkingDays'](arg1, arg2);
+}
+
 export function GetAppSettings() {
   return window['go']['backend']['App']['GetAppSettings']();
+}
+
+export function GetBrazilianHolidays(arg1) {
+  return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
 
 export function GetConfig() {
@@ -36,6 +56,18 @@ export function GetCurrentUserIdWithConfig(arg1) {
 
 export function GetDashboardStats() {
   return window['go']['backend']['App']['GetDashboardStats']();
+}
+
+export function GetEntriesFromLoggedTime(arg1, arg2) {
+  return window['go']['backend']['App']['GetEntriesFromLoggedTime'](arg1, arg2);
+}
+
+export function GetHolidaysForMonth(arg1, arg2) {
+  return window['go']['backend']['App']['GetHolidaysForMonth'](arg1, arg2);
+}
+
+export function GetLoggedTimeFromCalendarAPI(arg1, arg2) {
+  return window['go']['backend']['App']['GetLoggedTimeFromCalendarAPI'](arg1, arg2);
 }
 
 export function GetProjects() {
@@ -74,8 +106,24 @@ export function GetTemplates() {
   return window['go']['backend']['App']['GetTemplates']();
 }
 
+export function GetTimeEntriesForPeriod(arg1, arg2) {
+  return window['go']['backend']['App']['GetTimeEntriesForPeriod'](arg1, arg2);
+}
+
+export function GetTimeTotalsForPeriod(arg1, arg2) {
+  return window['go']['backend']['App']['GetTimeTotalsForPeriod'](arg1, arg2);
+}
+
+export function GetUserProfile() {
+  return window['go']['backend']['App']['GetUserProfile']();
+}
+
 export function GetWorkingDays(arg1, arg2) {
   return window['go']['backend']['App']['GetWorkingDays'](arg1, arg2);
+}
+
+export function IsWorkDay(arg1) {
+  return window['go']['backend']['App']['IsWorkDay'](arg1);
 }
 
 export function LogMultipleTimes(arg1) {

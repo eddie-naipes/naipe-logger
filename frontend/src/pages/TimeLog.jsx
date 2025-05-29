@@ -1,6 +1,16 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {toast} from 'react-toastify';
-import {FiAlertCircle, FiCalendar, FiCheck, FiCheckCircle, FiClock, FiList, FiLoader, FiPlay} from 'react-icons/fi';
+import {
+    FiAlertCircle,
+    FiCalendar,
+    FiCheck,
+    FiCheckCircle,
+    FiClock,
+    FiList,
+    FiLoader,
+    FiPlay,
+    FiRefreshCw
+} from 'react-icons/fi';
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
@@ -20,6 +30,11 @@ const TimeLog = () => {
     const [showResults, setShowResults] = useState(false);
     const [error, setError] = useState(null);
     const [processingProgress, setProcessingProgress] = useState(0);
+    const [nonWorkingDays, setNonWorkingDays] = useState({});
+    const [calendarKey, setCalendarKey] = useState(0); // Para forçar re-render do calendário
+
+    // Ref para acessar métodos do componente MonthlyTimeCalendar
+    const calendarRef = useRef(null);
 
     useEffect(() => {
         const loadSavedTasks = async () => {
@@ -39,8 +54,82 @@ const TimeLog = () => {
         loadSavedTasks();
     }, []);
 
-    const handleDaySelection = (day, entries) => {
+    useEffect(() => {
+        const loadNonWorkingDays = async () => {
+            try {
+                if (!dateRange.startDate || !dateRange.endDate) return;
+
+                // Verificar os meses incluídos no intervalo de datas
+                const startDate = new Date(dateRange.startDate);
+                const endDate = new Date(dateRange.endDate);
+
+                const monthsToCheck = new Set();
+                let currentDate = new Date(startDate);
+
+                while (currentDate <= endDate) {
+                    const yearMonth = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}`;
+                    monthsToCheck.add(yearMonth);
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                // Carregar dias não úteis para cada mês
+                const nonWorkingDaysMap = {};
+
+                for (const yearMonth of monthsToCheck) {
+                    const [year, month] = yearMonth.split('-').map(Number);
+                    const nonWorkingDaysForMonth = await window.go.backend.App.GetAllNonWorkingDays(year, month);
+
+                    nonWorkingDaysForMonth.forEach(day => {
+                        nonWorkingDaysMap[day.date] = day;
+                    });
+                }
+
+                setNonWorkingDays(nonWorkingDaysMap);
+            } catch (error) {
+                console.error('Erro ao carregar dias não úteis:', error);
+            }
+        };
+
+        loadNonWorkingDays();
+    }, [dateRange]);
+
+    // Função para recarregar o calendário
+    const refreshCalendar = () => {
+        // Método 1: Forçar re-render através de uma key
+        setCalendarKey(prev => prev + 1);
+
+        // Método 2: Se o MonthlyTimeCalendar tiver um método de refresh exposto
+        if (calendarRef.current && calendarRef.current.refresh) {
+            calendarRef.current.refresh();
+        }
+
+        toast.success('Calendário atualizado com os novos lançamentos!');
+    };
+
+    const handleDaySelection = async (day, entries) => {
         const formattedDate = day.toISOString().split('T')[0];
+
+        // Verificar se o dia é um dia não útil
+        const isNonWorkingDay = nonWorkingDays[formattedDate];
+        if (isNonWorkingDay) {
+            if (isNonWorkingDay.type === 'holiday') {
+                toast.warning(`${formattedDate} é um feriado: ${isNonWorkingDay.name}. Não é possível lançar horas em feriados.`);
+            } else if (isNonWorkingDay.type === 'weekend') {
+                toast.warning(`${formattedDate} é um fim de semana. Não é possível lançar horas em fins de semana.`);
+            }
+            return;
+        }
+
+        // Verificar explicitamente usando a API
+        try {
+            const isWorkDay = await window.go.backend.App.IsWorkDay(formattedDate);
+            if (!isWorkDay) {
+                toast.warning(`${formattedDate} não é um dia útil. Não é possível lançar horas.`);
+                return;
+            }
+        } catch (error) {
+            console.error("Erro ao verificar dia útil:", error);
+        }
 
         setDateRange({
             startDate: formattedDate,
@@ -95,6 +184,28 @@ const TimeLog = () => {
         setError(null);
 
         try {
+            // Verificar se todas as datas no intervalo são dias úteis
+            const startDate = new Date(dateRange.startDate);
+            const endDate = new Date(dateRange.endDate);
+            let hasNonWorkingDays = false;
+            let currentDate = new Date(startDate);
+
+            while (currentDate <= endDate) {
+                const formattedDate = format(currentDate, 'yyyy-MM-dd');
+                const isNonWorkingDay = nonWorkingDays[formattedDate];
+
+                if (isNonWorkingDay) {
+                    hasNonWorkingDays = true;
+                    break;
+                }
+
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            if (hasNonWorkingDays) {
+                toast.warning('O intervalo selecionado contém fins de semana ou feriados. Apenas dias úteis serão considerados.');
+            }
+
             const workingDays = await window.go.backend.App.GetWorkingDays(
                 dateRange.startDate,
                 dateRange.endDate
@@ -169,10 +280,21 @@ const TimeLog = () => {
 
             if (failures === 0) {
                 toast.success(`${successes} lançamentos realizados com sucesso!`);
+
+                // Recarregar o calendário após sucesso completo
+                setTimeout(() => {
+                    refreshCalendar();
+                }, 1000); // Pequeno delay para garantir que os dados foram processados no backend
+
             } else if (successes === 0) {
                 toast.error(`Falha em todos os ${failures} lançamentos.`);
             } else {
                 toast.warning(`${successes} lançamentos com sucesso e ${failures} falhas.`);
+
+                // Recarregar o calendário mesmo com falhas parciais
+                setTimeout(() => {
+                    refreshCalendar();
+                }, 1000);
             }
         } catch (error) {
             console.error('Erro ao lançar horas:', error);
@@ -207,6 +329,22 @@ const TimeLog = () => {
         };
     };
 
+    const isDateNonWorkingDay = (dateStr) => {
+        return nonWorkingDays[dateStr] !== undefined;
+    };
+
+    const getNonWorkingDayInfo = (dateStr) => {
+        if (!nonWorkingDays[dateStr]) return null;
+
+        const day = nonWorkingDays[dateStr];
+        if (day.type === 'holiday') {
+            return `Feriado: ${day.name}`;
+        } else if (day.type === 'weekend') {
+            return 'Fim de semana';
+        }
+        return 'Dia não útil';
+    };
+
     const totals = calculateTotalHours();
 
     if (isLoading) {
@@ -220,12 +358,27 @@ const TimeLog = () => {
 
     return (
         <div>
-            <div className="mb-6">
-                <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Lançar Horas</h1>
-                <p className="text-gray-600 dark:text-gray-400">Registre horas trabalhadas em múltiplos dias</p>
+            <div className="mb-6 flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Lançar Horas</h1>
+                    <p className="text-gray-600 dark:text-gray-400">Registre horas trabalhadas em múltiplos dias</p>
+                </div>
+                <button
+                    onClick={refreshCalendar}
+                    className="flex items-center px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Atualizar calendário"
+                >
+                    <FiRefreshCw className="w-4 h-4 mr-2"/>
+                    Atualizar Calendário
+                </button>
             </div>
 
-            <MonthlyTimeCalendar onDayClick={handleDaySelection} />
+            {/* Usando key para forçar re-render do calendário quando necessário */}
+            <MonthlyTimeCalendar
+                key={calendarKey}
+                ref={calendarRef}
+                onDayClick={handleDaySelection}
+            />
 
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">
@@ -331,6 +484,12 @@ const TimeLog = () => {
                                 onChange={(e) => setDateRange({...dateRange, startDate: e.target.value})}
                                 className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
+                            {isDateNonWorkingDay(dateRange.startDate) && (
+                                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                                    <FiAlertCircle className="inline-block mr-1"/>
+                                    {getNonWorkingDayInfo(dateRange.startDate)}
+                                </p>
+                            )}
                         </div>
 
                         <div>
@@ -345,6 +504,12 @@ const TimeLog = () => {
                                 onChange={(e) => setDateRange({...dateRange, endDate: e.target.value})}
                                 className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                             />
+                            {isDateNonWorkingDay(dateRange.endDate) && (
+                                <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">
+                                    <FiAlertCircle className="inline-block mr-1"/>
+                                    {getNonWorkingDayInfo(dateRange.endDate)}
+                                </p>
+                            )}
                         </div>
 
                         <button
@@ -534,6 +699,17 @@ const TimeLog = () => {
                                         className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
                                 </p>
                             </div>
+                        </div>
+
+                        {/* Botão para atualizar calendário após ver os resultados */}
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                            <button
+                                onClick={refreshCalendar}
+                                className="w-full flex items-center justify-center px-3 py-2 text-sm bg-primary-100 hover:bg-primary-200 dark:bg-primary-900/20 dark:hover:bg-primary-900/40 text-primary-700 dark:text-primary-300 rounded-lg transition-colors"
+                            >
+                                <FiRefreshCw className="w-4 h-4 mr-2"/>
+                                Atualizar Calendário
+                            </button>
                         </div>
                     </div>
                 </div>

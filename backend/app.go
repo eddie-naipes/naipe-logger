@@ -2,9 +2,13 @@ package backend
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -349,4 +353,111 @@ func (a *App) GetEntriesFromLoggedTime(month, year int) ([]map[string]interface{
 	}
 
 	return a.teamworkAPI.GetEntriesFromLoggedTime(month, year)
+}
+
+func (a *App) GetBrazilianHolidays(year int) (map[string]api.Holiday, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetBrazilianHolidays(year)
+}
+
+func (a *App) GetHolidaysForMonth(year, month int) ([]api.Holiday, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetHolidaysForMonth(year, month)
+}
+
+func (a *App) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetAllNonWorkingDays(year, month)
+}
+
+func (a *App) IsWorkDay(date string) (bool, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return false, fmt.Errorf("API não configurada")
+	}
+
+	dateObj, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return false, fmt.Errorf("formato de data inválido: %v", err)
+	}
+
+	return a.teamworkAPI.IsWorkDay(dateObj), nil
+}
+
+// backend/app.go - adicionar método
+func (a *App) GetUserProfile() (map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	userID, err := a.teamworkAPI.GetCurrentUserId()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao obter ID do usuário: %v", err)
+	}
+
+	config := a.configManager.GetTeamworkConfig()
+	baseURL := config.ApiHost
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "https://" + baseURL
+	}
+
+	url := fmt.Sprintf("%s/projects/api/v3/people/%d.json", baseURL, userID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(config.AuthToken + ":X"))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("erro na requisição: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("erro ao obter perfil do usuário: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	var response struct {
+		Person struct {
+			ID        int    `json:"id"`
+			FirstName string `json:"firstName"`
+			LastName  string `json:"lastName"`
+			Email     string `json:"email"`
+			AvatarURL string `json:"avatar-url"`
+		} `json:"person"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	}
+
+	profile := map[string]interface{}{
+		"id":        response.Person.ID,
+		"firstName": response.Person.FirstName,
+		"lastName":  response.Person.LastName,
+		"email":     response.Person.Email,
+		"avatarURL": response.Person.AvatarURL,
+		"fullName":  fmt.Sprintf("%s %s", response.Person.FirstName, response.Person.LastName),
+	}
+
+	return profile, nil
 }

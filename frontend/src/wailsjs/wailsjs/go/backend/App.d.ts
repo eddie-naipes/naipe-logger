@@ -7,11 +7,21 @@ export function CalculateTotalMinutes(arg1:Array<api.Task>):Promise<number>;
 
 export function CreateDistributionPlan(arg1:Array<string>,arg2:Array<api.Task>):Promise<Array<api.WorkDay>>;
 
+export function CreateDistributionPlanFromLoggedTime(arg1:number,arg2:number,arg3:Array<api.Task>):Promise<Array<api.WorkDay>>;
+
 export function DeleteTemplate(arg1:string):Promise<void>;
 
 export function DownloadCurrentMonthReport():Promise<string>;
 
+export function DownloadCurrentMonthTimeReport():Promise<string>;
+
+export function DownloadTimeReport(arg1:string,arg2:string):Promise<string>;
+
+export function GetAllNonWorkingDays(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
+
 export function GetAppSettings():Promise<config.AppSettings>;
+
+export function GetBrazilianHolidays(arg1:number):Promise<Record<string, api.Holiday>>;
 
 export function GetConfig():Promise<api.Config>;
 
@@ -20,6 +30,12 @@ export function GetCurrentUserId():Promise<number>;
 export function GetCurrentUserIdWithConfig(arg1:api.Config):Promise<number>;
 
 export function GetDashboardStats():Promise<Record<string, any>>;
+
+export function GetEntriesFromLoggedTime(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
+
+export function GetHolidaysForMonth(arg1:number,arg2:number):Promise<Array<api.Holiday>>;
+
+export function GetLoggedTimeFromCalendarAPI(arg1:number,arg2:number):Promise<api.LoggedTimeResponse>;
 
 export function GetProjects():Promise<Array<api.Project>>;
 
@@ -39,7 +55,15 @@ export function GetTemplate(arg1:string):Promise<api.Template|boolean>;
 
 export function GetTemplates():Promise<Record<string, api.Template>>;
 
+export function GetTimeEntriesForPeriod(arg1:string,arg2:string):Promise<Array<api.TimeEntryReport>>;
+
+export function GetTimeTotalsForPeriod(arg1:string,arg2:string):Promise<api.TimeTotal>;
+
+export function GetUserProfile():Promise<Record<string, any>>;
+
 export function GetWorkingDays(arg1:string,arg2:string):Promise<Array<string>>;
+
+export function IsWorkDay(arg1:string):Promise<boolean>;
 
 export function LogMultipleTimes(arg1:Array<api.WorkDay>):Promise<Array<api.TimeLogResult>>;
 
