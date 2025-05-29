@@ -11,7 +11,8 @@ import {
     FiArrowDown,
     FiLoader,
     FiRefreshCw,
-    FiFlag
+    FiFlag,
+    FiTrash2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
@@ -19,6 +20,7 @@ import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
+import TimeEntryManager from '../components/TimeEntryManager';
 
 const StatCard = ({ title, icon, value, description, change, className }) => {
     return (
@@ -32,9 +34,9 @@ const StatCard = ({ title, icon, value, description, change, className }) => {
                     <p className="text-3xl font-bold text-gray-900 dark:text-white">{value}</p>
                     {change !== undefined && change !== null && (
                         <span className={`ml-2 text-sm ${change >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} flex items-center`}>
-                            {change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
+                           {change >= 0 ? <FiArrowUp className="mr-1" /> : <FiArrowDown className="mr-1" />}
                             {Math.abs(change)}%
-                        </span>
+                       </span>
                     )}
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">{description}</p>
@@ -110,6 +112,7 @@ const Dashboard = () => {
     const [projectsData, setProjectsData] = useState([]);
     const [tasksData, setTasksData] = useState([]);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
 
     const loadProjectsAndTasks = async () => {
         try {
@@ -227,6 +230,11 @@ const Dashboard = () => {
         } finally {
             setIsExporting(false);
         }
+    };
+
+    const handleTimeManagerClose = () => {
+        setIsTimeManagerOpen(false);
+        loadDashboard();
     };
 
     const formatarHoras = (horas) => {
@@ -366,6 +374,13 @@ const Dashboard = () => {
                             <span className="font-medium">Templates</span>
                         </button>
                         <button
+                            onClick={() => setIsTimeManagerOpen(true)}
+                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600"
+                        >
+                            <FiTrash2 className="w-6 h-6 text-red-600 mr-3" />
+                            <span className="font-medium">Gerenciar Horas</span>
+                        </button>
+                        <button
                             onClick={handleExportReport}
                             disabled={isExporting}
                             className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600"
@@ -435,6 +450,15 @@ const Dashboard = () => {
                 isOpen={isReportModalOpen}
                 onClose={() => setIsReportModalOpen(false)}
                 onExport={handleExportCustomPeriodReport}
+            />
+
+            <TimeEntryManager
+                isOpen={isTimeManagerOpen}
+                onClose={handleTimeManagerClose}
+                onEntriesDeleted={() => {
+                    loadDashboard();
+                    toast.success('Dados atualizados após deleção das entradas.');
+                }}
             />
         </div>
     );

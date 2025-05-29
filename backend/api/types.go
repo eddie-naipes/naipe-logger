@@ -130,3 +130,35 @@ type TaskListItem struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
+
+type DeleteTimeEntryResult struct {
+	EntryID int    `json:"entryId"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type TimeEntryReport struct {
+	ID            int     `json:"id"`
+	ProjectID     int     `json:"projectId"`
+	ProjectName   string  `json:"projectName"`
+	TaskID        int     `json:"taskId"`
+	TaskName      string  `json:"taskName"`
+	TasklistID    int     `json:"tasklistId"`
+	TasklistName  string  `json:"tasklistName"`
+	UserID        int     `json:"userId"`
+	UserFirstName string  `json:"userFirstName"`
+	UserLastName  string  `json:"userLastName"`
+	Date          string  `json:"date"`
+	Hours         float64 `json:"hours"`
+	Minutes       int     `json:"minutes"`
+	Description   string  `json:"description"`
+	IsBillable    bool    `json:"isBillable"`
+	IsBilled      bool    `json:"isBilled"`
+	StartTime     string  `json:"startTime"`
+	EndTime       string  `json:"endTime"`
+	Status        string  `json:"status,omitempty"`
+	CreatedAt     string  `json:"createdAt,omitempty"`
+	UpdatedAt     string  `json:"updatedAt,omitempty"`
+	DeletedAt     string  `json:"deletedAt,omitempty"`
+	DeletedBy     string  `json:"deletedBy,omitempty"`
+}

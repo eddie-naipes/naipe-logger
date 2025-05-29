@@ -1,8 +1,11 @@
+// src/pages/Templates.jsx - versão corrigida
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy } from 'react-icons/fi';
+import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy, FiCheck } from 'react-icons/fi';
+import { useNavigate } from 'react-router-dom';
 
 const Templates = () => {
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [templates, setTemplates] = useState({});
     const [savedTasks, setSavedTasks] = useState([]);
@@ -11,18 +14,16 @@ const Templates = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [currentTemplate, setCurrentTemplate] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [applyingTemplate, setApplyingTemplate] = useState(null);
 
-    // Carrega os templates e tarefas
     useEffect(() => {
         const loadData = async () => {
             try {
                 setIsLoading(true);
 
-                // Carregar templates
                 const templatesData = await window.go.backend.App.GetTemplates();
                 setTemplates(templatesData);
 
-                // Carregar tarefas salvas
                 const tasksData = await window.go.backend.App.GetSavedTasks();
                 setSavedTasks(tasksData);
             } catch (error) {
@@ -36,7 +37,6 @@ const Templates = () => {
         loadData();
     }, []);
 
-    // Limpa o formulário
     const resetForm = () => {
         setTemplateName('');
         setSelectedTasks([]);
@@ -44,7 +44,6 @@ const Templates = () => {
         setCurrentTemplate(null);
     };
 
-    // Toggle seleção de tarefa
     const toggleTaskSelection = (taskId) => {
         if (selectedTasks.includes(taskId)) {
             setSelectedTasks(selectedTasks.filter(id => id !== taskId));
@@ -53,7 +52,6 @@ const Templates = () => {
         }
     };
 
-    // Seleciona todas as tarefas
     const selectAllTasks = () => {
         if (selectedTasks.length === savedTasks.length) {
             setSelectedTasks([]);
@@ -62,7 +60,6 @@ const Templates = () => {
         }
     };
 
-    // Edita um template existente
     const editTemplate = (name) => {
         const template = templates[name];
         if (!template) return;
@@ -71,12 +68,10 @@ const Templates = () => {
         setTemplateName(name);
         setIsEditing(true);
 
-        // Seleciona as tarefas do template
         const taskIds = template.tasks.map(task => task.taskId);
         setSelectedTasks(taskIds);
     };
 
-    // Remove um template
     const deleteTemplate = async (name) => {
         if (!window.confirm(`Tem certeza que deseja excluir o template "${name}"?`)) {
             return;
@@ -85,7 +80,6 @@ const Templates = () => {
         try {
             await window.go.backend.App.DeleteTemplate(name);
 
-            // Atualiza a lista de templates
             const updatedTemplates = { ...templates };
             delete updatedTemplates[name];
             setTemplates(updatedTemplates);
@@ -97,7 +91,6 @@ const Templates = () => {
         }
     };
 
-    // Salva um template
     const saveTemplate = async (e) => {
         e.preventDefault();
 
@@ -111,7 +104,6 @@ const Templates = () => {
             return;
         }
 
-        // Verifica se o nome já existe (quando não estiver editando)
         if (!isEditing && templates[templateName]) {
             toast.warning('Já existe um template com este nome.');
             return;
@@ -120,17 +112,14 @@ const Templates = () => {
         setIsSaving(true);
 
         try {
-            // Filtra as tarefas selecionadas
             const taskList = savedTasks.filter(task =>
                 selectedTasks.includes(task.taskId)
             );
 
-            // Calcula o total de minutos
             const totalMin = taskList.reduce((total, task) => {
                 return total + task.entries.reduce((sum, entry) => sum + entry.minutes, 0);
             }, 0);
 
-            // Monta o objeto do template
             const templateData = {
                 name: templateName,
                 tasks: taskList,
@@ -139,7 +128,6 @@ const Templates = () => {
 
             await window.go.backend.App.SaveTemplate(templateData);
 
-            // Atualiza a lista de templates
             const updatedTemplates = {
                 ...templates,
                 [templateName]: templateData
@@ -156,24 +144,29 @@ const Templates = () => {
         }
     };
 
-    // Aplica um template às tarefas selecionadas
     const applyTemplateToTimelog = async (name) => {
         const template = templates[name];
         if (!template) return;
 
         try {
-            // Primeiro salva todas as tarefas do template
+            setApplyingTemplate(name);
+
+            await window.go.backend.App.ClearSavedTasks();
+
             for (const task of template.tasks) {
                 await window.go.backend.App.SaveTask(task);
             }
 
-            toast.success('Template aplicado com sucesso! Vá para "Lançar Horas" para continuar.');
+            toast.success(`Template "${name}" aplicado com sucesso! Redirecionando para lançamento de horas...`);
+
             setTimeout(() => {
-                window.location.hash = '#/timelog';
+                navigate('/timelog');
             }, 1500);
         } catch (error) {
             console.error('Erro ao aplicar template:', error);
-            toast.error('Erro ao aplicar template.');
+            toast.error('Erro ao aplicar template: ' + (error.message || 'Erro desconhecido'));
+        } finally {
+            setApplyingTemplate(null);
         }
     };
 
@@ -193,7 +186,6 @@ const Templates = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Formulário de Templates */}
                 <div className="card">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                         <FiSave className="w-5 h-5 mr-2" />
@@ -298,7 +290,6 @@ const Templates = () => {
                     </form>
                 </div>
 
-                {/* Lista de Templates */}
                 <div className="card">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
                         <FiFolder className="w-5 h-5 mr-2" />
@@ -364,10 +355,20 @@ const Templates = () => {
                                     <div className="mt-4">
                                         <button
                                             onClick={() => applyTemplateToTimelog(name)}
-                                            className="w-full flex items-center justify-center text-sm px-3 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-md dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50"
+                                            disabled={applyingTemplate === name}
+                                            className="w-full flex items-center justify-center text-sm px-3 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-md dark:bg-primary-900/30 dark:text-primary-400 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            <FiCopy className="w-4 h-4 mr-2" />
-                                            Aplicar Template
+                                            {applyingTemplate === name ? (
+                                                <>
+                                                    <FiLoader className="w-4 h-4 mr-2 animate-spin" />
+                                                    Aplicando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <FiCopy className="w-4 h-4 mr-2" />
+                                                    Aplicar Template
+                                                </>
+                                            )}
                                         </button>
                                     </div>
                                 </div>

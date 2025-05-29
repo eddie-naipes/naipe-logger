@@ -1,3 +1,4 @@
+// src/components/Sidebar.jsx - adicionar item de menu para gerenciar horas
 import React, { useContext, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -11,16 +12,19 @@ import {
     FiMoon,
     FiFileText,
     FiLoader,
-    FiDownload
+    FiDownload,
+    FiTrash2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
 import UserProfile from './UserProfile';
+import TimeEntryManager from './TimeEntryManager';
 import clsx from 'clsx';
 
 const Sidebar = ({ isOpen, onClose, isConfigured }) => {
     const { darkMode, toggleDarkMode } = useContext(ThemeContext);
     const [isExporting, setIsExporting] = useState(false);
+    const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
 
     const navItems = [
         {
@@ -79,6 +83,10 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
         }
     };
 
+    const handleTimeManagerClose = () => {
+        setIsTimeManagerOpen(false);
+    };
+
     return (
         <>
             {isOpen && (
@@ -125,20 +133,30 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         ))}
 
                         {isConfigured && (
-                            <button
-                                onClick={handleExportReport}
-                                disabled={isExporting}
-                                className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                            >
-                                {isExporting ? (
-                                    <FiLoader className="w-5 h-5 animate-spin" />
-                                ) : (
-                                    <FiDownload className="w-5 h-5" />
-                                )}
-                                <span className="ml-3">
-                                    {isExporting ? "Exportando..." : "Relatório Mensal"}
-                                </span>
-                            </button>
+                            <>
+                                <button
+                                    onClick={handleExportReport}
+                                    disabled={isExporting}
+                                    className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                >
+                                    {isExporting ? (
+                                        <FiLoader className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <FiDownload className="w-5 h-5" />
+                                    )}
+                                    <span className="ml-3">
+                                        {isExporting ? "Exportando..." : "Relatório Mensal"}
+                                    </span>
+                                </button>
+
+                                <button
+                                    onClick={() => setIsTimeManagerOpen(true)}
+                                    className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                >
+                                    <FiTrash2 className="w-5 h-5" />
+                                    <span className="ml-3">Gerenciar Horas</span>
+                                </button>
+                            </>
                         )}
                     </nav>
 
@@ -164,6 +182,14 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                     </div>
                 </div>
             </aside>
+
+            <TimeEntryManager
+                isOpen={isTimeManagerOpen}
+                onClose={handleTimeManagerClose}
+                onEntriesDeleted={() => {
+                    toast.success('Entradas deletadas com sucesso!');
+                }}
+            />
         </>
     );
 };

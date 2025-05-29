@@ -17,27 +17,6 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-type TimeEntryReport struct {
-	ID            int     `json:"id"`
-	ProjectID     int     `json:"projectId"`
-	ProjectName   string  `json:"projectName"`
-	TaskID        int     `json:"taskId"`
-	TaskName      string  `json:"taskName"`
-	TasklistID    int     `json:"tasklistId"`
-	TasklistName  string  `json:"tasklistName"`
-	UserID        int     `json:"userId"`
-	UserFirstName string  `json:"userFirstName"`
-	UserLastName  string  `json:"userLastName"`
-	Date          string  `json:"date"`
-	Hours         float64 `json:"hours"`
-	Minutes       int     `json:"minutes"`
-	Description   string  `json:"description"`
-	IsBillable    bool    `json:"isBillable"`
-	IsBilled      bool    `json:"isBilled"`
-	StartTime     string  `json:"startTime"`
-	EndTime       string  `json:"endTime"`
-}
-
 type TimeTotal struct {
 	FinancialTotals struct {
 		TotalCost         float64 `json:"totalCost"`

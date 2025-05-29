@@ -461,3 +461,80 @@ func (a *App) GetUserProfile() (map[string]interface{}, error) {
 
 	return profile, nil
 }
+
+func (a *App) ApplyTemplate(templateName string) error {
+	template, exists := a.configManager.GetTemplate(templateName)
+	if !exists {
+		return fmt.Errorf("template '%s' não encontrado", templateName)
+	}
+
+	for _, task := range template.Tasks {
+		err := a.configManager.AddSavedTask(task)
+		if err != nil {
+			return fmt.Errorf("erro ao aplicar tarefa do template: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *App) ClearSavedTasks() error {
+	return a.configManager.SetSavedTasks([]api.Task{})
+}
+
+func (a *App) GetTimeEntriesWithDetails(startDate, endDate string) ([]api.TimeEntryReport, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetTimeEntriesWithDetails(startDate, endDate)
+}
+
+func (a *App) DeleteTimeEntry(entryID int) error {
+	if !a.teamworkAPI.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.DeleteTimeEntry(entryID)
+}
+
+func (a *App) DeleteMultipleTimeEntries(entryIDs []int) ([]api.DeleteTimeEntryResult, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.DeleteMultipleTimeEntries(entryIDs)
+}
+
+// backend/app.go - atualizar métodos expostos
+func (a *App) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]api.TimeEntryReport, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetTimeEntriesForPeriodV2(startDate, endDate, includeDeleted)
+}
+
+func (a *App) GetAllTimeEntriesForDay(date string) ([]api.TimeEntryReport, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetAllTimeEntriesForDay(date)
+}
+
+func (a *App) GetDeletedTimeEntries(startDate, endDate string) ([]api.TimeEntryReport, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetDeletedTimeEntries(startDate, endDate)
+}
+
+func (a *App) DeleteTimeEntryV2(entryID int) error {
+	if !a.teamworkAPI.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.DeleteTimeEntryV2(entryID)
+}

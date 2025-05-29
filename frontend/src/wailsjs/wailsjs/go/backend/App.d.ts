@@ -3,13 +3,23 @@
 import {api} from '../models';
 import {config} from '../models';
 
+export function ApplyTemplate(arg1:string):Promise<void>;
+
 export function CalculateTotalMinutes(arg1:Array<api.Task>):Promise<number>;
+
+export function ClearSavedTasks():Promise<void>;
 
 export function CreateDistributionPlan(arg1:Array<string>,arg2:Array<api.Task>):Promise<Array<api.WorkDay>>;
 
 export function CreateDistributionPlanFromLoggedTime(arg1:number,arg2:number,arg3:Array<api.Task>):Promise<Array<api.WorkDay>>;
 
+export function DeleteMultipleTimeEntries(arg1:Array<number>):Promise<Array<api.DeleteTimeEntryResult>>;
+
 export function DeleteTemplate(arg1:string):Promise<void>;
+
+export function DeleteTimeEntry(arg1:number):Promise<void>;
+
+export function DeleteTimeEntryV2(arg1:number):Promise<void>;
 
 export function DownloadCurrentMonthReport():Promise<string>;
 
@@ -18,6 +28,8 @@ export function DownloadCurrentMonthTimeReport():Promise<string>;
 export function DownloadTimeReport(arg1:string,arg2:string):Promise<string>;
 
 export function GetAllNonWorkingDays(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
+
+export function GetAllTimeEntriesForDay(arg1:string):Promise<Array<api.TimeEntryReport>>;
 
 export function GetAppSettings():Promise<config.AppSettings>;
 
@@ -30,6 +42,8 @@ export function GetCurrentUserId():Promise<number>;
 export function GetCurrentUserIdWithConfig(arg1:api.Config):Promise<number>;
 
 export function GetDashboardStats():Promise<Record<string, any>>;
+
+export function GetDeletedTimeEntries(arg1:string,arg2:string):Promise<Array<api.TimeEntryReport>>;
 
 export function GetEntriesFromLoggedTime(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
 
@@ -56,6 +70,10 @@ export function GetTemplate(arg1:string):Promise<api.Template|boolean>;
 export function GetTemplates():Promise<Record<string, api.Template>>;
 
 export function GetTimeEntriesForPeriod(arg1:string,arg2:string):Promise<Array<api.TimeEntryReport>>;
+
+export function GetTimeEntriesForPeriodV2(arg1:string,arg2:string,arg3:boolean):Promise<Array<api.TimeEntryReport>>;
+
+export function GetTimeEntriesWithDetails(arg1:string,arg2:string):Promise<Array<api.TimeEntryReport>>;
 
 export function GetTimeTotalsForPeriod(arg1:string,arg2:string):Promise<api.TimeTotal>;
 

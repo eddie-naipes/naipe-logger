@@ -2,8 +2,11 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
@@ -699,4 +702,346 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 	}
 
 	return nonWorkingDays, nil
+}
+
+func (t *TeamworkAPI) GetTimeEntryDetails(entryID int) (*TimeEntryReport, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	entryIDStr := strconv.Itoa(entryID)
+	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
+	url := t.buildURL(path)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("erro ao obter detalhes da entrada de tempo: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	var response struct {
+		TimeEntry TimeEntryReport `json:"timeEntry"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	}
+
+	return &response.TimeEntry, nil
+}
+
+func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
+	if !t.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	entryIDStr := strconv.Itoa(entryID)
+	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
+	url := t.buildURL(path)
+
+	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
+
+	req, err := t.createRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return err
+	}
+
+	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
+			resp.StatusCode, resp.Status, string(body))
+	}
+
+	return nil
+}
+
+func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEntryResult, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	if len(entryIDs) == 0 {
+		return []DeleteTimeEntryResult{}, nil
+	}
+
+	results := make([]DeleteTimeEntryResult, 0, len(entryIDs))
+	resultChan := make(chan DeleteTimeEntryResult, len(entryIDs))
+
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 3)
+
+	for _, entryID := range entryIDs {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			result := DeleteTimeEntryResult{
+				EntryID: id,
+				Success: false,
+			}
+
+			err := t.DeleteTimeEntry(id)
+			if err != nil {
+				result.Message = err.Error()
+			} else {
+				result.Success = true
+				result.Message = "Entrada deletada com sucesso"
+			}
+
+			resultChan <- result
+			time.Sleep(200 * time.Millisecond)
+		}(entryID)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+
+	for result := range resultChan {
+		results = append(results, result)
+	}
+
+	return results, nil
+}
+
+func (t *TeamworkAPI) GetTimeEntriesWithDetails(startDate, endDate string) ([]TimeEntryReport, error) {
+	entries, err := t.GetTimeEntriesForPeriod(startDate, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range entries {
+		if entries[i].ID > 0 {
+			details, err := t.GetTimeEntryDetails(entries[i].ID)
+			if err == nil {
+				entries[i] = *details
+			}
+		}
+	}
+
+	return entries, nil
+}
+
+// backend/api/time_entries.go - atualizar métodos existentes
+func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]TimeEntryReport, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	_, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("data inicial inválida: %v", err)
+	}
+
+	_, err = time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("data final inválida: %v", err)
+	}
+
+	startDateFormatted := strings.ReplaceAll(startDate, "-", "")
+	endDateFormatted := strings.ReplaceAll(endDate, "-", "")
+
+	showDeleted := "0"
+	if includeDeleted {
+		showDeleted = "1"
+	}
+
+	path := fmt.Sprintf("/projects/api/v2/time.json?page=1&pageSize=500&getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
+		t.Config.UserID, startDateFormatted, endDateFormatted, showDeleted)
+
+	url := t.buildURL(path)
+
+	t.logDebug("Obtendo entradas de tempo V2 de %s a %s...", startDate, endDate)
+
+	req, err := t.createRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s - %s",
+			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
+	}
+
+	var response struct {
+		TimeEntries []struct {
+			ID                int     `json:"id"`
+			ProjectID         int     `json:"projectId"`
+			ProjectName       string  `json:"projectName"`
+			TaskID            int     `json:"taskId"`
+			TaskName          string  `json:"taskName"`
+			TasklistID        int     `json:"tasklistId"`
+			TasklistName      string  `json:"tasklistName"`
+			UserID            int     `json:"userId"`
+			UserFirstName     string  `json:"userFirstName"`
+			UserLastName      string  `json:"userLastName"`
+			Date              string  `json:"date"`
+			Hours             float64 `json:"hours"`
+			HoursDecimal      float64 `json:"hoursDecimal"`
+			Minutes           int     `json:"minutes"`
+			Description       string  `json:"description"`
+			IsBillable        bool    `json:"isBillable"`
+			IsBilled          bool    `json:"isBilled"`
+			HasStartTime      bool    `json:"hasStartTime"`
+			Status            string  `json:"status"`
+			CreatedAt         string  `json:"createdAt"`
+			UpdatedDate       string  `json:"updatedDate"`
+			DateDeleted       string  `json:"dateDeleted,omitempty"`
+			DeletedByUserId   int     `json:"deletedByUserId,omitempty"`
+			DeletedByUserName string  `json:"deletedByUserName,omitempty"`
+		} `json:"timeEntries"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	}
+
+	var entries []TimeEntryReport
+	for _, entry := range response.TimeEntries {
+		parsedDate, _ := time.Parse("2006-01-02T15:04:05Z", entry.Date)
+		formattedDate := parsedDate.Format("2006-01-02")
+
+		totalMinutes := int(entry.HoursDecimal * 60)
+		if entry.Minutes > 0 {
+			totalMinutes = int(entry.Hours)*60 + entry.Minutes
+		}
+
+		timeEntry := TimeEntryReport{
+			ID:            entry.ID,
+			ProjectID:     entry.ProjectID,
+			ProjectName:   entry.ProjectName,
+			TaskID:        entry.TaskID,
+			TaskName:      entry.TaskName,
+			TasklistID:    entry.TasklistID,
+			TasklistName:  entry.TasklistName,
+			UserID:        entry.UserID,
+			UserFirstName: entry.UserFirstName,
+			UserLastName:  entry.UserLastName,
+			Date:          formattedDate,
+			Hours:         entry.HoursDecimal,
+			Minutes:       totalMinutes,
+			Description:   entry.Description,
+			IsBillable:    entry.IsBillable,
+			IsBilled:      entry.IsBilled,
+			StartTime:     "",
+			EndTime:       "",
+		}
+
+		entries = append(entries, timeEntry)
+	}
+
+	return entries, nil
+}
+
+func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	dateFormatted := strings.ReplaceAll(date, "-", "")
+
+	baseURL := t.Config.ApiHost
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "https://" + baseURL
+	}
+
+	url := fmt.Sprintf("%s/app/time/all?startdate=%s&enddate=%s&userid=%d&includearchivedprojects=true",
+		baseURL, dateFormatted, dateFormatted, t.Config.UserID)
+
+	t.logDebug("Obtendo todas as entradas de tempo para %s: %s", date, url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("erro na requisição: %v", err)
+	}
+	defer resp.Body.Close()
+
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s", resp.StatusCode, resp.Status)
+	}
+
+	return t.GetTimeEntriesForPeriodV2(date, date, false)
+}
+
+func (t *TeamworkAPI) DeleteTimeEntryV2(entryID int) error {
+	if !t.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	entryIDStr := strconv.Itoa(entryID)
+	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
+	url := t.buildURL(path)
+
+	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("erro ao criar requisição: %v", err)
+	}
+
+	auth := base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
+	req.Header.Set("Authorization", "Basic "+auth)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("erro na requisição: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("erro ao ler resposta: %v", err)
+	}
+
+	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
+
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
+			resp.StatusCode, resp.Status, string(body))
+	}
+
+	return nil
+}
+
+func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEntryReport, error) {
+	return t.GetTimeEntriesForPeriodV2(startDate, endDate, true)
 }

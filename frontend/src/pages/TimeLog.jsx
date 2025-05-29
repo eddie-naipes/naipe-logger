@@ -1,3 +1,4 @@
+// src/pages/TimeLog.jsx - adicionar useEffect para detectar mudanças nas tarefas salvas
 import React, {useEffect, useRef, useState} from 'react';
 import {toast} from 'react-toastify';
 import {
@@ -6,6 +7,7 @@ import {
     FiCheck,
     FiCheckCircle,
     FiClock,
+    FiInfo,
     FiList,
     FiLoader,
     FiPlay,
@@ -14,8 +16,10 @@ import {
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
+import {useLocation} from 'react-router-dom';
 
 const TimeLog = () => {
+    const location = useLocation();
     const [isLoading, setIsLoading] = useState(true);
     const [savedTasks, setSavedTasks] = useState([]);
     const [selectedTasks, setSelectedTasks] = useState([]);
@@ -31,35 +35,46 @@ const TimeLog = () => {
     const [error, setError] = useState(null);
     const [processingProgress, setProcessingProgress] = useState(0);
     const [nonWorkingDays, setNonWorkingDays] = useState({});
-    const [calendarKey, setCalendarKey] = useState(0); // Para forçar re-render do calendário
+    const [calendarKey, setCalendarKey] = useState(0);
+    const [templatesApplied, setTemplatesApplied] = useState(false);
 
-    // Ref para acessar métodos do componente MonthlyTimeCalendar
     const calendarRef = useRef(null);
 
-    useEffect(() => {
-        const loadSavedTasks = async () => {
-            try {
-                setIsLoading(true);
-                const tasks = await window.go.backend.App.GetSavedTasks();
-                setSavedTasks(tasks);
-            } catch (error) {
-                console.error('Erro ao carregar tarefas salvas:', error);
-                toast.error('Erro ao carregar tarefas salvas.');
-                setError("Erro ao carregar tarefas salvas: " + (error.message || error));
-            } finally {
-                setIsLoading(false);
-            }
-        };
+    const loadSavedTasks = async () => {
+        try {
+            setIsLoading(true);
+            const tasks = await window.go.backend.App.GetSavedTasks();
+            setSavedTasks(tasks);
 
+            if (tasks.length > 0 && !templatesApplied) {
+                setSelectedTasks(tasks.map(task => task.taskId));
+                setTemplatesApplied(true);
+                toast.info(`${tasks.length} tarefas carregadas. Clique em "Gerar Plano" para continuar.`);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar tarefas salvas:', error);
+            toast.error('Erro ao carregar tarefas salvas.');
+            setError("Erro ao carregar tarefas salvas: " + (error.message || error));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
         loadSavedTasks();
     }, []);
+
+    useEffect(() => {
+        if (location.pathname === '/timelog') {
+            loadSavedTasks();
+        }
+    }, [location]);
 
     useEffect(() => {
         const loadNonWorkingDays = async () => {
             try {
                 if (!dateRange.startDate || !dateRange.endDate) return;
 
-                // Verificar os meses incluídos no intervalo de datas
                 const startDate = new Date(dateRange.startDate);
                 const endDate = new Date(dateRange.endDate);
 
@@ -72,7 +87,6 @@ const TimeLog = () => {
                     currentDate.setDate(currentDate.getDate() + 1);
                 }
 
-                // Carregar dias não úteis para cada mês
                 const nonWorkingDaysMap = {};
 
                 for (const yearMonth of monthsToCheck) {
@@ -93,12 +107,9 @@ const TimeLog = () => {
         loadNonWorkingDays();
     }, [dateRange]);
 
-    // Função para recarregar o calendário
     const refreshCalendar = () => {
-        // Método 1: Forçar re-render através de uma key
         setCalendarKey(prev => prev + 1);
 
-        // Método 2: Se o MonthlyTimeCalendar tiver um método de refresh exposto
         if (calendarRef.current && calendarRef.current.refresh) {
             calendarRef.current.refresh();
         }
@@ -109,7 +120,6 @@ const TimeLog = () => {
     const handleDaySelection = async (day, entries) => {
         const formattedDate = day.toISOString().split('T')[0];
 
-        // Verificar se o dia é um dia não útil
         const isNonWorkingDay = nonWorkingDays[formattedDate];
         if (isNonWorkingDay) {
             if (isNonWorkingDay.type === 'holiday') {
@@ -120,7 +130,6 @@ const TimeLog = () => {
             return;
         }
 
-        // Verificar explicitamente usando a API
         try {
             const isWorkDay = await window.go.backend.App.IsWorkDay(formattedDate);
             if (!isWorkDay) {
@@ -184,7 +193,6 @@ const TimeLog = () => {
         setError(null);
 
         try {
-            // Verificar se todas as datas no intervalo são dias úteis
             const startDate = new Date(dateRange.startDate);
             const endDate = new Date(dateRange.endDate);
             let hasNonWorkingDays = false;
@@ -281,17 +289,15 @@ const TimeLog = () => {
             if (failures === 0) {
                 toast.success(`${successes} lançamentos realizados com sucesso!`);
 
-                // Recarregar o calendário após sucesso completo
                 setTimeout(() => {
                     refreshCalendar();
-                }, 1000); // Pequeno delay para garantir que os dados foram processados no backend
+                }, 1000);
 
             } else if (successes === 0) {
                 toast.error(`Falha em todos os ${failures} lançamentos.`);
             } else {
                 toast.warning(`${successes} lançamentos com sucesso e ${failures} falhas.`);
 
-                // Recarregar o calendário mesmo com falhas parciais
                 setTimeout(() => {
                     refreshCalendar();
                 }, 1000);
@@ -372,13 +378,29 @@ const TimeLog = () => {
                     Atualizar Calendário
                 </button>
             </div>
-
-            {/* Usando key para forçar re-render do calendário quando necessário */}
             <MonthlyTimeCalendar
                 key={calendarKey}
                 ref={calendarRef}
                 onDayClick={handleDaySelection}
             />
+
+            {savedTasks.length > 0 && templatesApplied && (
+                <div
+                    className="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 dark:bg-blue-900/20 dark:border-blue-700">
+                    <div className="flex items-start">
+                        <FiInfo className="mt-0.5 w-5 h-5 text-blue-500 dark:text-blue-600 mr-2"/>
+                        <div>
+                            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-400">
+                                Template Aplicado
+                            </h3>
+                            <p className="mt-1 text-sm text-blue-700 dark:text-blue-200">
+                                {savedTasks.length} tarefas foram carregadas do template. Configure o período e clique
+                                em "Gerar Plano" para continuar.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">
@@ -409,7 +431,7 @@ const TimeLog = () => {
                                         Nenhuma tarefa salva
                                     </h3>
                                     <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-200">
-                                        Adicione tarefas na seção "Tarefas" antes de lançar horas.
+                                        Adicione tarefas na seção "Tarefas" ou aplique um template da seção "Templates".
                                     </p>
                                 </div>
                             </div>
@@ -546,8 +568,8 @@ const TimeLog = () => {
                             <span className="font-medium">{totals.days} dias</span> •
                             <span className="font-medium">{totals.hours}h {totals.minutes}min</span> •
                             <span className="font-medium">
-                                {workDays.reduce((sum, day) => sum + (day.entries ? day.entries.length : 0), 0)} entradas
-                            </span>
+                               {workDays.reduce((sum, day) => sum + (day.entries ? day.entries.length : 0), 0)} entradas
+                           </span>
                         </div>
                     </div>
 
@@ -569,12 +591,12 @@ const TimeLog = () => {
                                                 >
                                                     <div className="flex justify-between">
                                                         <div>
-                                                            <span className="font-medium">
-                                                                {entry.entry.description}
-                                                            </span>
+                                                           <span className="font-medium">
+                                                               {entry.entry.description}
+                                                           </span>
                                                             <span className="text-gray-600 dark:text-gray-400 ml-2">
-                                                                ({entry.entry.minutes} min • {entry.entry.time ? entry.entry.time.substring(0, 5) : "00:00"})
-                                                            </span>
+                                                               ({entry.entry.minutes} min • {entry.entry.time ? entry.entry.time.substring(0, 5) : "00:00"})
+                                                           </span>
                                                         </div>
                                                         <div className="text-gray-700 dark:text-gray-300">
                                                             TaskID: {entry.taskId}
@@ -593,8 +615,8 @@ const TimeLog = () => {
                                         <span className="text-gray-600 dark:text-gray-400">Total do dia:</span>
                                         <span className="font-medium ml-1">{day.totalMin || 0} minutos</span>
                                         <span className="text-gray-600 dark:text-gray-400 ml-1">
-                                            ({((day.totalMin || 0) / 60).toFixed(1)}h)
-                                        </span>
+                                           ({((day.totalMin || 0) / 60).toFixed(1)}h)
+                                       </span>
                                     </div>
                                 </div>
                             ))}
@@ -670,9 +692,9 @@ const TimeLog = () => {
                                                     ? 'text-green-800 dark:text-green-200'
                                                     : 'text-red-800 dark:text-red-200'
                                             }`}>
-                                                <span className="font-medium">
-                                                    {result.success ? 'Sucesso' : 'Falha'}:
-                                                </span> {result.message || 'Sem mensagem'}
+                                               <span className="font-medium">
+                                                   {result.success ? 'Sucesso' : 'Falha'}:
+                                               </span> {result.message || 'Sem mensagem'}
                                             </p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                                 Tarefa: {result.taskId} • Data: {result.date || 'N/A'}
@@ -689,19 +711,18 @@ const TimeLog = () => {
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-green-50 p-2 rounded dark:bg-green-900/20">
                                 <p className="text-xs text-green-800 dark:text-green-200">
-                                    <span
-                                        className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
+                                   <span
+                                       className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
                                 </p>
                             </div>
                             <div className="bg-red-50 p-2 rounded dark:bg-red-900/20">
                                 <p className="text-xs text-red-800 dark:text-red-200">
-                                    <span
-                                        className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
+                                   <span
+                                       className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
                                 </p>
                             </div>
                         </div>
 
-                        {/* Botão para atualizar calendário após ver os resultados */}
                         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                             <button
                                 onClick={refreshCalendar}
