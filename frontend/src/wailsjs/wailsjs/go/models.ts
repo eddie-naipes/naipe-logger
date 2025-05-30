@@ -206,6 +206,7 @@ export namespace api {
 	    projectId: number;
 	    projectName: string;
 	    entries: TimeEntry[];
+	    workingDays?: number[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Task(source);
@@ -218,6 +219,7 @@ export namespace api {
 	        this.projectId = source["projectId"];
 	        this.projectName = source["projectName"];
 	        this.entries = this.convertValues(source["entries"], TimeEntry);
+	        this.workingDays = source["workingDays"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

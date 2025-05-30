@@ -22,6 +22,7 @@ type Task struct {
 	ProjectID   int         `json:"projectId"`
 	ProjectName string      `json:"projectName"`
 	Entries     []TimeEntry `json:"entries"`
+	WorkingDays []int       `json:"workingDays,omitempty"`
 }
 
 type TimelogRequest struct {

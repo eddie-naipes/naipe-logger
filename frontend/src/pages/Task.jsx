@@ -13,7 +13,16 @@ const Tasks = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTask, setSelectedTask] = useState(null);
 
-    // Carrega os projetos
+    const diasSemana = [
+        { id: 1, nome: 'Segunda', abrev: 'Seg' },
+        { id: 2, nome: 'Terça', abrev: 'Ter' },
+        { id: 3, nome: 'Quarta', abrev: 'Qua' },
+        { id: 4, nome: 'Quinta', abrev: 'Qui' },
+        { id: 5, nome: 'Sexta', abrev: 'Sex' },
+        { id: 6, nome: 'Sábado', abrev: 'Sáb' },
+        { id: 0, nome: 'Domingo', abrev: 'Dom' }
+    ];
+
     useEffect(() => {
         const loadProjects = async () => {
             try {
@@ -21,19 +30,15 @@ const Tasks = () => {
                 const projectsList = await window.go.backend.App.GetProjects();
                 setProjects(projectsList);
 
-                // Seleciona o primeiro projeto automaticamente se a lista não estiver vazia
                 if (projectsList && projectsList.length > 0) {
                     setSelectedProjectId(projectsList[0].id);
-                    // Carrega as tarefas do primeiro projeto
                     loadTasksForProject(projectsList[0].id);
                 } else {
-                    // Se não há projetos, tenta carregar todas as tarefas
                     loadAllTasks();
                 }
             } catch (error) {
                 console.error('Erro ao carregar projetos:', error);
                 toast.error('Erro ao carregar projetos. Tentando carregar tarefas diretamente...');
-                // Tenta carregar todas as tarefas como fallback
                 loadAllTasks();
             } finally {
                 setIsLoadingProjects(false);
@@ -41,12 +46,9 @@ const Tasks = () => {
         };
 
         loadProjects();
-
-        // Carregar tarefas salvas independentemente dos projetos
         loadSavedTasks();
     }, []);
 
-    // Carrega tarefas salvas
     const loadSavedTasks = async () => {
         try {
             const saved = await window.go.backend.App.GetSavedTasks();
@@ -57,7 +59,6 @@ const Tasks = () => {
         }
     };
 
-    // Carrega todas as tarefas (método antigo)
     const loadAllTasks = async () => {
         try {
             setIsLoading(true);
@@ -84,15 +85,12 @@ const Tasks = () => {
         }
     };
 
-    // Atualiza as tarefas do projeto atual
     const refreshTasks = async () => {
         try {
             setIsRefreshing(true);
             if (selectedProjectId) {
-                // Se há um projeto selecionado, atualiza suas tarefas
                 await loadTasksForProject(selectedProjectId);
             } else {
-                // Caso contrário, carrega todas as tarefas
                 await loadAllTasks();
             }
             toast.success('Tarefas atualizadas com sucesso!');
@@ -113,9 +111,7 @@ const Tasks = () => {
         }
     };
 
-    // Seleciona uma tarefa para adicionar
     const handleSelectTask = (task) => {
-        // Verifica se a tarefa já está salva
         const isSaved = savedTasks.some(t => t.taskId === task.id);
 
         if (isSaved) {
@@ -124,14 +120,15 @@ const Tasks = () => {
         }
 
         setSelectedTask({
-            taskId: task.id,  // Agora taskId é um número, não uma string
+            taskId: task.id,
             taskName: task.content,
-            projectId: task.projectId, // Também é um número
+            projectId: task.projectId,
             projectName: task.projectName,
+            workingDays: [1, 2, 3, 4, 5],
             entries: [
                 {
                     minutes: 60,
-                    userId: 0, // Será preenchido pelo backend
+                    userId: 0,
                     time: "09:00:00",
                     description: "Desenvolvimento",
                     isBillable: true
@@ -140,12 +137,45 @@ const Tasks = () => {
         });
     };
 
-    // Seleciona uma tarefa salva para edição
+    const selectAllDays = () => {
+        if (!selectedTask) return;
+
+        const allDays = [0, 1, 2, 3, 4, 5, 6];
+        const isAllSelected = allDays.every(day => selectedTask.workingDays?.includes(day));
+
+        setSelectedTask({
+            ...selectedTask,
+            workingDays: isAllSelected ? [] : allDays
+        });
+    };
+
+    const selectWeekdays = () => {
+        if (!selectedTask) return;
+
+        setSelectedTask({
+            ...selectedTask,
+            workingDays: [1, 2, 3, 4, 5]
+        });
+    };
+
     const editSavedTask = (task) => {
         setSelectedTask({...task});
     };
 
-    // Adiciona uma entrada à tarefa selecionada
+    const toggleWorkingDay = (dayId) => {
+        if (!selectedTask) return;
+
+        const currentDays = selectedTask.workingDays || [];
+        const newDays = currentDays.includes(dayId)
+            ? currentDays.filter(day => day !== dayId)
+            : [...currentDays, dayId].sort();
+
+        setSelectedTask({
+            ...selectedTask,
+            workingDays: newDays
+        });
+    };
+
     const addEntry = () => {
         if (!selectedTask) return;
 
@@ -164,7 +194,6 @@ const Tasks = () => {
         });
     };
 
-    // Remove uma entrada da tarefa selecionada
     const removeEntry = (index) => {
         if (!selectedTask) return;
 
@@ -177,13 +206,11 @@ const Tasks = () => {
         });
     };
 
-    // Atualiza um campo de entrada
     const updateEntry = (index, field, value) => {
         if (!selectedTask) return;
 
         const newEntries = [...selectedTask.entries];
 
-        // Ajusta o valor para o tipo correto
         let parsedValue = value;
         if (field === 'minutes') {
             parsedValue = parseInt(value) || 0;
@@ -202,11 +229,9 @@ const Tasks = () => {
         });
     };
 
-    // Salva a tarefa
     const saveTask = async () => {
         if (!selectedTask) return;
 
-        // Verifica se há pelo menos uma entrada
         if (selectedTask.entries.length === 0) {
             toast.warning('Adicione pelo menos uma entrada de tempo.');
             return;
@@ -214,13 +239,8 @@ const Tasks = () => {
 
         try {
             await window.go.backend.App.SaveTask(selectedTask);
-
-            // Atualiza a lista de tarefas salvas
             await loadSavedTasks();
-
-            // Limpa a seleção
             setSelectedTask(null);
-
             toast.success('Tarefa salva com sucesso!');
         } catch (error) {
             console.error('Erro ao salvar tarefa:', error);
@@ -228,15 +248,10 @@ const Tasks = () => {
         }
     };
 
-    // Remove uma tarefa salva
     const removeTask = async (taskId) => {
         try {
-            // Passa o taskId diretamente como número
             await window.go.backend.App.RemoveTask(taskId);
-
-            // Atualiza a lista de tarefas salvas
             await loadSavedTasks();
-
             toast.success('Tarefa removida com sucesso!');
         } catch (error) {
             console.error('Erro ao remover tarefa:', error);
@@ -244,13 +259,31 @@ const Tasks = () => {
         }
     };
 
-    // Filtra as tarefas com base no termo de pesquisa
+    const formatWorkingDays = (workingDays) => {
+        if (!workingDays || workingDays.length === 0) return 'Todos os dias';
+
+        const diasNomes = {
+            0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua',
+            4: 'Qui', 5: 'Sex', 6: 'Sáb'
+        };
+
+        if (workingDays.length === 7) return 'Todos os dias';
+        if (workingDays.length === 5 &&
+            [1,2,3,4,5].every(day => workingDays.includes(day))) {
+            return 'Dias úteis';
+        }
+
+        return workingDays
+            .sort()
+            .map(day => diasNomes[day])
+            .join(', ');
+    };
+
     const filteredTasks = tasks.filter(task =>
         task.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (task.projectName && task.projectName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    // Calcula o total de minutos da tarefa selecionada
     const totalMinutes = selectedTask
         ? selectedTask.entries.reduce((sum, entry) => sum + entry.minutes, 0)
         : 0;
@@ -263,7 +296,6 @@ const Tasks = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Lista de tarefas */}
                 <div className="card">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center">
@@ -279,7 +311,6 @@ const Tasks = () => {
                         </button>
                     </div>
 
-                    {/* Seletor de Projetos */}
                     <div className="mb-4">
                         <label htmlFor="projectSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             <FiFilter className="inline w-4 h-4 mr-1" /> Selecione um Projeto
@@ -306,7 +337,6 @@ const Tasks = () => {
                         </select>
                     </div>
 
-                    {/* Barra de pesquisa */}
                     <div className="relative mb-4">
                         <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                             <FiSearch className="w-5 h-5 text-gray-500 dark:text-gray-400" />
@@ -320,7 +350,6 @@ const Tasks = () => {
                         />
                     </div>
 
-                    {/* Lista de tarefas */}
                     {isLoading ? (
                         <div className="flex justify-center items-center h-60">
                             <div className="animate-spin-slow w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full"></div>
@@ -361,7 +390,6 @@ const Tasks = () => {
                     )}
                 </div>
 
-                {/* Painel de edição */}
                 <div className="card">
                     {selectedTask ? (
                         <div>
@@ -375,6 +403,59 @@ const Tasks = () => {
                                 </h3>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                     {selectedTask.projectName}
+                                </p>
+                            </div>
+
+                            <div className="mb-6">
+                                <div className="flex justify-between items-center mb-3">
+                                    <h4 className="text-md font-medium text-gray-700 dark:text-gray-300">
+                                        Dias da Semana para Lançamento
+                                    </h4>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={selectWeekdays}
+                                            className="text-xs text-primary-600 dark:text-primary-500 hover:underline"
+                                        >
+                                            Dias Úteis
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={selectAllDays}
+                                            className="text-xs text-primary-600 dark:text-primary-500 hover:underline"
+                                        >
+                                            {diasSemana.every(day => selectedTask.workingDays?.includes(day.id)) ? 'Desmarcar Todos' : 'Todos os Dias'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-7 gap-2">
+                                    {diasSemana.map(dia => (
+                                        <label
+                                            key={dia.id}
+                                            className={`flex flex-col items-center p-2 rounded-lg border-2 cursor-pointer transition-colors ${
+                                                selectedTask.workingDays?.includes(dia.id)
+                                                    ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 dark:border-primary-700'
+                                                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedTask.workingDays?.includes(dia.id) || false}
+                                                onChange={() => toggleWorkingDay(dia.id)}
+                                                className="sr-only"
+                                            />
+                                            <span className="text-xs font-medium">{dia.abrev}</span>
+                                            <span className="text-xs text-gray-500 dark:text-gray-400">{dia.nome}</span>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                    {selectedTask.workingDays?.length === 0
+                                        ? 'Nenhum dia selecionado - tarefa não será lançada'
+                                        : `Selecionados: ${selectedTask.workingDays?.length || 0} dia(s)`
+                                    }
                                 </p>
                             </div>
 
@@ -509,6 +590,12 @@ const Tasks = () => {
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">
                                                             {task.projectName} • {task.entries.length} entradas •
                                                             {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min
+                                                            {task.workingDays && (
+                                                                <span className="block text-blue-600 dark:text-blue-400 mt-1">
+                                                                   <FiClock className="inline w-3 h-3 mr-1" />
+                                                                    {formatWorkingDays(task.workingDays)}
+                                                               </span>
+                                                            )}
                                                         </p>
                                                     </div>
                                                     <div className="flex space-x-1">

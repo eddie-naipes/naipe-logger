@@ -431,19 +431,57 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 			TotalMin: 0,
 		}
 
+		diaData, err := time.Parse("2006-01-02", dia)
+		if err != nil {
+			t.logDebug("Erro ao fazer parse da data %s: %v", dia, err)
+			continue
+		}
+		diaSemana := int(diaData.Weekday())
+
+		t.logDebug("Processando dia %s (dia da semana: %d)", dia, diaSemana)
+
 		for _, tarefa := range tarefas {
+			shouldIncludeTask := true
+
+			if len(tarefa.WorkingDays) > 0 {
+				t.logDebug("Tarefa %s tem workingDays definidos: %v", tarefa.TaskName, tarefa.WorkingDays)
+				shouldIncludeTask = false
+
+				for _, workingDay := range tarefa.WorkingDays {
+					if workingDay == diaSemana {
+						shouldIncludeTask = true
+						t.logDebug("Dia %d está incluído nos workingDays da tarefa %s", diaSemana, tarefa.TaskName)
+						break
+					}
+				}
+
+				if !shouldIncludeTask {
+					t.logDebug("Dia %d NÃO está incluído nos workingDays da tarefa %s, pulando", diaSemana, tarefa.TaskName)
+					continue
+				}
+			} else {
+				t.logDebug("Tarefa %s não tem workingDays definidos, incluindo em todos os dias", tarefa.TaskName)
+			}
+
 			for _, entrada := range tarefa.Entries {
 				workDay.Entries = append(workDay.Entries, EntryTask{
 					TaskID: tarefa.TaskID,
 					Entry:  entrada,
 				})
 				workDay.TotalMin += entrada.Minutes
+				t.logDebug("Adicionada entrada da tarefa %s no dia %s", tarefa.TaskName, dia)
 			}
 		}
 
-		planoDistribuicao = append(planoDistribuicao, workDay)
+		if len(workDay.Entries) > 0 {
+			planoDistribuicao = append(planoDistribuicao, workDay)
+			t.logDebug("Dia %s adicionado ao plano com %d entradas", dia, len(workDay.Entries))
+		} else {
+			t.logDebug("Dia %s não adicionado ao plano (sem entradas)", dia)
+		}
 	}
 
+	t.logDebug("Plano final gerado com %d dias", len(planoDistribuicao))
 	return planoDistribuicao
 }
 

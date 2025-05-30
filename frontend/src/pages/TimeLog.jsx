@@ -1,4 +1,3 @@
-// src/pages/TimeLog.jsx - adicionar useEffect para detectar mudanças nas tarefas salvas
 import React, {useEffect, useRef, useState} from 'react';
 import {toast} from 'react-toastify';
 import {
@@ -206,27 +205,6 @@ const TimeLog = () => {
         setError(null);
 
         try {
-            const startDate = new Date(dateRange.startDate);
-            const endDate = new Date(dateRange.endDate);
-            let hasNonWorkingDays = false;
-            let currentDate = new Date(startDate);
-
-            while (currentDate <= endDate) {
-                const formattedDate = format(currentDate, 'yyyy-MM-dd');
-                const isNonWorkingDay = nonWorkingDays[formattedDate];
-
-                if (isNonWorkingDay) {
-                    hasNonWorkingDays = true;
-                    break;
-                }
-
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-
-            if (hasNonWorkingDays) {
-                toast.warning('O intervalo selecionado contém fins de semana ou feriados. Apenas dias úteis serão considerados.');
-            }
-
             const workingDays = await window.go.backend.App.GetWorkingDays(
                 dateRange.startDate,
                 dateRange.endDate
@@ -242,6 +220,13 @@ const TimeLog = () => {
                 selectedTasks.includes(task.taskId)
             );
 
+            // DEBUG: Log das tarefas que serão enviadas
+            console.log('Tarefas filtradas para o plano:', filteredTasks.map(t => ({
+                taskId: t.taskId,
+                taskName: t.taskName,
+                workingDays: t.workingDays
+            })));
+
             const plan = await window.go.backend.App.CreateDistributionPlan(
                 workingDays,
                 filteredTasks
@@ -252,6 +237,7 @@ const TimeLog = () => {
                 return;
             }
 
+            console.log('Plano gerado:', plan);
             setWorkDays(plan);
             toast.success(`Plano gerado com sucesso para ${plan.length} dias!`);
         } catch (error) {
@@ -362,6 +348,46 @@ const TimeLog = () => {
             return 'Fim de semana';
         }
         return 'Dia não útil';
+    };
+
+    const getTaskDaysSummary = () => {
+        if (!workDays || workDays.length === 0) return '';
+
+        const taskDays = {};
+        workDays.forEach(day => {
+            day.entries?.forEach(entry => {
+                const taskId = entry.taskId;
+                if (!taskDays[taskId]) {
+                    taskDays[taskId] = new Set();
+                }
+                taskDays[taskId].add(day.date);
+            });
+        });
+
+        return Object.entries(taskDays).map(([taskId, daysSet]) => {
+            const task = savedTasks.find(t => t.taskId === parseInt(taskId));
+            return `${task?.taskName || `Tarefa ${taskId}`}: ${daysSet.size} dias`;
+        }).join(' • ');
+    };
+
+    const formatWorkingDays = (workingDays) => {
+        if (!workingDays || workingDays.length === 0) return 'Todos os dias';
+
+        const diasNomes = {
+            0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua',
+            4: 'Qui', 5: 'Sex', 6: 'Sáb'
+        };
+
+        if (workingDays.length === 7) return 'Todos os dias';
+        if (workingDays.length === 5 &&
+            [1, 2, 3, 4, 5].every(day => workingDays.includes(day))) {
+            return 'Dias úteis';
+        }
+
+        return workingDays
+            .sort()
+            .map(day => diasNomes[day])
+            .join(', ');
     };
 
     const totals = calculateTotalHours();
@@ -491,6 +517,12 @@ const TimeLog = () => {
                                                     {task.entries.length} entradas •
                                                     {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min
                                                 </div>
+                                                {task.workingDays && (
+                                                    <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                                                        <FiClock className="inline w-3 h-3 mr-1"/>
+                                                        {formatWorkingDays(task.workingDays)}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -581,10 +613,18 @@ const TimeLog = () => {
                             <span className="font-medium">{totals.days} dias</span> •
                             <span className="font-medium">{totals.hours}h {totals.minutes}min</span> •
                             <span className="font-medium">
-                               {workDays.reduce((sum, day) => sum + (day.entries ? day.entries.length : 0), 0)} entradas
-                           </span>
+                              {workDays.reduce((sum, day) => sum + (day.entries ? day.entries.length : 0), 0)} entradas
+                          </span>
                         </div>
                     </div>
+
+                    {getTaskDaysSummary() && (
+                        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <p className="text-sm text-blue-700 dark:text-blue-300">
+                                <strong>Distribuição por tarefa:</strong> {getTaskDaysSummary()}
+                            </p>
+                        </div>
+                    )}
 
                     <div className="overflow-y-auto max-h-96">
                         <div className="space-y-4">
@@ -604,12 +644,12 @@ const TimeLog = () => {
                                                 >
                                                     <div className="flex justify-between">
                                                         <div>
-                                                           <span className="font-medium">
-                                                               {entry.entry.description}
-                                                           </span>
+                                                          <span className="font-medium">
+                                                              {entry.entry.description}
+                                                          </span>
                                                             <span className="text-gray-600 dark:text-gray-400 ml-2">
-                                                               ({entry.entry.minutes} min • {entry.entry.time ? entry.entry.time.substring(0, 5) : "00:00"})
-                                                           </span>
+                                                              ({entry.entry.minutes} min • {entry.entry.time ? entry.entry.time.substring(0, 5) : "00:00"})
+                                                          </span>
                                                         </div>
                                                         <div className="text-gray-700 dark:text-gray-300">
                                                             TaskID: {entry.taskId}
@@ -628,8 +668,8 @@ const TimeLog = () => {
                                         <span className="text-gray-600 dark:text-gray-400">Total do dia:</span>
                                         <span className="font-medium ml-1">{day.totalMin || 0} minutos</span>
                                         <span className="text-gray-600 dark:text-gray-400 ml-1">
-                                           ({((day.totalMin || 0) / 60).toFixed(1)}h)
-                                       </span>
+                                          ({((day.totalMin || 0) / 60).toFixed(1)}h)
+                                      </span>
                                     </div>
                                 </div>
                             ))}
@@ -705,9 +745,9 @@ const TimeLog = () => {
                                                     ? 'text-green-800 dark:text-green-200'
                                                     : 'text-red-800 dark:text-red-200'
                                             }`}>
-                                               <span className="font-medium">
-                                                   {result.success ? 'Sucesso' : 'Falha'}:
-                                               </span> {result.message || 'Sem mensagem'}
+                                              <span className="font-medium">
+                                                  {result.success ? 'Sucesso' : 'Falha'}:
+                                              </span> {result.message || 'Sem mensagem'}
                                             </p>
                                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                                                 Tarefa: {result.taskId} • Data: {result.date || 'N/A'}
@@ -724,14 +764,14 @@ const TimeLog = () => {
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-green-50 p-2 rounded dark:bg-green-900/20">
                                 <p className="text-xs text-green-800 dark:text-green-200">
-                                   <span
-                                       className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
+                                  <span
+                                      className="font-medium">Sucessos:</span> {results.filter(r => r.success).length}
                                 </p>
                             </div>
                             <div className="bg-red-50 p-2 rounded dark:bg-red-900/20">
                                 <p className="text-xs text-red-800 dark:text-red-200">
-                                   <span
-                                       className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
+                                  <span
+                                      className="font-medium">Falhas:</span> {results.filter(r => !r.success).length}
                                 </p>
                             </div>
                         </div>

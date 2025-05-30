@@ -1,7 +1,6 @@
-// src/pages/Templates.jsx - versão corrigida
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy, FiCheck } from 'react-icons/fi';
+import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy, FiCheck, FiClock } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 
 const Templates = () => {
@@ -15,6 +14,16 @@ const Templates = () => {
     const [currentTemplate, setCurrentTemplate] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
     const [applyingTemplate, setApplyingTemplate] = useState(null);
+
+    const diasSemana = [
+        { id: 1, nome: 'Segunda', abrev: 'Seg' },
+        { id: 2, nome: 'Terça', abrev: 'Ter' },
+        { id: 3, nome: 'Quarta', abrev: 'Qua' },
+        { id: 4, nome: 'Quinta', abrev: 'Qui' },
+        { id: 5, nome: 'Sexta', abrev: 'Sex' },
+        { id: 6, nome: 'Sábado', abrev: 'Sáb' },
+        { id: 0, nome: 'Domingo', abrev: 'Dom' }
+    ];
 
     useEffect(() => {
         const loadData = async () => {
@@ -84,7 +93,6 @@ const Templates = () => {
             delete updatedTemplates[name];
             setTemplates(updatedTemplates);
 
-            // ADICIONAR ESTAS LINHAS - Limpar tarefas salvas se o template deletado foi o último aplicado
             await window.go.backend.App.ClearSavedTasks();
             localStorage.removeItem('templateApplied');
 
@@ -163,7 +171,6 @@ const Templates = () => {
 
             toast.success(`Template "${name}" aplicado com sucesso! Redirecionando para lançamento de horas...`);
 
-            // ADICIONAR ESTA LINHA - Marcar que um template foi aplicado
             localStorage.setItem('templateApplied', 'true');
 
             setTimeout(() => {
@@ -175,6 +182,26 @@ const Templates = () => {
         } finally {
             setApplyingTemplate(null);
         }
+    };
+
+    const formatWorkingDays = (workingDays) => {
+        if (!workingDays || workingDays.length === 0) return 'Todos os dias';
+
+        const diasNomes = {
+            0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua',
+            4: 'Qui', 5: 'Sex', 6: 'Sáb'
+        };
+
+        if (workingDays.length === 7) return 'Todos os dias';
+        if (workingDays.length === 5 &&
+            [1,2,3,4,5].every(day => workingDays.includes(day))) {
+            return 'Dias úteis';
+        }
+
+        return workingDays
+            .sort()
+            .map(day => diasNomes[day])
+            .join(', ');
     };
 
     if (isLoading) {
@@ -257,6 +284,12 @@ const Templates = () => {
                                                         {task.projectName} • {task.entries.length} entradas •
                                                         {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min
                                                     </p>
+                                                    {task.workingDays && (
+                                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                                            <FiClock className="inline w-3 h-3 mr-1" />
+                                                            {formatWorkingDays(task.workingDays)}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}
@@ -354,6 +387,9 @@ const Templates = () => {
                                                 <li key={task.taskId} className="text-sm text-gray-600 dark:text-gray-400">
                                                     • {task.taskName} ({task.entries.length} entradas,
                                                     {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min)
+                                                    <span className="text-xs text-gray-500 dark:text-gray-500 ml-2">
+                                                       - {formatWorkingDays(task.workingDays)}
+                                                   </span>
                                                 </li>
                                             ))}
                                         </ul>
