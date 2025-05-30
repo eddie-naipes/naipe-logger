@@ -60,13 +60,16 @@ jobs:
         run: |
           sudo apt-get update
           
+          # Try to install webkit2gtk-4.0 first, fallback to 4.1
           if ! sudo apt-get install -y libwebkit2gtk-4.0-dev; then
             echo "Installing webkit2gtk-4.1 and creating compatibility symlink..."
             sudo apt-get install -y libwebkit2gtk-4.1-dev
           
+            # Create symlink for pkg-config compatibility
             sudo mkdir -p /usr/lib/x86_64-linux-gnu/pkgconfig/
             sudo ln -sf webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
           
+            # Also check common locations
             if [ -f /usr/lib/pkgconfig/webkit2gtk-4.1.pc ]; then
               sudo ln -sf /usr/lib/pkgconfig/webkit2gtk-4.1.pc /usr/lib/pkgconfig/webkit2gtk-4.0.pc
             fi
@@ -74,6 +77,7 @@ jobs:
           
           sudo apt-get install -y build-essential pkg-config libgtk-3-dev
           
+          # Verify webkit2gtk is available
           pkg-config --exists webkit2gtk-4.0 || pkg-config --exists webkit2gtk-4.1 || echo "WARNING: No webkit2gtk found"
 
       - name: Install Wails
@@ -89,15 +93,26 @@ jobs:
 
       - name: Create AppImage
         run: |
+          # First, check what files were actually built
+          echo "=== Files in build/bin/ ==="
+          ls -la build/bin/
+          
+          # Download AppImageTool
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
           
+          # Create AppImage directory structure
           mkdir -p NaipeLogger.AppDir/usr/bin
           mkdir -p NaipeLogger.AppDir/usr/share/applications
           mkdir -p NaipeLogger.AppDir/usr/share/pixmaps
           
-          cp build/bin/* NaipeLogger.AppDir/usr/bin/naipe-logger
+          # Find the actual binary name and copy it
+          BINARY_NAME=$(ls build/bin/ | head -n 1)
+          echo "Found binary: $BINARY_NAME"
+          cp build/bin/$BINARY_NAME NaipeLogger.AppDir/usr/bin/naipe-logger
+          chmod +x NaipeLogger.AppDir/usr/bin/naipe-logger
           
+          # Create desktop file
           cat > NaipeLogger.AppDir/naipe-logger.desktop << EOF
           [Desktop Entry]
           Type=Application
@@ -108,21 +123,22 @@ jobs:
           Comment=Teamwork Time Logger Application
           EOF
           
-          cat > NaipeLogger.AppDir/usr/share/applications/naipe-logger.desktop << EOF
-          [Desktop Entry]
-          Type=Application
-          Name=Naipe Logger
-          Exec=naipe-logger
-          Icon=naipe-logger
-          Categories=Office;ProjectManagement;
-          Comment=Teamwork Time Logger Application
-          EOF
+          # Copy desktop file to applications directory
+          cp NaipeLogger.AppDir/naipe-logger.desktop NaipeLogger.AppDir/usr/share/applications/
           
-          echo '#!/bin/bash' > NaipeLogger.AppDir/AppRun
-          echo 'exec "$APPDIR/usr/bin/naipe-logger" "$@"' >> NaipeLogger.AppDir/AppRun
+          # Create AppRun script
+          cat > NaipeLogger.AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          APPDIR="$(dirname "$(readlink -f "$0")")"
+          exec "$APPDIR/usr/bin/naipe-logger" "$@"
+          EOF
           chmod +x NaipeLogger.AppDir/AppRun
           
+          # Create the AppImage
           ./appimagetool-x86_64.AppImage NaipeLogger.AppDir naipe-logger-linux.AppImage
+          
+          echo "=== Final files created ==="
+          ls -la naipe-logger-linux.AppImage build/bin/
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
