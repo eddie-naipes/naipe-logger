@@ -112,29 +112,31 @@ jobs:
           cp build/bin/$BINARY_NAME NaipeLogger.AppDir/usr/bin/naipe-logger
           chmod +x NaipeLogger.AppDir/usr/bin/naipe-logger
           
-          # Create a simple placeholder icon (64x64 PNG with ImageMagick)
+          # Create a simple placeholder icon (256x256 PNG as recommended)
           sudo apt-get install -y imagemagick
-          convert -size 64x64 xc:blue -fill white -gravity center -pointsize 20 -annotate +0+0 'NL' NaipeLogger.AppDir/naipe-logger.png
+          convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 -annotate +0+0 'NL' NaipeLogger.AppDir/naipe-logger.png
           
-          # Create desktop file (without icon to avoid the error)
-          cat > NaipeLogger.AppDir/naipe-logger.desktop << EOF
+          # Create desktop file with proper formatting
+          cat > NaipeLogger.AppDir/naipe-logger.desktop << 'DESKTOP_EOF'
           [Desktop Entry]
           Type=Application
           Name=Naipe Logger
           Exec=naipe-logger
+          Icon=naipe-logger
           Categories=Office;ProjectManagement;
           Comment=Teamwork Time Logger Application
-          EOF
+          StartupNotify=true
+          DESKTOP_EOF
           
           # Copy desktop file to applications directory
           cp NaipeLogger.AppDir/naipe-logger.desktop NaipeLogger.AppDir/usr/share/applications/
           
           # Create AppRun script
-          cat > NaipeLogger.AppDir/AppRun << 'EOF'
+          cat > NaipeLogger.AppDir/AppRun << 'APPRUN_EOF'
           #!/bin/bash
           APPDIR="$(dirname "$(readlink -f "$0")")"
           exec "$APPDIR/usr/bin/naipe-logger" "$@"
-          EOF
+          APPRUN_EOF
           chmod +x NaipeLogger.AppDir/AppRun
           
           # Create the AppImage using --appimage-extract-and-run to bypass FUSE requirement
