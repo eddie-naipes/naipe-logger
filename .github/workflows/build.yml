@@ -112,13 +112,16 @@ jobs:
           cp build/bin/$BINARY_NAME NaipeLogger.AppDir/usr/bin/naipe-logger
           chmod +x NaipeLogger.AppDir/usr/bin/naipe-logger
           
-          # Create desktop file
+          # Create a simple placeholder icon (64x64 PNG with ImageMagick)
+          sudo apt-get install -y imagemagick
+          convert -size 64x64 xc:blue -fill white -gravity center -pointsize 20 -annotate +0+0 'NL' NaipeLogger.AppDir/naipe-logger.png
+          
+          # Create desktop file (without icon to avoid the error)
           cat > NaipeLogger.AppDir/naipe-logger.desktop << EOF
           [Desktop Entry]
           Type=Application
           Name=Naipe Logger
           Exec=naipe-logger
-          Icon=naipe-logger
           Categories=Office;ProjectManagement;
           Comment=Teamwork Time Logger Application
           EOF
