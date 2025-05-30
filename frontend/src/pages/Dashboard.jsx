@@ -207,7 +207,7 @@ const Dashboard = () => {
     const handleExportReport = async () => {
         try {
             setIsExporting(true);
-            const filePath = await window.go.backend.App.DownloadCurrentMonthTimeReport();
+            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
             await window.go.backend.App.OpenDirectoryPath(filePath);
         } catch (error) {
@@ -316,17 +316,17 @@ const Dashboard = () => {
                         <div className="mb-4">
                             <div className="flex justify-between text-sm text-blue-700 dark:text-blue-400 mb-2">
                                 <span className="font-medium">Progresso: {formatarHoras(dashboardData.horasLogadas)}</span>
-                                <span className="font-medium">Meta: 160h</span>
+                                <span className="font-medium">Meta: 168h</span>
                             </div>
                             <div className="w-full bg-blue-200 rounded-full h-3 dark:bg-blue-700">
                                 <div
                                     className="bg-blue-600 h-3 rounded-full dark:bg-blue-500"
-                                    style={{ width: `${Math.min(100, (dashboardData.horasLogadas / 160) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, (dashboardData.horasLogadas / 168) * 100)}%` }}
                                 ></div>
                             </div>
                         </div>
                         <p className="text-sm text-blue-700 dark:text-blue-400 text-center font-medium">
-                            {Math.floor((dashboardData.horasLogadas / 160) * 100)}% da meta mensal atingida
+                            {Math.floor((dashboardData.horasLogadas / 168) * 100)}% da meta mensal atingida
                         </p>
                     </div>
 
@@ -383,7 +383,7 @@ const Dashboard = () => {
                         <button
                             onClick={handleExportReport}
                             disabled={isExporting}
-                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600"
+                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50"
                         >
                             {isExporting ? (
                                 <FiLoader className="w-6 h-6 text-primary-600 mr-3 animate-spin" />
@@ -395,7 +395,7 @@ const Dashboard = () => {
                         <button
                             onClick={() => setIsReportModalOpen(true)}
                             disabled={isExporting}
-                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600"
+                            className="flex items-center p-4 bg-gray-50 hover:bg-gray-100 rounded-lg dark:bg-gray-700 dark:hover:bg-gray-600 disabled:opacity-50"
                         >
                             <FiCalendar className="w-6 h-6 text-primary-600 mr-3" />
                             <span className="font-medium">Relatório Personalizado</span>

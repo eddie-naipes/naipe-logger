@@ -2,10 +2,7 @@ module logTime-go
 
 go 1.24
 
-require (
-	github.com/jung-kurt/gofpdf v1.16.2
-	github.com/wailsapp/wails/v2 v2.10.1
-)
+require github.com/wailsapp/wails/v2 v2.10.1
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect

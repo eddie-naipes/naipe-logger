@@ -1,4 +1,3 @@
-// src/components/Sidebar.jsx - adicionar item de menu para gerenciar horas
 import React, { useContext, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
@@ -10,7 +9,6 @@ import {
     FiX,
     FiSun,
     FiMoon,
-    FiFileText,
     FiLoader,
     FiDownload,
     FiTrash2
@@ -72,7 +70,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
         setIsExporting(true);
 
         try {
-            const filePath = await window.go.backend.App.DownloadCurrentMonthTimeReport();
+            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
             await window.go.backend.App.OpenDirectoryPath(filePath);
         } catch (error) {
@@ -137,7 +135,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                                 <button
                                     onClick={handleExportReport}
                                     disabled={isExporting}
-                                    className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                                    className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
                                 >
                                     {isExporting ? (
                                         <FiLoader className="w-5 h-5 animate-spin" />

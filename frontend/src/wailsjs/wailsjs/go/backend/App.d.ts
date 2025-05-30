@@ -23,8 +23,6 @@ export function DeleteTimeEntryV2(arg1:number):Promise<void>;
 
 export function DownloadCurrentMonthReport():Promise<string>;
 
-export function DownloadCurrentMonthTimeReport():Promise<string>;
-
 export function DownloadTimeReport(arg1:string,arg2:string):Promise<string>;
 
 export function GetAllNonWorkingDays(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;

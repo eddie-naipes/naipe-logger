@@ -18,6 +18,22 @@ export namespace api {
 	        this.minutosPorDia = source["minutosPorDia"];
 	    }
 	}
+	export class DeleteTimeEntryResult {
+	    entryId: number;
+	    success: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeleteTimeEntryResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.entryId = source["entryId"];
+	        this.success = source["success"];
+	        this.message = source["message"];
+	    }
+	}
 	export class TimeEntry {
 	    minutes: number;
 	    userId: number;
@@ -364,6 +380,11 @@ export namespace api {
 	    isBilled: boolean;
 	    startTime: string;
 	    endTime: string;
+	    status?: string;
+	    createdAt?: string;
+	    updatedAt?: string;
+	    deletedAt?: string;
+	    deletedBy?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimeEntryReport(source);
@@ -389,6 +410,11 @@ export namespace api {
 	        this.isBilled = source["isBilled"];
 	        this.startTime = source["startTime"];
 	        this.endTime = source["endTime"];
+	        this.status = source["status"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.deletedAt = source["deletedAt"];
+	        this.deletedBy = source["deletedBy"];
 	    }
 	}
 	export class TimeLogResult {

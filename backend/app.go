@@ -40,7 +40,6 @@ func NewApp(ctx context.Context) (*App, error) {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-
 	a.teamworkAPI = api.NewTeamworkAPI(a.configManager.GetTeamworkConfig())
 
 	defer func() {
@@ -213,8 +212,27 @@ func (a *App) DownloadCurrentMonthReport() (string, error) {
 		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
 	}
 
-	// Usar o método DownloadCurrentMonthTimeReport em vez de DownloadCurrentMonthReport
 	filePath, err := a.teamworkAPI.DownloadCurrentMonthTimeReport()
+	if err != nil {
+		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
+	}
+
+	return filePath, nil
+}
+
+func (a *App) DownloadTimeReport(startDate, endDate string) (string, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
+	}
+
+	filePath, err := a.teamworkAPI.GetDefaultReportPath()
+	if err != nil {
+		return "", fmt.Errorf("erro ao obter caminho padrão de relatório: %v", err)
+	}
+
+	filePath = strings.TrimSuffix(filePath, filepath.Ext(filePath)) + "_" + startDate + "_" + endDate + ".pdf"
+
+	err = a.teamworkAPI.DownloadTimeReportPDF(startDate, endDate, filePath)
 	if err != nil {
 		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
 	}
@@ -275,39 +293,6 @@ func (a *App) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) 
 		return nil, fmt.Errorf("API não configurada")
 	}
 	return a.teamworkAPI.GetTasksWithUpcomingDeadlines()
-}
-
-func (a *App) DownloadCurrentMonthTimeReport() (string, error) {
-	if !a.teamworkAPI.IsConfigured() {
-		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
-	}
-
-	filePath, err := a.teamworkAPI.DownloadCurrentMonthTimeReport()
-	if err != nil {
-		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
-	}
-
-	return filePath, nil
-}
-
-func (a *App) DownloadTimeReport(startDate, endDate string) (string, error) {
-	if !a.teamworkAPI.IsConfigured() {
-		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
-	}
-
-	filePath, err := a.teamworkAPI.GetDefaultReportPath()
-	if err != nil {
-		return "", fmt.Errorf("erro ao obter caminho padrão de relatório: %v", err)
-	}
-
-	filePath = strings.TrimSuffix(filePath, filepath.Ext(filePath)) + "_" + startDate + "_" + endDate + ".pdf"
-
-	err = a.teamworkAPI.DownloadTimeReport(startDate, endDate, filePath)
-	if err != nil {
-		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
-	}
-
-	return filePath, nil
 }
 
 func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal, error) {
@@ -392,7 +377,6 @@ func (a *App) IsWorkDay(date string) (bool, error) {
 	return a.teamworkAPI.IsWorkDay(dateObj), nil
 }
 
-// backend/app.go - adicionar método
 func (a *App) GetUserProfile() (map[string]interface{}, error) {
 	if !a.teamworkAPI.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -506,7 +490,6 @@ func (a *App) DeleteMultipleTimeEntries(entryIDs []int) ([]api.DeleteTimeEntryRe
 	return a.teamworkAPI.DeleteMultipleTimeEntries(entryIDs)
 }
 
-// backend/app.go - atualizar métodos expostos
 func (a *App) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]api.TimeEntryReport, error) {
 	if !a.teamworkAPI.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
