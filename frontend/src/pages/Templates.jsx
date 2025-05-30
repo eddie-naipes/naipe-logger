@@ -84,6 +84,10 @@ const Templates = () => {
             delete updatedTemplates[name];
             setTemplates(updatedTemplates);
 
+            // ADICIONAR ESTAS LINHAS - Limpar tarefas salvas se o template deletado foi o último aplicado
+            await window.go.backend.App.ClearSavedTasks();
+            localStorage.removeItem('templateApplied');
+
             toast.success('Template excluído com sucesso!');
         } catch (error) {
             console.error('Erro ao excluir template:', error);
@@ -158,6 +162,9 @@ const Templates = () => {
             }
 
             toast.success(`Template "${name}" aplicado com sucesso! Redirecionando para lançamento de horas...`);
+
+            // ADICIONAR ESTA LINHA - Marcar que um template foi aplicado
+            localStorage.setItem('templateApplied', 'true');
 
             setTimeout(() => {
                 navigate('/timelog');

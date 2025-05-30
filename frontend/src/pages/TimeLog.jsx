@@ -37,6 +37,7 @@ const TimeLog = () => {
     const [nonWorkingDays, setNonWorkingDays] = useState({});
     const [calendarKey, setCalendarKey] = useState(0);
     const [templatesApplied, setTemplatesApplied] = useState(false);
+    const [templateAlertShown, setTemplateAlertShown] = useState(false);
 
     const calendarRef = useRef(null);
 
@@ -46,10 +47,15 @@ const TimeLog = () => {
             const tasks = await window.go.backend.App.GetSavedTasks();
             setSavedTasks(tasks);
 
-            if (tasks.length > 0 && !templatesApplied) {
+            const wasTemplateApplied = localStorage.getItem('templateApplied') === 'true';
+
+            if (tasks.length > 0 && wasTemplateApplied && !templateAlertShown) {
                 setSelectedTasks(tasks.map(task => task.taskId));
                 setTemplatesApplied(true);
-                toast.info(`${tasks.length} tarefas carregadas. Clique em "Gerar Plano" para continuar.`);
+                setTemplateAlertShown(true);
+                toast.info(`${tasks.length} tarefas carregadas do template. Clique em "Gerar Plano" para continuar.`);
+
+                localStorage.removeItem('templateApplied');
             }
         } catch (error) {
             console.error('Erro ao carregar tarefas salvas:', error);
@@ -65,10 +71,17 @@ const TimeLog = () => {
     }, []);
 
     useEffect(() => {
-        if (location.pathname === '/timelog') {
+        if (location.pathname === '/timelog' && !templateAlertShown) {
             loadSavedTasks();
         }
-    }, [location]);
+    }, [location, templateAlertShown]);
+
+    useEffect(() => {
+        return () => {
+            setTemplateAlertShown(false);
+            setTemplatesApplied(false);
+        };
+    }, []);
 
     useEffect(() => {
         const loadNonWorkingDays = async () => {
