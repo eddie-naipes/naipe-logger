@@ -1083,3 +1083,75 @@ func (t *TeamworkAPI) DeleteTimeEntryV2(entryID int) error {
 func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEntryReport, error) {
 	return t.GetTimeEntriesForPeriodV2(startDate, endDate, true)
 }
+
+// backend/api/time_entries.go - Adicionar função de edição
+func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogResult, error) {
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	if entryID <= 0 {
+		return nil, fmt.Errorf("ID de entrada inválido: %d", entryID)
+	}
+
+	if entry.Minutes <= 0 {
+		return nil, fmt.Errorf("minutos devem ser maiores que zero: %d", entry.Minutes)
+	}
+
+	entryIDStr := strconv.Itoa(entryID)
+	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
+	url := t.buildURL(path)
+
+	if t.Config.UserID <= 0 {
+		return nil, fmt.Errorf("ID do usuário não configurado")
+	}
+
+	entry.UserID = t.Config.UserID
+
+	t.logDebug("Atualizando entrada de tempo #%d: %s %s - %d minutos - %s",
+		entryID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+
+	reqBody := TimelogRequest{
+		Timelog: entry,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter para JSON: %v", err)
+	}
+
+	req, err := t.createRequest("PUT", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &TimeLogResult{
+		TaskID: entryID, // Usando entryID aqui
+		Date:   entry.Date,
+	}
+
+	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		result.Success = true
+		result.Message = fmt.Sprintf("Entrada de tempo atualizada com sucesso")
+		return result, nil
+	} else {
+		result.Success = false
+		var errorResponse struct {
+			Errors []string `json:"errors"`
+		}
+
+		if err := json.Unmarshal(body, &errorResponse); err == nil && len(errorResponse.Errors) > 0 {
+			result.Message = fmt.Sprintf("Erro ao atualizar entrada: %s", strings.Join(errorResponse.Errors, ", "))
+		} else {
+			result.Message = fmt.Sprintf("Erro ao atualizar entrada: %d %s - %s",
+				resp.StatusCode, resp.Status, string(body))
+		}
+
+		return result, fmt.Errorf(result.Message)
+	}
+}

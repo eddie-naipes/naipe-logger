@@ -100,3 +100,5 @@ export function SaveTask(arg1:api.Task):Promise<void>;
 export function SaveTemplate(arg1:api.Template):Promise<void>;
 
 export function TestConnection(arg1:api.Config):Promise<Array<any>>;
+
+export function UpdateTimeEntry(arg1:number,arg2:api.TimeEntry):Promise<api.TimeLogResult>;

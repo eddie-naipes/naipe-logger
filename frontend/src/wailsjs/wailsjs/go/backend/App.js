@@ -197,3 +197,7 @@ export function SaveTemplate(arg1) {
 export function TestConnection(arg1) {
   return window['go']['backend']['App']['TestConnection'](arg1);
 }
+
+export function UpdateTimeEntry(arg1, arg2) {
+  return window['go']['backend']['App']['UpdateTimeEntry'](arg1, arg2);
+}

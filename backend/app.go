@@ -521,3 +521,11 @@ func (a *App) DeleteTimeEntryV2(entryID int) error {
 
 	return a.teamworkAPI.DeleteTimeEntryV2(entryID)
 }
+
+func (a *App) UpdateTimeEntry(entryID int, entry api.TimeEntry) (*api.TimeLogResult, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.UpdateTimeEntry(entryID, entry)
+}
