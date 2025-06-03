@@ -46,7 +46,6 @@ func Encrypt(plaintext string) (string, error) {
 }
 
 func Decrypt(encryptedText string) (string, error) {
-	// Verificar se o texto está vazio
 	if encryptedText == "" {
 		return "", nil
 	}
@@ -58,8 +57,6 @@ func Decrypt(encryptedText string) (string, error) {
 
 	ciphertext, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
-		// Se não puder decodificar, retornar o texto original
-		// Isso pode ocorrer quando o token ainda não foi criptografado
 		return encryptedText, nil
 	}
 
@@ -74,7 +71,6 @@ func Decrypt(encryptedText string) (string, error) {
 	}
 
 	if len(ciphertext) < aesGCM.NonceSize() {
-		// Se o tamanho for menor que o esperado, retornar o texto original
 		return encryptedText, nil
 	}
 
@@ -82,7 +78,6 @@ func Decrypt(encryptedText string) (string, error) {
 
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		// Se não puder descriptografar, retornar o texto original
 		return encryptedText, nil
 	}
 

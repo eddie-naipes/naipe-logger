@@ -57,7 +57,6 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	startDate := firstDay.Format("2006-01-02")
 	endDate := lastDay.Format("2006-01-02")
 
-	// Executar solicitações em paralelo
 	var wg sync.WaitGroup
 	var taskCountErr, projectCountErr, hoursLoggedErr, workDaysErr error
 	var tarefasPendentes, projetosAtivos int
@@ -95,7 +94,6 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 
 	wg.Wait()
 
-	// Processa os resultados
 	if taskCountErr != nil {
 		stats["tarefasPendentes"] = 0
 	} else {

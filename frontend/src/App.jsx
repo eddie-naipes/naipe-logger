@@ -3,14 +3,11 @@ import {Route, Routes, useLocation, useNavigate} from 'react-router-dom';
 import {toast, ToastContainer} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Importa diretamente as funções do backend
 import {GetAppSettings, SaveAppSettings} from '../wailsjs/go/backend/App';
 
-// Componentes
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 
-// Páginas
 import Dashboard from './pages/Dashboard.jsx';
 import Config from './pages/Config';
 import Tasks from './pages/Task';
@@ -18,7 +15,6 @@ import TimeLog from './pages/TimeLog';
 import Templates from './pages/Templates';
 import NotFound from './pages/NotFound';
 
-// Contexto para tema
 import {ThemeContext} from './contexts/ThemeContext';
 
 function App() {
@@ -29,14 +25,12 @@ function App() {
     const [loading, setLoading] = useState(true);
     const [isConfigured, setIsConfigured] = useState(false);
 
-    // Carrega as configurações ao iniciar
     useEffect(() => {
         const loadSettings = async () => {
             try {
                 const settings = await GetAppSettings();
                 setDarkMode(settings.darkMode);
 
-                // Verificar se estamos configurados
                 await checkIfConfigured();
             } catch (error) {
                 console.error('Erro ao carregar configurações:', error);
@@ -48,7 +42,6 @@ function App() {
         loadSettings();
     }, []);
 
-    // Verifica se a aplicação está configurada
     const checkIfConfigured = async () => {
         try {
             const config = await window.go.backend.App.GetConfig();
@@ -57,7 +50,6 @@ function App() {
 
             setIsConfigured(configured);
 
-            // Se não estiver configurado e não estiver na página de configuração, redireciona
             if (!configured && location.pathname !== '/config') {
                 navigate('/config');
             }
@@ -67,18 +59,15 @@ function App() {
         }
     };
 
-    // Alterna o tema claro/escuro
     const toggleDarkMode = async () => {
         try {
             const newMode = !darkMode;
             setDarkMode(newMode);
 
-            // Salva a preferência nas configurações
             const settings = await GetAppSettings();
             settings.darkMode = newMode;
             await SaveAppSettings(settings);
 
-            // Aplica a classe ao documento
             if (newMode) {
                 document.documentElement.classList.add('dark');
             } else {
@@ -90,7 +79,6 @@ function App() {
         }
     };
 
-    // Aplica a classe de tema ao carregar
     useEffect(() => {
         if (darkMode) {
             document.documentElement.classList.add('dark');
@@ -99,7 +87,6 @@ function App() {
         }
     }, [darkMode]);
 
-    // Renderização condicional durante o carregamento
     if (loading) {
         return (
             <div className="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">

@@ -220,7 +220,6 @@ const TimeLog = () => {
                 selectedTasks.includes(task.taskId)
             );
 
-            // DEBUG: Log das tarefas que serão enviadas
             console.log('Tarefas filtradas para o plano:', filteredTasks.map(t => ({
                 taskId: t.taskId,
                 taskName: t.taskName,

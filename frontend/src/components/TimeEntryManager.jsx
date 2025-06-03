@@ -38,7 +38,6 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
     const [showResults, setShowResults] = useState(false);
     const [showDeleted, setShowDeleted] = useState(false);
 
-    // Estados para edição
     const [editingEntry, setEditingEntry] = useState(null);
     const [editForm, setEditForm] = useState({
         minutes: 0,
@@ -207,7 +206,6 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         }
     };
 
-    // Funções para edição
     const openEditModal = (entry) => {
         setEditingEntry(entry);
         setEditForm({

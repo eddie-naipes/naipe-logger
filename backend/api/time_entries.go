@@ -26,7 +26,6 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 
 	entries := make([]map[string]interface{}, 0)
 
-	// Processar entradas billable
 	if response.User.Billable != nil {
 		for _, entry := range response.User.Billable {
 			if len(entry) < 3 {
@@ -38,14 +37,12 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 				continue
 			}
 
-			// Convertendo milissegundos para segundos
 			date := time.Unix(timestamp/1000, 0)
 			dateStr := date.Format("2006-01-02")
 
 			hours, _ := strconv.ParseFloat(entry[1], 64)
 			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
 
-			// Criar uma entrada para o dia
 			entryData := map[string]interface{}{
 				"date":        dateStr,
 				"minutes":     minutes,
@@ -61,7 +58,6 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 		}
 	}
 
-	// Processar entradas não billable
 	if response.User.Nonbillable != nil {
 		for _, entry := range response.User.Nonbillable {
 			if len(entry) < 3 {
@@ -73,16 +69,13 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 				continue
 			}
 
-			// Convertendo milissegundos para segundos
 			date := time.Unix(timestamp/1000, 0)
 			dateStr := date.Format("2006-01-02")
 
 			hours, _ := strconv.ParseFloat(entry[1], 64)
 			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
 
-			// Só adiciona se tiver minutos
 			if minutes > 0 {
-				// Criar uma entrada para o dia
 				entryData := map[string]interface{}{
 					"date":        dateStr,
 					"minutes":     minutes,
@@ -205,7 +198,6 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 		return nil, err
 	}
 
-	// Agrupar entradas por dia
 	entriesByDay := make(map[string][]map[string]interface{})
 	for _, entry := range entries {
 		date := entry["date"].(string)
@@ -215,7 +207,6 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 		entriesByDay[date] = append(entriesByDay[date], entry)
 	}
 
-	// Criar dias de trabalho
 	workDays := make([]WorkDay, 0, len(entriesByDay))
 
 	for date, dayEntries := range entriesByDay {
@@ -225,16 +216,13 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 			TotalMin: 0,
 		}
 
-		// Total de minutos para o dia
 		totalMin := 0
 		for _, entry := range dayEntries {
 			mins := int(entry["minutes"].(int64))
 			totalMin += mins
 		}
 
-		// Distribuir os minutos entre as tarefas
 		if len(tasks) > 0 {
-			// Se temos tarefas, distribuímos entre elas
 			minsPerTask := totalMin / len(tasks)
 			remainingMins := totalMin % len(tasks)
 
@@ -249,7 +237,6 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 					continue
 				}
 
-				// Criar entrada para a tarefa
 				workDay.Entries = append(workDay.Entries, EntryTask{
 					TaskID: task.TaskID,
 					Entry: TimeEntry{
@@ -262,9 +249,8 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 				})
 			}
 		} else {
-			// Se não temos tarefas, criamos uma entrada genérica
 			workDay.Entries = append(workDay.Entries, EntryTask{
-				TaskID: 0, // TaskID 0 indica que precisamos selecionar uma tarefa
+				TaskID: 0,
 				Entry: TimeEntry{
 					Minutes:     totalMin,
 					Description: "Tempo importado do calendário",
@@ -303,7 +289,6 @@ func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, er
 	errorChan := make(chan error, totalEntries)
 
 	var wg sync.WaitGroup
-	// Limitar processamento paralelo a 3 para não sobrecarregar a API
 	semaphore := make(chan struct{}, 3)
 
 	for _, dia := range workDays {
@@ -348,7 +333,6 @@ func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, er
 					resultChan <- result
 				}
 
-				// Pequena pausa para não sobrecarregar a API
 				time.Sleep(500 * time.Millisecond)
 			}(dia.Date, alocacao)
 		}
@@ -877,7 +861,6 @@ func (t *TeamworkAPI) GetTimeEntriesWithDetails(startDate, endDate string) ([]Ti
 	return entries, nil
 }
 
-// backend/api/time_entries.go - atualizar métodos existentes
 func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]TimeEntryReport, error) {
 	if !t.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -1084,7 +1067,6 @@ func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEn
 	return t.GetTimeEntriesForPeriodV2(startDate, endDate, true)
 }
 
-// backend/api/time_entries.go - Adicionar função de edição
 func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogResult, error) {
 	if !t.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -1131,7 +1113,7 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 	}
 
 	result := &TimeLogResult{
-		TaskID: entryID, // Usando entryID aqui
+		TaskID: entryID,
 		Date:   entry.Date,
 	}
 

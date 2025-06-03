@@ -57,7 +57,6 @@ func extractUserIDFromResponse(body []byte) (int, bool) {
 		return responsePerson.Person.ID, true
 	}
 
-	// Tenta o formato User (API V3)
 	var responseUser struct {
 		User struct {
 			ID int `json:"id"`
@@ -69,7 +68,6 @@ func extractUserIDFromResponse(body []byte) (int, bool) {
 		return responseUser.User.ID, true
 	}
 
-	// Tenta encontrar em qualquer estrutura
 	var responseAlt map[string]interface{}
 	err = json.Unmarshal(body, &responseAlt)
 	if err != nil {

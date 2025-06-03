@@ -25,7 +25,6 @@ var (
 )
 
 func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error) {
-	// Verificar se já temos os feriados em cache
 	cachedHolidaysLock.RLock()
 	holidays, exists := cachedHolidays[year]
 	cachedHolidaysLock.RUnlock()
