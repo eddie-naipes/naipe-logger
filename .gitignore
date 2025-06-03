@@ -1,0 +1,9 @@
+*.exe
+*.msi
+build/
+dist/
+LICENSE.txt
+README.txt
+installer-build.nsi
+nsis-output.txt
+nsis-error.txt

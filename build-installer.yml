@@ -1,0 +1,160 @@
+name: Build Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build executable
+        run: wails build -platform windows/amd64 -ldflags "-H windowsgui -s -w"
+
+      - name: Create documentation
+        run: |
+          $license = @"
+          MIT License
+          
+          Copyright (c) 2025 Naipe Sync Solutions
+          
+          Permission is hereby granted, free of charge, to any person obtaining a copy
+          of this software and associated documentation files (the `"Software`"), to deal
+          in the Software without restriction, including without limitation the rights
+          to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+          copies of the Software, and to permit persons to whom the Software is
+          furnished to do so, subject to the following conditions:
+          
+          The above copyright notice and this permission notice shall be included in all
+          copies or substantial portions of the Software.
+          
+          THE SOFTWARE IS PROVIDED `"AS IS`", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+          IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+          FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+          AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+          LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+          OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+          SOFTWARE.
+          "@
+          
+          $readme = @"
+          NAIPE LOGGER - GUIA RÁPIDO
+          ============================
+          
+          Obrigado por instalar o Naipe Logger!
+          
+          PRIMEIROS PASSOS:
+          1. Execute o aplicativo
+          2. Faça login com suas credenciais do Teamwork
+          3. Configure suas tarefas favoritas
+          4. Use templates para apontamento automático
+          
+          RECURSOS:
+          ✓ Lançamento automático de horas
+          ✓ Calendário inteligente
+          ✓ Templates reutilizáveis
+          ✓ Relatórios em PDF
+          ✓ Interface moderna
+          
+          SUPORTE:
+          - GitHub: https://github.com/eddie-naipes/naipe-logger
+          - Site: https://naipe-logger.com
+          
+          VERSÃO: ${{ github.ref_name }}
+          DATA: $(Get-Date -Format 'dd/MM/yyyy')
+          "@
+          
+          $license | Out-File -FilePath "LICENSE.txt" -Encoding UTF8
+          $readme | Out-File -FilePath "README.txt" -Encoding UTF8
+
+      - name: Build installer
+        run: |
+          $version = "${{ github.ref_name }}" -replace "^v", ""
+          $nsiContent = Get-Content "installer.nsi" -Raw
+          $nsiContent = $nsiContent -replace '\$\{PRODUCT_VERSION\}', $version
+          $nsiContent | Out-File -FilePath "installer-final.nsi" -Encoding UTF8
+          
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /V4 installer-final.nsi
+          
+          $installerFile = "NaipeLogger-Setup-$version.exe"
+          if (Test-Path $installerFile) {
+            Rename-Item $installerFile "NaipeLogger-Setup.exe"
+          }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: |
+            NaipeLogger-Setup.exe
+            build/bin/*.exe
+
+  create-release:
+    needs: build-installer
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: installer
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Naipe Logger ${{ github.ref_name }}
+          body: |
+            ## 🚀 Naipe Logger ${{ github.ref_name }}
+            
+            ### 📥 Downloads
+            
+            **Windows (Recomendado):**
+            - 🔧 **NaipeLogger-Setup.exe** - Instalador completo
+            - 💻 **naipe-logger.exe** - Executável direto
+            
+            ### ✨ Recursos
+            - ✅ Lançamento automático de horas
+            - ✅ Calendário inteligente
+            - ✅ Templates reutilizáveis
+            - ✅ Relatórios PDF
+            - ✅ Interface moderna
+            
+            ### 🛠️ Instalação
+            1. Baixe `NaipeLogger-Setup.exe`
+            2. Execute como administrador
+            3. Siga o assistente de instalação
+            
+            ### 📋 Requisitos
+            - Windows 10/11 (64-bit)
+            - 4GB RAM mínimo
+          files: |
+            NaipeLogger-Setup.exe
+            *.exe
