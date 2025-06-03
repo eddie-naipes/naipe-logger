@@ -153,8 +153,84 @@ jobs:
             build/bin/*
             naipe-logger-linux.AppImage
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install
+
+      - name: Build macOS Universal Binary
+        run: |
+          # Build para both arquiteturas (Intel + Apple Silicon)
+          wails build -platform darwin/universal
+
+      - name: Create DMG
+        run: |
+          # Verificar arquivos criados
+          echo "=== Files in build/bin/ ==="
+          ls -la build/bin/
+          
+          # Encontrar o .app bundle
+          APP_NAME=$(ls build/bin/ | grep "\.app$" | head -n 1)
+          
+          if [ -n "$APP_NAME" ]; then
+            echo "Found app bundle: $APP_NAME"
+          
+            # Criar pasta temporária para o DMG
+            mkdir -p dmg-temp
+            cp -R "build/bin/$APP_NAME" dmg-temp/
+          
+            # Criar DMG usando hdiutil (nativo do macOS)
+            hdiutil create -volname "Naipe Logger" -srcfolder dmg-temp -ov -format UDZO naipe-logger-macos.dmg
+          
+            # Limpeza
+            rm -rf dmg-temp
+          
+            echo "=== DMG created successfully ==="
+            ls -la naipe-logger-macos.dmg
+          else
+            echo "No .app bundle found, skipping DMG creation"
+          fi
+
+      - name: Zip .app for direct download option
+        run: |
+          APP_NAME=$(ls build/bin/ | grep "\.app$" | head -n 1)
+          if [ -n "$APP_NAME" ]; then
+            cd build/bin/
+            zip -r "../../naipe-logger-macos.app.zip" "$APP_NAME"
+            cd ../..
+            echo "=== .app zip created ==="
+            ls -la naipe-logger-macos.app.zip
+          fi
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: naipe-logger-macos
+          path: |
+            naipe-logger-macos.dmg
+            naipe-logger-macos.app.zip
+
   create-release:
-    needs: [build-windows, build-linux]
+    needs: [build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -172,12 +248,20 @@ jobs:
           name: naipe-logger-linux
           path: ./linux/
 
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: naipe-logger-macos
+          path: ./macos/
+
       - name: List downloaded files
         run: |
           echo "=== Windows files ==="
           ls -la ./windows/
           echo "=== Linux files ==="
           ls -la ./linux/
+          echo "=== macOS files ==="
+          ls -la ./macos/
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -189,3 +273,5 @@ jobs:
           files: |
             windows/*.exe
             linux/naipe-logger-linux.AppImage
+            macos/*.dmg
+            macos/*.zip
