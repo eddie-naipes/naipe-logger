@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -16,13 +15,11 @@ import (
 var assets embed.FS
 
 func main() {
-	// Cria uma nova instância da aplicação
 	app, err := backend.NewApp(nil)
 	if err != nil {
 		log.Fatalf("Erro ao inicializar a aplicação: %v", err)
 	}
 
-	// Cria uma nova aplicação Wails
 	if err := wails.Run(&options.App{
 		Title:  "Teamwork Time Logger",
 		Width:  1024,
@@ -44,4 +41,5 @@ func main() {
 	}); err != nil {
 		log.Fatalf("Erro ao executar a aplicação: %v", err)
 	}
+
 }
