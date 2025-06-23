@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi';
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
+import TimeInputComponent from './TimeInputComponent';
 
 const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
     const [entries, setEntries] = useState([]);
@@ -40,6 +41,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
 
     const [editingEntry, setEditingEntry] = useState(null);
     const [editForm, setEditForm] = useState({
+        hours: 0,
         minutes: 0,
         description: '',
         time: '09:00',
@@ -47,6 +49,17 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         isBillable: true
     });
     const [showEditModal, setShowEditModal] = useState(false);
+
+    // Funções auxiliares para conversão de tempo
+    const minutesToHoursAndMinutes = (totalMinutes) => {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return { hours, minutes };
+    };
+
+    const hoursAndMinutesToMinutes = (hours, minutes) => {
+        return (hours * 60) + minutes;
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -207,9 +220,12 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
     };
 
     const openEditModal = (entry) => {
+        const { hours, minutes } = minutesToHoursAndMinutes(entry.minutes || 0);
+
         setEditingEntry(entry);
         setEditForm({
-            minutes: entry.minutes || 0,
+            hours: hours,
+            minutes: minutes,
             description: entry.description || '',
             time: entry.startTime ? entry.startTime.substring(0, 5) : '09:00',
             date: entry.date || '',
@@ -222,6 +238,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         setShowEditModal(false);
         setEditingEntry(null);
         setEditForm({
+            hours: 0,
             minutes: 0,
             description: '',
             time: '09:00',
@@ -237,10 +254,20 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         }));
     };
 
+    const handleTimeChange = (hours, minutes) => {
+        setEditForm(prev => ({
+            ...prev,
+            hours: hours,
+            minutes: minutes
+        }));
+    };
+
     const saveEditedEntry = async () => {
         if (!editingEntry) return;
 
-        if (editForm.minutes <= 0) {
+        const totalMinutes = hoursAndMinutesToMinutes(editForm.hours, editForm.minutes);
+
+        if (totalMinutes <= 0) {
             toast.warning('Informe um tempo válido (maior que 0 minutos).');
             return;
         }
@@ -254,7 +281,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
 
         try {
             const updatedEntry = {
-                minutes: parseInt(editForm.minutes),
+                minutes: totalMinutes,
                 description: editForm.description.trim(),
                 time: editForm.time + ':00',
                 date: editForm.date,
@@ -718,25 +745,14 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Tempo (minutos) *
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="1440"
-                                            value={editForm.minutes}
-                                            onChange={(e) => handleEditFormChange('minutes', e.target.value)}
-                                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                                            placeholder="Ex: 60"
-                                            required
-                                            disabled={updating}
-                                        />
-                                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                            Equivale a: {(editForm.minutes / 60).toFixed(2)} horas
-                                        </p>
-                                    </div>
+                                    <TimeInputComponent
+                                        hours={editForm.hours}
+                                        minutes={editForm.minutes}
+                                        onTimeChange={handleTimeChange}
+                                        label="Duração *"
+                                        disabled={updating}
+                                        showTotalMinutes={true}
+                                    />
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -772,39 +788,6 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                                     </p>
                                 </div>
 
-                                {/* Atalhos de Tempo */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Atalhos de Tempo
-                                    </label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                        {[
-                                            { label: '15 min', value: 15 },
-                                            { label: '30 min', value: 30 },
-                                            { label: '1 hora', value: 60 },
-                                            { label: '2 horas', value: 120 },
-                                            { label: '4 horas', value: 240 },
-                                            { label: '6 horas', value: 360 },
-                                            { label: '8 horas', value: 480 },
-                                            { label: '12 horas', value: 720 }
-                                        ].map((shortcut) => (
-                                            <button
-                                                key={shortcut.value}
-                                                type="button"
-                                                onClick={() => handleEditFormChange('minutes', shortcut.value)}
-                                                className={`px-3 py-2 text-xs rounded-md border transition-colors ${
-                                                    editForm.minutes == shortcut.value
-                                                        ? 'bg-primary-100 border-primary-300 text-primary-700 dark:bg-primary-900/30 dark:border-primary-700 dark:text-primary-300'
-                                                        : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-600'
-                                                }`}
-                                                disabled={updating}
-                                            >
-                                                {shortcut.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
                                 {/* Preview das Mudanças */}
                                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                                     <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
@@ -824,7 +807,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                                         <div>
                                             <span className="text-blue-600 dark:text-blue-400">Tempo:</span>
                                             <p className="font-medium">
-                                                {editForm.minutes} min ({(editForm.minutes / 60).toFixed(2)}h)
+                                                {hoursAndMinutesToMinutes(editForm.hours, editForm.minutes)} min ({(hoursAndMinutesToMinutes(editForm.hours, editForm.minutes) / 60).toFixed(2)}h)
                                             </p>
                                         </div>
                                         <div>
@@ -851,7 +834,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                             </button>
                             <button
                                 onClick={saveEditedEntry}
-                                disabled={updating || !editForm.description.trim() || editForm.minutes <= 0 || !editForm.date}
+                                disabled={updating || !editForm.description.trim() || hoursAndMinutesToMinutes(editForm.hours, editForm.minutes) <= 0 || !editForm.date}
                                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-primary-700 dark:hover:bg-primary-800 flex items-center"
                             >
                                 {updating ? (

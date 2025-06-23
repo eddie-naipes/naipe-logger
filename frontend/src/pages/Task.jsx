@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiList, FiRefreshCw, FiSearch, FiPlus, FiTrash2, FiSave, FiClock, FiEdit, FiFilter } from 'react-icons/fi';
+import TimeInputComponent from '../components/TimeInputComponent';
 
 const Tasks = () => {
     const [projects, setProjects] = useState([]);
@@ -22,6 +23,17 @@ const Tasks = () => {
         { id: 6, nome: 'Sábado', abrev: 'Sáb' },
         { id: 0, nome: 'Domingo', abrev: 'Dom' }
     ];
+
+    // Funções auxiliares para conversão de tempo
+    const minutesToHoursAndMinutes = (totalMinutes) => {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return { hours, minutes };
+    };
+
+    const hoursAndMinutesToMinutes = (hours, minutes) => {
+        return (hours * 60) + minutes;
+    };
 
     useEffect(() => {
         const loadProjects = async () => {
@@ -127,7 +139,7 @@ const Tasks = () => {
             workingDays: [1, 2, 3, 4, 5],
             entries: [
                 {
-                    minutes: 60,
+                    minutes: 60, // Será convertido para horas/minutos na UI
                     userId: 0,
                     time: "09:00:00",
                     description: "Desenvolvimento",
@@ -227,6 +239,12 @@ const Tasks = () => {
             ...selectedTask,
             entries: newEntries
         });
+    };
+
+    // Nova função para atualizar tempo usando horas e minutos
+    const updateEntryTime = (index, hours, minutes) => {
+        const totalMinutes = hoursAndMinutesToMinutes(hours, minutes);
+        updateEntry(index, 'minutes', totalMinutes);
     };
 
     const saveTask = async () => {
@@ -473,73 +491,74 @@ const Tasks = () => {
                                     </button>
                                 </div>
 
-                                {selectedTask.entries.map((entry, index) => (
-                                    <div key={index} className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mb-3">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <h5 className="text-sm font-medium flex items-center">
-                                                <FiClock className="w-4 h-4 mr-1 text-primary-600 dark:text-primary-500" />
-                                                Entrada {index + 1}
-                                            </h5>
-                                            <button
-                                                onClick={() => removeEntry(index)}
-                                                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                            >
-                                                <FiTrash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
+                                {selectedTask.entries.map((entry, index) => {
+                                    const { hours, minutes } = minutesToHoursAndMinutes(entry.minutes);
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                            <div>
+                                    return (
+                                        <div key={index} className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg mb-3">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <h5 className="text-sm font-medium flex items-center">
+                                                    <FiClock className="w-4 h-4 mr-1 text-primary-600 dark:text-primary-500" />
+                                                    Entrada {index + 1}
+                                                </h5>
+                                                <button
+                                                    onClick={() => removeEntry(index)}
+                                                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                                >
+                                                    <FiTrash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                                <TimeInputComponent
+                                                    hours={hours}
+                                                    minutes={minutes}
+                                                    onTimeChange={(h, m) => updateEntryTime(index, h, m)}
+                                                    label="Duração"
+                                                    showTotalMinutes={false}
+                                                />
+
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Hora
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        value={entry.time ? entry.time.substring(0, 5) : "09:00"}
+                                                        onChange={(e) => updateEntry(index, 'time', e.target.value + ":00")}
+                                                        className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="mb-3">
                                                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Tempo (minutos)
+                                                    Descrição
                                                 </label>
                                                 <input
-                                                    type="number"
-                                                    value={entry.minutes}
-                                                    onChange={(e) => updateEntry(index, 'minutes', e.target.value)}
+                                                    type="text"
+                                                    value={entry.description}
+                                                    onChange={(e) => updateEntry(index, 'description', e.target.value)}
                                                     className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
                                                 />
                                             </div>
+
                                             <div>
                                                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Hora
+                                                    Cobrável
                                                 </label>
-                                                <input
-                                                    type="time"
-                                                    value={entry.time ? entry.time.substring(0, 5) : "09:00"}
-                                                    onChange={(e) => updateEntry(index, 'time', e.target.value + ":00")}
+                                                <select
+                                                    value={entry.isBillable.toString()}
+                                                    onChange={(e) => updateEntry(index, 'isBillable', e.target.value)}
                                                     className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
-                                                />
+                                                >
+                                                    <option value="true">Sim</option>
+                                                    <option value="false">Não</option>
+                                                </select>
                                             </div>
                                         </div>
-
-                                        <div className="mb-3">
-                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Descrição
-                                            </label>
-                                            <input
-                                                type="text"
-                                                value={entry.description}
-                                                onChange={(e) => updateEntry(index, 'description', e.target.value)}
-                                                className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                Cobrável
-                                            </label>
-                                            <select
-                                                value={entry.isBillable.toString()}
-                                                onChange={(e) => updateEntry(index, 'isBillable', e.target.value)}
-                                                className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
-                                            >
-                                                <option value="true">Sim</option>
-                                                <option value="false">Não</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
                                 <div className="text-right mt-2 text-sm">
                                     <span className="font-medium">Total:</span> {totalMinutes} minutos ({(totalMinutes / 60).toFixed(1)} horas)
