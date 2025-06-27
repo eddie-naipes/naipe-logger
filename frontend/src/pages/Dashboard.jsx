@@ -12,7 +12,8 @@ import {
     FiLoader,
     FiRefreshCw,
     FiFlag,
-    FiTrash2
+    FiTrash2,
+    FiX
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
@@ -21,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 import TimeEntryManager from '../components/TimeEntryManager';
+import HolidayManager from '../components/HolidayManager';
 
 const StatCard = ({ title, icon, value, description, change, className }) => {
     return (
@@ -113,6 +115,7 @@ const Dashboard = () => {
     const [tasksData, setTasksData] = useState([]);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
+    const [isHolidayManagerOpen, setIsHolidayManagerOpen] = useState(false);
 
     const loadProjectsAndTasks = async () => {
         try {
@@ -234,6 +237,11 @@ const Dashboard = () => {
 
     const handleTimeManagerClose = () => {
         setIsTimeManagerOpen(false);
+        loadDashboard();
+    };
+
+    const handleHolidayManagerClose = () => {
+        setIsHolidayManagerOpen(false);
         loadDashboard();
     };
 
@@ -402,6 +410,16 @@ const Dashboard = () => {
                         </button>
                     </div>
 
+                    <div className="mt-6">
+                        <button
+                            onClick={() => setIsHolidayManagerOpen(true)}
+                            className="w-full flex items-center justify-center p-3 bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 dark:text-purple-300 rounded-lg border border-purple-200 dark:border-purple-800 transition-colors"
+                        >
+                            <FiCalendar className="w-5 h-5 mr-2" />
+                            <span className="font-medium">Gerenciar Feriados</span>
+                        </button>
+                    </div>
+
                     <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
                         Última atualização: {lastUpdate.toLocaleString()}
                     </div>
@@ -459,6 +477,11 @@ const Dashboard = () => {
                     loadDashboard();
                     toast.success('Dados atualizados após deleção das entradas.');
                 }}
+            />
+
+            <HolidayManager
+                isOpen={isHolidayManagerOpen}
+                onClose={handleHolidayManagerClose}
             />
         </div>
     );

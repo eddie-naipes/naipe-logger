@@ -7,6 +7,8 @@ export function ApplyTemplate(arg1:string):Promise<void>;
 
 export function CalculateTotalMinutes(arg1:Array<api.Task>):Promise<number>;
 
+export function ClearHolidayCache():Promise<void>;
+
 export function ClearSavedTasks():Promise<void>;
 
 export function CreateDistributionPlan(arg1:Array<string>,arg2:Array<api.Task>):Promise<Array<api.WorkDay>>;
@@ -44,6 +46,8 @@ export function GetDashboardStats():Promise<Record<string, any>>;
 export function GetDeletedTimeEntries(arg1:string,arg2:string):Promise<Array<api.TimeEntryReport>>;
 
 export function GetEntriesFromLoggedTime(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
+
+export function GetHolidayCacheStats():Promise<Record<string, any>>;
 
 export function GetHolidaysForMonth(arg1:number,arg2:number):Promise<Array<api.Holiday>>;
 
@@ -88,6 +92,10 @@ export function LogTime(arg1:number,arg2:api.TimeEntry):Promise<api.TimeLogResul
 export function LoginWithCredentials(arg1:string,arg2:string,arg3:string):Promise<api.LoginResponse>;
 
 export function OpenDirectoryPath(arg1:string):Promise<void>;
+
+export function PreloadHolidays():Promise<void>;
+
+export function RefreshHolidaysForYear(arg1:number):Promise<Record<string, api.Holiday>>;
 
 export function RemoveTask(arg1:number):Promise<void>;
 

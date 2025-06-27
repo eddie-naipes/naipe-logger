@@ -94,6 +94,7 @@ export namespace api {
 	    description?: string;
 	    type: string;
 	    isOptional: boolean;
+	    source?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Holiday(source);
@@ -106,6 +107,7 @@ export namespace api {
 	        this.description = source["description"];
 	        this.type = source["type"];
 	        this.isOptional = source["isOptional"];
+	        this.source = source["source"];
 	    }
 	}
 	export class LoggedTimeResponse {

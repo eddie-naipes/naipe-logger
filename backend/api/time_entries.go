@@ -397,7 +397,11 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 		return false
 	}
 
-	isHoliday, _, _ := t.IsHoliday(data)
+	isHoliday, _, err := t.IsHoliday(data)
+	if err != nil {
+		t.logDebug("Erro ao verificar feriado para %s: %v", data.Format("2006-01-02"), err)
+		return true
+	}
 	return !isHoliday
 }
 
@@ -626,7 +630,6 @@ func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[str
 }
 
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
-
 	cacheKey := "recent_activities"
 	if cachedData, found := t.cache.Get(cacheKey); found {
 		return cachedData.([]map[string]interface{}), nil
@@ -693,7 +696,8 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 
 	holidays, err := t.GetHolidaysForMonth(year, month)
 	if err != nil {
-		return nil, err
+		t.logDebug("Erro ao obter feriados para %d/%d: %v", month, year, err)
+		holidays = []Holiday{}
 	}
 
 	nonWorkingDays := make([]map[string]interface{}, 0)
@@ -711,8 +715,13 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 	}
 
 	for _, holiday := range holidays {
-		date, _ := time.Parse("2006-01-02", holiday.Date)
-		if date.Weekday() != time.Saturday && date.Weekday() != time.Sunday {
+		holidayDate, err := time.Parse("2006-01-02", holiday.Date)
+		if err != nil {
+			t.logDebug("Erro ao fazer parse da data do feriado %s: %v", holiday.Date, err)
+			continue
+		}
+
+		if holidayDate.Weekday() != time.Saturday && holidayDate.Weekday() != time.Sunday {
 			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
 				"date":        holiday.Date,
 				"type":        "holiday",

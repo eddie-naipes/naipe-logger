@@ -55,6 +55,14 @@ func (a *App) Startup(ctx context.Context) {
 	if err := config.CheckAndMoveConfigFromExecDir(); err != nil {
 		fmt.Printf("Aviso: não foi possível verificar/mover configurações: %v\n", err)
 	}
+
+	a.teamworkAPI.ClearExpiredHolidayCache()
+
+	go func() {
+		if err := a.teamworkAPI.PreloadUpcomingHolidays(); err != nil {
+			fmt.Printf("Aviso: erro ao pré-carregar feriados: %v\n", err)
+		}
+	}()
 }
 
 func (a *App) Shutdown(ctx context.Context) {
@@ -528,4 +536,39 @@ func (a *App) UpdateTimeEntry(entryID int, entry api.TimeEntry) (*api.TimeLogRes
 	}
 
 	return a.teamworkAPI.UpdateTimeEntry(entryID, entry)
+}
+
+func (a *App) GetHolidayCacheStats() (map[string]interface{}, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.GetHolidayCacheStats(), nil
+}
+
+func (a *App) ClearHolidayCache() error {
+	if !a.teamworkAPI.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	a.teamworkAPI.ClearExpiredHolidayCache()
+	return nil
+}
+
+func (a *App) PreloadHolidays() error {
+	if !a.teamworkAPI.IsConfigured() {
+		return fmt.Errorf("API não configurada")
+	}
+
+	return a.teamworkAPI.PreloadUpcomingHolidays()
+}
+
+func (a *App) RefreshHolidaysForYear(year int) (map[string]api.Holiday, error) {
+	if !a.teamworkAPI.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
+	}
+
+	a.teamworkAPI.ClearHolidaysCacheForYear(year)
+
+	return a.teamworkAPI.GetBrazilianHolidays(year)
 }

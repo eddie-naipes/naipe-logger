@@ -10,6 +10,10 @@ export function CalculateTotalMinutes(arg1) {
   return window['go']['backend']['App']['CalculateTotalMinutes'](arg1);
 }
 
+export function ClearHolidayCache() {
+  return window['go']['backend']['App']['ClearHolidayCache']();
+}
+
 export function ClearSavedTasks() {
   return window['go']['backend']['App']['ClearSavedTasks']();
 }
@@ -84,6 +88,10 @@ export function GetDeletedTimeEntries(arg1, arg2) {
 
 export function GetEntriesFromLoggedTime(arg1, arg2) {
   return window['go']['backend']['App']['GetEntriesFromLoggedTime'](arg1, arg2);
+}
+
+export function GetHolidayCacheStats() {
+  return window['go']['backend']['App']['GetHolidayCacheStats']();
 }
 
 export function GetHolidaysForMonth(arg1, arg2) {
@@ -172,6 +180,14 @@ export function LoginWithCredentials(arg1, arg2, arg3) {
 
 export function OpenDirectoryPath(arg1) {
   return window['go']['backend']['App']['OpenDirectoryPath'](arg1);
+}
+
+export function PreloadHolidays() {
+  return window['go']['backend']['App']['PreloadHolidays']();
+}
+
+export function RefreshHolidaysForYear(arg1) {
+  return window['go']['backend']['App']['RefreshHolidaysForYear'](arg1);
 }
 
 export function RemoveTask(arg1) {
