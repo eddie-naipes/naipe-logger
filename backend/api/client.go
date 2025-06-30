@@ -106,5 +106,18 @@ func (t *TeamworkAPI) TestConnection(config Config) (bool, string) {
 }
 
 func (t *TeamworkAPI) logDebug(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
+	safeArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		safeArgs[i] = sanitizeForLog(arg)
+	}
+	fmt.Printf(format+"\n", safeArgs...)
+}
+
+func sanitizeForLog(data interface{}) interface{} {
+	if str, ok := data.(string); ok {
+		if strings.Contains(str, "password") || strings.Contains(str, "token") {
+			return "[REDACTED]"
+		}
+	}
+	return data
 }

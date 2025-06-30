@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -341,11 +342,10 @@ func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
 
 	var wg sync.WaitGroup
 	tasksCopy := *tasks
-
 	semaphore := make(chan struct{}, 5)
 
 	for i, task := range tasksCopy {
-		if task.Content == "" || task.ProjectID == 0 || task.ProjectName == "" {
+		if task.Content == "" || strings.HasPrefix(task.Content, "Tarefa #") {
 			wg.Add(1)
 			go func(idx int, tsk TeamworkTask) {
 				defer wg.Done()
@@ -356,7 +356,6 @@ func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
 			}(i, task)
 		}
 	}
-
 	wg.Wait()
 }
 

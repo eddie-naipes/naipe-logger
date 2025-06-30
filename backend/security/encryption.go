@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"golang.org/x/crypto/pbkdf2"
 	"io"
 	"os"
 	"path/filepath"
@@ -90,10 +91,10 @@ func deriveKey() ([]byte, error) {
 		return nil, err
 	}
 
-	combinedID := machineID + applicationID
+	salt := []byte("teamwork-logger-v1")
 
-	hash := sha256.Sum256([]byte(combinedID))
-	return hash[:], nil
+	key := pbkdf2.Key([]byte(machineID+applicationID), salt, 100000, 32, sha256.New)
+	return key, nil
 }
 
 func getMachineID() (string, error) {

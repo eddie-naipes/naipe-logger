@@ -243,7 +243,7 @@ func (m *Manager) Save() error {
 		return fmt.Errorf("erro ao serializar configurações: %v", err)
 	}
 
-	if err := os.WriteFile(m.configFile, data, 0644); err != nil {
+	if err := os.WriteFile(m.configFile, data, 0600); err != nil {
 		return fmt.Errorf("erro ao salvar configurações: %v", err)
 	}
 
