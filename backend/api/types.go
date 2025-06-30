@@ -65,6 +65,8 @@ type TeamworkTask struct {
 	LoggedMinutes int `json:"loggedMinutes,omitempty"`
 }
 
+// types.go - Versão expandida do TasksResponse (OPCIONAL)
+
 type TasksResponse struct {
 	Tasks    []TeamworkTask `json:"tasks"`
 	Included struct {
@@ -72,6 +74,15 @@ type TasksResponse struct {
 			ID   int    `json:"id"`
 			Name string `json:"name"`
 		} `json:"tasklists"`
+		Projects map[string]struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"projects,omitempty"`
+		Users map[string]struct {
+			ID        int    `json:"id"`
+			FirstName string `json:"firstName"`
+			LastName  string `json:"lastName"`
+		} `json:"users,omitempty"`
 	} `json:"included,omitempty"`
 	Meta struct {
 		Page struct {

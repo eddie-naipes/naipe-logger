@@ -74,11 +74,18 @@ const Tasks = () => {
     const loadAllTasks = async () => {
         try {
             setIsLoading(true);
+            setTasks([]);
+
             const teamworkTasks = await window.go.backend.App.GetTasks();
-            setTasks(teamworkTasks);
+            setTasks(teamworkTasks || []);
+
+            if (!teamworkTasks || teamworkTasks.length === 0) {
+                toast.info('Nenhuma tarefa encontrada.');
+            }
         } catch (error) {
-            console.error('Erro ao carregar tarefas:', error);
-            toast.error('Erro ao carregar tarefas.');
+            console.error('Erro ao carregar todas as tarefas:', error);
+            toast.error('Erro ao carregar tarefas: ' + (error.message || 'Erro desconhecido'));
+            setTasks([]);
         } finally {
             setIsLoading(false);
         }
@@ -87,11 +94,34 @@ const Tasks = () => {
     const loadTasksForProject = async (projectId) => {
         try {
             setIsLoading(true);
+            setTasks([]);
+
+            console.log(`Carregando tarefas para projeto ID: ${projectId} (tipo: ${typeof projectId})`);
+
             const teamworkTasks = await window.go.backend.App.GetTasksByProject(projectId);
-            setTasks(teamworkTasks);
+
+            if (teamworkTasks && teamworkTasks.length > 0) {
+                const validTasks = teamworkTasks.filter(task =>
+                    task.projectId === projectId || task.projectId === 0
+                );
+
+                if (validTasks.length !== teamworkTasks.length) {
+                    console.warn(`Filtradas ${teamworkTasks.length - validTasks.length} tarefas de outros projetos`);
+                }
+
+                setTasks(validTasks);
+
+                if (validTasks.length === 0) {
+                    toast.info('Nenhuma tarefa encontrada neste projeto.');
+                }
+            } else {
+                setTasks([]);
+                toast.info('Nenhuma tarefa encontrada neste projeto.');
+            }
         } catch (error) {
             console.error(`Erro ao carregar tarefas do projeto ${projectId}:`, error);
-            toast.error('Erro ao carregar tarefas do projeto.');
+            toast.error('Erro ao carregar tarefas do projeto: ' + (error.message || 'Erro desconhecido'));
+            setTasks([]);
         } finally {
             setIsLoading(false);
         }
@@ -115,9 +145,21 @@ const Tasks = () => {
     };
 
     const handleProjectChange = (projectId) => {
+        setTasks([]);
+        setSearchTerm('');
+        setSelectedTask(null);
+
         setSelectedProjectId(projectId);
+
         if (projectId) {
-            loadTasksForProject(projectId);
+            const projectIdNumber = parseInt(projectId, 10);
+            if (!isNaN(projectIdNumber) && projectIdNumber > 0) {
+                loadTasksForProject(projectIdNumber);
+            } else {
+                console.error('Project ID inválido:', projectId);
+                toast.error('ID do projeto inválido');
+                setTasks([]);
+            }
         } else {
             loadAllTasks();
         }
@@ -336,7 +378,11 @@ const Tasks = () => {
                         <select
                             id="projectSelect"
                             value={selectedProjectId}
-                            onChange={(e) => handleProjectChange(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                console.log(`Projeto selecionado: "${value}" (tipo: ${typeof value})`);
+                                handleProjectChange(value);
+                            }}
                             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             disabled={isLoadingProjects}
                         >
@@ -371,31 +417,54 @@ const Tasks = () => {
                     {isLoading ? (
                         <div className="flex justify-center items-center h-60">
                             <div className="animate-spin-slow w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full"></div>
+                            <span className="ml-3 text-gray-500 dark:text-gray-400">
+            {selectedProjectId ? 'Carregando tarefas do projeto...' : 'Carregando tarefas...'}
+        </span>
                         </div>
                     ) : (
                         <div className="overflow-y-auto max-h-96">
                             {filteredTasks.length === 0 ? (
-                                <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-                                    {searchTerm
-                                        ? 'Nenhuma tarefa encontrada com esse termo.'
-                                        : selectedProjectId
-                                            ? 'Não há tarefas disponíveis neste projeto.'
-                                            : 'Não há tarefas disponíveis.'}
-                                </p>
+                                <div className="text-center py-8">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-2">
+                                        {searchTerm
+                                            ? `Nenhuma tarefa encontrada para "${searchTerm}".`
+                                            : selectedProjectId
+                                                ? 'Não há tarefas disponíveis neste projeto.'
+                                                : 'Não há tarefas disponíveis.'}
+                                    </p>
+                                    {selectedProjectId && !searchTerm && (
+                                        <button
+                                            onClick={() => refreshTasks()}
+                                            className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-500"
+                                        >
+                                            Tentar recarregar
+                                        </button>
+                                    )}
+                                </div>
                             ) : (
                                 <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                                     {filteredTasks.map(task => (
                                         <li key={task.id} className="py-3">
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
-                                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">{task.content}</h3>
+                                                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+                                                        {task.content || task.name || `Tarefa #${task.id}`}
+                                                    </h3>
                                                     {task.projectName && (
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{task.projectName}</p>
+                                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                            {task.projectName}
+                                                        </p>
+                                                    )}
+                                                    {process.env.NODE_ENV === 'development' && (
+                                                        <p className="text-xs text-gray-400">
+                                                            ID: {task.id} | ProjectID: {task.projectId || 'N/A'}
+                                                        </p>
                                                     )}
                                                 </div>
                                                 <button
                                                     onClick={() => handleSelectTask(task)}
                                                     className="ml-2 p-1 text-primary-600 hover:bg-primary-50 rounded dark:text-primary-500 dark:hover:bg-gray-700"
+                                                    title="Adicionar tarefa à lista de favoritas"
                                                 >
                                                     <FiPlus className="w-5 h-5" />
                                                 </button>

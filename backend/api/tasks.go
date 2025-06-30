@@ -235,14 +235,16 @@ func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
 			resp.StatusCode, resp.Status, string(body))
 		tasks, err := t.getTasksByTasklists(projectID)
 		if err == nil && len(tasks) > 0 {
-			t.cache.Set(cacheKey, tasks, 15*time.Minute)
+			t.enrichTasksWithProjectContext(&tasks, projectID)
+			t.cache.Set(cacheKey, tasks, 5*time.Minute)
 		}
 		return tasks, err
 	}
 
 	tasks, err := parseProjectTasksV3(body, projectID, t)
 	if err == nil {
-		t.cache.Set(cacheKey, tasks, 15*time.Minute)
+		t.enrichTasksWithProjectContext(&tasks, projectID)
+		t.cache.Set(cacheKey, tasks, 5*time.Minute)
 		return tasks, nil
 	}
 
@@ -252,18 +254,62 @@ func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
 		t.logDebug("Erro ao decodificar resposta: %v\nTentando método alternativo...", err)
 		tasks, err := t.getTasksByTasklists(projectID)
 		if err == nil && len(tasks) > 0 {
-			t.cache.Set(cacheKey, tasks, 15*time.Minute)
+			t.enrichTasksWithProjectContext(&tasks, projectID)
+			t.cache.Set(cacheKey, tasks, 5*time.Minute)
 		}
 		return tasks, err
 	}
 
 	enrichTasksWithIncludedData(&response)
+
 	if len(response.Tasks) > 0 {
-		t.enrichTasksWithDetails(&response.Tasks)
+		t.enrichTasksWithProjectContext(&response.Tasks, projectID)
 	}
 
-	t.cache.Set(cacheKey, response.Tasks, 15*time.Minute)
+	t.cache.Set(cacheKey, response.Tasks, 5*time.Minute) // Cache reduzido
 	return response.Tasks, nil
+}
+
+func (t *TeamworkAPI) enrichTasksWithProjectContext(tasks *[]TeamworkTask, expectedProjectID int) {
+	if tasks == nil || len(*tasks) == 0 {
+		return
+	}
+
+	projectName := ""
+
+	if expectedProjectID > 0 {
+		projects, err := t.GetProjects()
+		if err == nil {
+			for _, p := range projects {
+				if p.ID == expectedProjectID {
+					projectName = p.Name
+					break
+				}
+			}
+		}
+	}
+
+	for i := range *tasks {
+		task := &(*tasks)[i]
+
+		if task.ProjectID == 0 && expectedProjectID > 0 {
+			task.ProjectID = expectedProjectID
+		}
+
+		if task.ProjectName == "" && projectName != "" {
+			task.ProjectName = projectName
+		}
+
+		if strings.HasPrefix(task.Content, "Tarefa #") && task.Name != "" {
+			task.Content = task.Name
+		}
+
+		if task.Content == "" && task.Name != "" {
+			task.Content = task.Name
+		}
+	}
+
+	t.enrichTasksWithDetails(tasks)
 }
 
 func parseProjectTasksV3(body []byte, projectID int, t *TeamworkAPI) ([]TeamworkTask, error) {
@@ -333,7 +379,12 @@ func parseProjectTasksV3(body []byte, projectID int, t *TeamworkAPI) ([]Teamwork
 }
 
 func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
-	if len(*tasks) <= 1 {
+	if len(*tasks) == 0 {
+		return
+	}
+
+	// Para poucas tarefas, processar sequencialmente
+	if len(*tasks) <= 3 {
 		for i, task := range *tasks {
 			t.enrichTaskDetail(&(*tasks)[i], task)
 		}
@@ -345,7 +396,12 @@ func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
 	semaphore := make(chan struct{}, 5)
 
 	for i, task := range tasksCopy {
-		if task.Content == "" || strings.HasPrefix(task.Content, "Tarefa #") {
+		needsEnrichment := task.Content == "" ||
+			task.ProjectID == 0 ||
+			task.ProjectName == "" ||
+			strings.HasPrefix(task.Content, "Tarefa #")
+
+		if needsEnrichment {
 			wg.Add(1)
 			go func(idx int, tsk TeamworkTask) {
 				defer wg.Done()
@@ -356,26 +412,33 @@ func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
 			}(i, task)
 		}
 	}
+
 	wg.Wait()
 }
 
 func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask, task TeamworkTask) {
-	if task.Content == "" || task.ProjectID == 0 || task.ProjectName == "" {
+	needsEnrichment := task.Content == "" ||
+		task.ProjectID == 0 ||
+		task.ProjectName == "" ||
+		strings.HasPrefix(task.Content, "Tarefa #") ||
+		(task.Content != "" && task.Name != "" && task.Content != task.Name)
+
+	if needsEnrichment {
 		taskDetail, err := t.GetTaskDetails(task.ID)
 		if err == nil {
-			if task.Content == "" {
-				if taskDetail.Name != "" {
-					taskPtr.Content = taskDetail.Name
-				} else if taskDetail.Content != "" {
-					taskPtr.Content = taskDetail.Content
-				}
+			if (task.Content == "" || strings.HasPrefix(task.Content, "Tarefa #")) && taskDetail.Name != "" {
+				taskPtr.Content = taskDetail.Name
+			} else if taskDetail.Content != "" && task.Content == "" {
+				taskPtr.Content = taskDetail.Content
 			}
-			if task.ProjectID == 0 && taskDetail.ProjectID != 0 {
+
+			if taskPtr.ProjectID == 0 && taskDetail.ProjectID != 0 {
 				taskPtr.ProjectID = taskDetail.ProjectID
 			}
-			if task.ProjectName == "" && taskDetail.ProjectName != "" {
+			if taskPtr.ProjectName == "" && taskDetail.ProjectName != "" {
 				taskPtr.ProjectName = taskDetail.ProjectName
 			}
+
 			if task.Description == "" && taskDetail.Description != "" {
 				taskPtr.Description = taskDetail.Description
 			}
@@ -385,42 +448,56 @@ func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask, task TeamworkTask)
 			if taskDetail.LoggedMinutes > 0 {
 				taskPtr.LoggedMinutes = taskDetail.LoggedMinutes
 			}
+		} else {
+			t.logDebug("Erro ao buscar detalhes da tarefa %d: %v", task.ID, err)
 		}
 
-		if taskPtr.Content == "" {
+		if taskPtr.Content == "" || strings.HasPrefix(taskPtr.Content, "Tarefa #") {
 			projectInfo := ""
 			if taskPtr.ProjectName != "" {
 				projectInfo = fmt.Sprintf(" (%s)", taskPtr.ProjectName)
 			}
-			taskPtr.Content = fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
+
+			if task.Name != "" {
+				taskPtr.Content = fmt.Sprintf("%s%s", task.Name, projectInfo)
+			} else {
+				taskPtr.Content = fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
+			}
 		}
 	}
 }
 
 func enrichTasksWithIncludedData(response *TasksResponse) {
-	if len(response.Included.TaskLists) > 0 {
-		for i, task := range response.Tasks {
-			if task.TasklistID > 0 {
-				tasklistIDStr := strconv.Itoa(task.TasklistID)
+	if response == nil || len(response.Tasks) == 0 {
+		return
+	}
 
-				if tasklistInfo, exists := response.Included.TaskLists[tasklistIDStr]; exists {
-					if task.Content == "" {
-						response.Tasks[i].Content = fmt.Sprintf("Tarefa #%d - %s", task.ID, tasklistInfo.Name)
-					}
+	for i := range response.Tasks {
+		task := &response.Tasks[i]
 
-					response.Tasks[i].TasklistName = tasklistInfo.Name
+		if len(response.Included.TaskLists) > 0 && task.TasklistID > 0 {
+			tasklistIDStr := strconv.Itoa(task.TasklistID)
+			if tasklistInfo, exists := response.Included.TaskLists[tasklistIDStr]; exists {
+				if task.Content == "" && tasklistInfo.Name != "" {
+					task.Content = tasklistInfo.Name
 				}
-			}
-
-			if response.Tasks[i].Content == "" {
-				response.Tasks[i].Content = fmt.Sprintf("Tarefa #%d", task.ID)
+				task.TasklistName = tasklistInfo.Name
 			}
 		}
-	} else {
-		for i, task := range response.Tasks {
-			if task.Content == "" {
-				response.Tasks[i].Content = fmt.Sprintf("Tarefa #%d", task.ID)
+
+		if task.Content == "" && task.Name != "" {
+			task.Content = task.Name
+		}
+
+		if task.Content == "" {
+			projectInfo := ""
+			if len(response.Included.Projects) > 0 && task.ProjectID > 0 {
+				projectIDStr := strconv.Itoa(task.ProjectID)
+				if projInfo, exists := response.Included.Projects[projectIDStr]; exists {
+					projectInfo = fmt.Sprintf(" (%s)", projInfo.Name)
+				}
 			}
+			task.Content = fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
 		}
 	}
 }
