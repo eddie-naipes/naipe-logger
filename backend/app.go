@@ -2,24 +2,39 @@ package backend
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
-	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
 type App struct {
 	ctx           context.Context
 	configManager *config.Manager
-	teamworkAPI   *api.TeamworkAPI
+
+	// apiMutex protege teamworkAPI, que é substituído quando a conexão muda
+	// enquanto outros bindings o leem em paralelo.
+	apiMutex    sync.RWMutex
+	teamworkAPI *api.TeamworkAPI
+}
+
+// api devolve o cliente atual sob lock de leitura.
+func (a *App) api() *api.TeamworkAPI {
+	a.apiMutex.RLock()
+	defer a.apiMutex.RUnlock()
+	return a.teamworkAPI
+}
+
+func (a *App) setAPI(client *api.TeamworkAPI) {
+	a.apiMutex.Lock()
+	defer a.apiMutex.Unlock()
+	a.teamworkAPI = client
 }
 
 func NewApp(ctx context.Context) (*App, error) {
@@ -40,7 +55,7 @@ func NewApp(ctx context.Context) (*App, error) {
 
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	a.teamworkAPI = api.NewTeamworkAPI(a.configManager.GetTeamworkConfig())
+	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -48,18 +63,10 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}()
 
-	if err := a.configManager.MigrateToSecureStorage(); err != nil {
-		fmt.Printf("Aviso: não foi possível migrar para armazenamento seguro: %v\n", err)
-	}
-
-	if err := config.CheckAndMoveConfigFromExecDir(); err != nil {
-		fmt.Printf("Aviso: não foi possível verificar/mover configurações: %v\n", err)
-	}
-
-	a.teamworkAPI.ClearExpiredHolidayCache()
+	a.api().ClearExpiredHolidayCache()
 
 	go func() {
-		if err := a.teamworkAPI.PreloadUpcomingHolidays(); err != nil {
+		if err := a.api().PreloadUpcomingHolidays(); err != nil {
 			fmt.Printf("Aviso: erro ao pré-carregar feriados: %v\n", err)
 		}
 	}()
@@ -69,17 +76,40 @@ func (a *App) Shutdown(ctx context.Context) {
 	_ = a.configManager.Save()
 }
 
-func (a *App) GetConfig() api.Config {
-	return a.configManager.GetTeamworkConfig()
+// GetPublicConfig devolve ao frontend apenas o que ele precisa saber. O token
+// de API nunca atravessa a fronteira Go -> JavaScript.
+func (a *App) GetPublicConfig() api.PublicConfig {
+	cfg := a.configManager.GetTeamworkConfig()
+	return api.PublicConfig{
+		Configured:    a.api().IsConfigured(),
+		ApiHost:       cfg.ApiHost,
+		UserID:        cfg.UserID,
+		MinutosPorDia: cfg.MinutosPorDia,
+	}
 }
 
-func (a *App) SaveConfig(config api.Config) error {
-	a.teamworkAPI = api.NewTeamworkAPI(config)
-	return a.configManager.SetTeamworkConfig(config)
+// IsConfigured informa se há uma conexão utilizável configurada.
+func (a *App) IsConfigured() bool {
+	return a.api().IsConfigured()
 }
 
-func (a *App) TestConnection(config api.Config) ([]interface{}, error) {
-	success, message := a.teamworkAPI.TestConnection(config)
+// LegacyCredentialPurged informa que uma credencial antiga (email:senha) foi
+// encontrada e apagada, para que a UI oriente o usuário a trocar a senha.
+func (a *App) LegacyCredentialPurged() bool {
+	return a.configManager.LegacyCredentialPurged()
+}
+
+// SetMinutosPorDia ajusta a jornada diária usada nos cálculos.
+func (a *App) SetMinutosPorDia(minutos int) error {
+	if err := a.configManager.SetMinutosPorDia(minutos); err != nil {
+		return err
+	}
+	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
+	return nil
+}
+
+func (a *App) TestConnection() ([]interface{}, error) {
+	success, message := a.api().TestConnection()
 	return []interface{}{success, message}, nil
 }
 
@@ -92,7 +122,7 @@ func (a *App) SaveAppSettings(settings config.AppSettings) error {
 }
 
 func (a *App) GetTasks() ([]api.TeamworkTask, error) {
-	return a.teamworkAPI.GetTasks()
+	return a.api().GetTasks()
 }
 
 func (a *App) GetSavedTasks() []api.Task {
@@ -108,7 +138,7 @@ func (a *App) RemoveTask(taskID int) error {
 }
 
 func (a *App) GetTaskDetails(taskID int) (api.TeamworkTask, error) {
-	return a.teamworkAPI.GetTaskDetails(taskID)
+	return a.api().GetTaskDetails(taskID)
 }
 
 func (a *App) GetTemplates() map[string]api.Template {
@@ -128,99 +158,74 @@ func (a *App) DeleteTemplate(name string) error {
 }
 
 func (a *App) CalculateTotalMinutes(tarefas []api.Task) int {
-	return a.teamworkAPI.CalculateTotalMinutes(tarefas)
+	return a.api().CalculateTotalMinutes(tarefas)
 }
 
 func (a *App) GetWorkingDays(inicio, fim string) ([]string, error) {
-	return a.teamworkAPI.GetWorkingDays(inicio, fim)
+	return a.api().GetWorkingDays(inicio, fim)
 }
 
 func (a *App) CreateDistributionPlan(diasUteis []string, tarefas []api.Task) []api.WorkDay {
-	return a.teamworkAPI.CreateDistributionPlan(diasUteis, tarefas)
+	return a.api().CreateDistributionPlan(diasUteis, tarefas)
 }
 
 func (a *App) LogMultipleTimes(workDays []api.WorkDay) ([]*api.TimeLogResult, error) {
-	return a.teamworkAPI.LogMultipleTimes(workDays)
+	return a.api().LogMultipleTimes(workDays)
 }
 
 func (a *App) LogTime(taskID int, entry api.TimeEntry) (*api.TimeLogResult, error) {
-	return a.teamworkAPI.LogTime(taskID, entry)
+	return a.api().LogTime(taskID, entry)
 }
 
 func (a *App) GetCurrentUserId() (int, error) {
-	return a.teamworkAPI.GetCurrentUserId()
+	return a.api().GetCurrentUserId()
 }
 
 func (a *App) GetProjects() ([]api.Project, error) {
-	return a.teamworkAPI.GetProjects()
+	return a.api().GetProjects()
 }
 
 func (a *App) GetTasksByProject(projectID int) ([]api.TeamworkTask, error) {
-	return a.teamworkAPI.GetTasksByProject(projectID)
+	return a.api().GetTasksByProject(projectID)
 }
 
-func (a *App) GetCurrentUserIdWithConfig(config api.Config) (int, error) {
-	if config.AuthToken == "" || config.ApiHost == "" {
-		return 0, fmt.Errorf("configuração incompleta: token ou host da API ausentes")
-	}
-
-	tempAPI := api.NewTeamworkAPI(config)
-	userId, err := tempAPI.GetCurrentUserId()
-
+// ConnectWithToken valida um token de API do Teamwork e, em caso de sucesso,
+// grava-o no cofre de credenciais do sistema. O token nunca é devolvido ao
+// frontend nem gravado em config.json.
+func (a *App) ConnectWithToken(token, host string) (*api.LoginResponse, error) {
+	loginResponse, err := api.ValidateToken(token, host)
 	if err != nil {
-		fmt.Printf("Erro ao obter ID do usuário: %v\n", err)
-		return 0, err
+		return nil, err
 	}
 
-	fmt.Printf("ID do usuário obtido com sucesso: %d\n", userId)
-	return userId, nil
-}
-
-func (a *App) LoginWithCredentials(email, password, host string) (*api.LoginResponse, error) {
-	if email == "" || password == "" || host == "" {
-		return nil, fmt.Errorf("email, senha e host são obrigatórios")
+	if !loginResponse.Success {
+		return loginResponse, nil
 	}
 
-	loginResponse, err := api.GetTokenWithCredentials(email, password, host)
-	if err != nil {
-		return nil, fmt.Errorf("erro na autenticação: %v", err)
+	if err := a.configManager.SetConnection(loginResponse.InstanceID, loginResponse.UserID, token); err != nil {
+		return nil, fmt.Errorf("erro ao salvar configuração: %v", err)
 	}
 
-	if loginResponse.Success && loginResponse.Token != "" {
-		config := a.configManager.GetTeamworkConfig()
-		config.AuthToken = loginResponse.Token
-		config.ApiHost = host
-
-		if loginResponse.UserID <= 0 {
-			tempAPI := api.NewTeamworkAPI(config)
-			userID, err := tempAPI.GetCurrentUserId()
-			if err != nil {
-				fmt.Printf("Erro ao obter ID do usuário após login: %v\n", err)
-				config.UserID = loginResponse.UserID
-			} else {
-				config.UserID = userID
-				loginResponse.UserID = userID
-			}
-		} else {
-			config.UserID = loginResponse.UserID
-		}
-
-		if err := a.configManager.SetTeamworkConfig(config); err != nil {
-			return nil, fmt.Errorf("erro ao salvar configuração: %v", err)
-		}
-
-		a.teamworkAPI = api.NewTeamworkAPI(config)
-	}
+	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
 
 	return loginResponse, nil
 }
 
+// Logout remove o token do cofre do sistema e limpa a conexão.
+func (a *App) Logout() error {
+	if err := a.configManager.ClearConnection(); err != nil {
+		return err
+	}
+	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
+	return nil
+}
+
 func (a *App) DownloadCurrentMonthReport() (string, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
 	}
 
-	filePath, err := a.teamworkAPI.DownloadCurrentMonthTimeReport()
+	filePath, err := a.api().DownloadCurrentMonthTimeReport()
 	if err != nil {
 		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
 	}
@@ -229,18 +234,18 @@ func (a *App) DownloadCurrentMonthReport() (string, error) {
 }
 
 func (a *App) DownloadTimeReport(startDate, endDate string) (string, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return "", fmt.Errorf("API não configurada. Configure sua conta antes de exportar relatórios")
 	}
 
-	filePath, err := a.teamworkAPI.GetDefaultReportPath()
+	filePath, err := a.api().GetDefaultReportPath()
 	if err != nil {
 		return "", fmt.Errorf("erro ao obter caminho padrão de relatório: %v", err)
 	}
 
 	filePath = strings.TrimSuffix(filePath, filepath.Ext(filePath)) + "_" + startDate + "_" + endDate + ".pdf"
 
-	err = a.teamworkAPI.DownloadTimeReportPDF(startDate, endDate, filePath)
+	err = a.api().DownloadTimeReportPDF(startDate, endDate, filePath)
 	if err != nil {
 		return "", fmt.Errorf("erro ao baixar relatório: %v", err)
 	}
@@ -268,11 +273,11 @@ func (a *App) OpenDirectoryPath(filePath string) error {
 }
 
 func (a *App) GetDashboardStats() (map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	stats, err := a.teamworkAPI.GetDashboardStats()
+	stats, err := a.api().GetDashboardStats()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter estatísticas do dashboard: %v", err)
 	}
@@ -281,7 +286,7 @@ func (a *App) GetDashboardStats() (map[string]interface{}, error) {
 	startDate := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
 	endDate := time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
 
-	timeTotal, err := a.teamworkAPI.GetTimeTotalsForPeriod(startDate, endDate)
+	timeTotal, err := a.api().GetTimeTotalsForPeriod(startDate, endDate)
 	if err == nil && timeTotal != nil && timeTotal.TimeTotals.Minutes > 0 {
 		stats["horasLogadas"] = float64(timeTotal.TimeTotals.Minutes) / 60.0
 	}
@@ -290,25 +295,25 @@ func (a *App) GetDashboardStats() (map[string]interface{}, error) {
 }
 
 func (a *App) GetRecentActivities() ([]map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
-	return a.teamworkAPI.GetRecentActivities()
+	return a.api().GetRecentActivities()
 }
 
 func (a *App) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
-	return a.teamworkAPI.GetTasksWithUpcomingDeadlines()
+	return a.api().GetTasksWithUpcomingDeadlines()
 }
 
 func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	timeTotal, err := a.teamworkAPI.GetTimeTotalsForPeriod(startDate, endDate)
+	timeTotal, err := a.api().GetTimeTotalsForPeriod(startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter totais de tempo: %v", err)
 	}
@@ -317,63 +322,63 @@ func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal,
 }
 
 func (a *App) GetTimeEntriesForPeriod(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetTimeEntriesForPeriod(startDate, endDate)
+	return a.api().GetTimeEntriesForPeriod(startDate, endDate)
 }
 
 func (a *App) GetLoggedTimeFromCalendarAPI(month, year int) (*api.LoggedTimeResponse, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetLoggedTimeFromCalendarAPI(month, year)
+	return a.api().GetLoggedTimeFromCalendarAPI(month, year)
 }
 
 func (a *App) CreateDistributionPlanFromLoggedTime(month, year int, tasks []api.Task) ([]api.WorkDay, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.CreateDistributionPlanFromLoggedTime(month, year, tasks)
+	return a.api().CreateDistributionPlanFromLoggedTime(month, year, tasks)
 }
 
 func (a *App) GetEntriesFromLoggedTime(month, year int) ([]map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetEntriesFromLoggedTime(month, year)
+	return a.api().GetEntriesFromLoggedTime(month, year)
 }
 
 func (a *App) GetBrazilianHolidays(year int) (map[string]api.Holiday, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetBrazilianHolidays(year)
+	return a.api().GetBrazilianHolidays(year)
 }
 
 func (a *App) GetHolidaysForMonth(year, month int) ([]api.Holiday, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetHolidaysForMonth(year, month)
+	return a.api().GetHolidaysForMonth(year, month)
 }
 
 func (a *App) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetAllNonWorkingDays(year, month)
+	return a.api().GetAllNonWorkingDays(year, month)
 }
 
 func (a *App) IsWorkDay(date string) (bool, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return false, fmt.Errorf("API não configurada")
 	}
 
@@ -382,50 +387,25 @@ func (a *App) IsWorkDay(date string) (bool, error) {
 		return false, fmt.Errorf("formato de data inválido: %v", err)
 	}
 
-	return a.teamworkAPI.IsWorkDay(dateObj), nil
+	return a.api().IsWorkDay(dateObj), nil
 }
 
 func (a *App) GetUserProfile() (map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	userID, err := a.teamworkAPI.GetCurrentUserId()
+	userID, err := a.api().GetCurrentUserId()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter ID do usuário: %v", err)
 	}
 
-	config := a.configManager.GetTeamworkConfig()
-	baseURL := config.ApiHost
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-
-	url := fmt.Sprintf("%s/projects/api/v3/people/%d.json", baseURL, userID)
-
-	req, err := http.NewRequest("GET", url, nil)
+	body, status, err := a.api().GetJSON(fmt.Sprintf("/projects/api/v3/people/%d.json", userID))
 	if err != nil {
-		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+		return nil, err
 	}
-
-	auth := base64.StdEncoding.EncodeToString([]byte(config.AuthToken + ":X"))
-	req.Header.Set("Authorization", "Basic "+auth)
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("erro na requisição: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter perfil do usuário: %d %s", resp.StatusCode, resp.Status)
+	if status != 200 {
+		return nil, fmt.Errorf("erro ao obter perfil do usuário: %d", status)
 	}
 
 	var response struct {
@@ -475,100 +455,100 @@ func (a *App) ClearSavedTasks() error {
 }
 
 func (a *App) GetTimeEntriesWithDetails(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetTimeEntriesWithDetails(startDate, endDate)
+	return a.api().GetTimeEntriesWithDetails(startDate, endDate)
 }
 
 func (a *App) DeleteTimeEntry(entryID int) error {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.DeleteTimeEntry(entryID)
+	return a.api().DeleteTimeEntry(entryID)
 }
 
 func (a *App) DeleteMultipleTimeEntries(entryIDs []int) ([]api.DeleteTimeEntryResult, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.DeleteMultipleTimeEntries(entryIDs)
+	return a.api().DeleteMultipleTimeEntries(entryIDs)
 }
 
 func (a *App) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]api.TimeEntryReport, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetTimeEntriesForPeriodV2(startDate, endDate, includeDeleted)
+	return a.api().GetTimeEntriesForPeriodV2(startDate, endDate, includeDeleted)
 }
 
 func (a *App) GetAllTimeEntriesForDay(date string) ([]api.TimeEntryReport, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetAllTimeEntriesForDay(date)
+	return a.api().GetAllTimeEntriesForDay(date)
 }
 
 func (a *App) GetDeletedTimeEntries(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetDeletedTimeEntries(startDate, endDate)
+	return a.api().GetDeletedTimeEntries(startDate, endDate)
 }
 
 func (a *App) DeleteTimeEntryV2(entryID int) error {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.DeleteTimeEntryV2(entryID)
+	return a.api().DeleteTimeEntryV2(entryID)
 }
 
 func (a *App) UpdateTimeEntry(entryID int, entry api.TimeEntry) (*api.TimeLogResult, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.UpdateTimeEntry(entryID, entry)
+	return a.api().UpdateTimeEntry(entryID, entry)
 }
 
 func (a *App) GetHolidayCacheStats() (map[string]interface{}, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.GetHolidayCacheStats(), nil
+	return a.api().GetHolidayCacheStats(), nil
 }
 
 func (a *App) ClearHolidayCache() error {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return fmt.Errorf("API não configurada")
 	}
 
-	a.teamworkAPI.ClearExpiredHolidayCache()
+	a.api().ClearExpiredHolidayCache()
 	return nil
 }
 
 func (a *App) PreloadHolidays() error {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return fmt.Errorf("API não configurada")
 	}
 
-	return a.teamworkAPI.PreloadUpcomingHolidays()
+	return a.api().PreloadUpcomingHolidays()
 }
 
 func (a *App) RefreshHolidaysForYear(year int) (map[string]api.Holiday, error) {
-	if !a.teamworkAPI.IsConfigured() {
+	if !a.api().IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	a.teamworkAPI.ClearHolidaysCacheForYear(year)
+	a.api().ClearHolidaysCacheForYear(year)
 
-	return a.teamworkAPI.GetBrazilianHolidays(year)
+	return a.api().GetBrazilianHolidays(year)
 }

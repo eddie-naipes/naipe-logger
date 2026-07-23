@@ -1,13 +1,9 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 )
 
 func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
@@ -111,68 +107,62 @@ func findUserIdInMap(data map[string]interface{}) (int, bool) {
 	return 0, false
 }
 
-func (t *TeamworkAPI) GetTokenWithCredentials(email, password, host string) (*LoginResponse, error) {
-	if email == "" || password == "" || host == "" {
-		return nil, fmt.Errorf("email, senha e host são obrigatórios")
+// ValidateToken confere um token de API do Teamwork contra o host informado e
+// devolve o ID do usuário dono do token. O token não é persistido aqui — quem
+// chama decide o que fazer com ele (ver security.StoreToken).
+func ValidateToken(token, host string) (*LoginResponse, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, fmt.Errorf("token de API é obrigatório")
+	}
+	if strings.Contains(token, ":") {
+		return nil, fmt.Errorf("isto não parece um token de API do Teamwork; não use email:senha, gere um token no seu perfil do Teamwork (Edit My Details > API & Mobile)")
 	}
 
-	baseURL := host
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-
-	url := fmt.Sprintf("%s/projects/api/v3/me.json", baseURL)
-
-	req, err := http.NewRequest("GET", url, nil)
+	baseURL, err := NormalizeHost(host)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+		return nil, err
 	}
 
-	auth := base64.StdEncoding.EncodeToString([]byte(email + ":" + password))
-	req.Header.Set("Authorization", "Basic "+auth)
-	req.Header.Set("Accept", "application/json")
+	tempAPI := &TeamworkAPI{Config: Config{AuthToken: token, ApiHost: baseURL}}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	req, err := tempAPI.createRequest("GET", baseURL+"/projects/api/v3/me.json", nil)
 	if err != nil {
-		return nil, fmt.Errorf("erro na requisição: %v", err)
+		return nil, err
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	resp, body, err := tempAPI.doRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
+		return nil, err
 	}
 
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return &LoginResponse{
+			Success: false,
+			Message: "Token de API rejeitado pelo Teamwork. Confira o token e o domínio da empresa.",
+		}, nil
+	}
 	if resp.StatusCode != 200 {
 		return &LoginResponse{
 			Success: false,
-			Message: fmt.Sprintf("Erro na autenticação: %d %s - %s",
-				resp.StatusCode, resp.Status, string(body)),
+			Message: fmt.Sprintf("Erro na autenticação: %d %s", resp.StatusCode, resp.Status),
 		}, nil
 	}
 
 	userID, found := extractUserIDFromResponse(body)
-	if !found {
-		userID = 0
+	if !found || userID <= 0 {
+		return &LoginResponse{
+			Success: false,
+			Message: "Autenticado, mas não foi possível identificar o usuário do token.",
+		}, nil
 	}
 
-	t.logDebug("Resposta da API ME: %s", string(body))
-
-	result := &LoginResponse{
+	return &LoginResponse{
 		Success:    true,
-		Token:      email + ":" + password,
 		UserID:     userID,
-		InstanceID: host,
-		Message:    "Autenticação bem-sucedida",
-	}
-
-	return result, nil
-}
-
-func GetTokenWithCredentials(email, password, host string) (*LoginResponse, error) {
-	tempAPI := &TeamworkAPI{}
-	return tempAPI.GetTokenWithCredentials(email, password, host)
+		InstanceID: baseURL,
+		Message:    "Token validado com sucesso",
+	}, nil
 }
 
 func minValue(a, b int) int {

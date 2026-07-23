@@ -40,8 +40,10 @@ func (t *TeamworkAPI) getProjectInfo(projectID int) []Project {
 
 func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	cacheKey := fmt.Sprintf("dashboard_stats_%d", t.Config.UserID)
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.(map[string]interface{}), nil
+	if cached, found := getCached[map[string]interface{}](t.cache, cacheKey); found {
+		// Cópia: o chamador ajusta "horasLogadas" no mapa devolvido, e mutar o
+		// objeto em cache contaminaria as próximas leituras.
+		return copyStats(cached), nil
 	}
 
 	if !t.IsConfigured() {
@@ -143,6 +145,14 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 		stats["diasUteisPassados"] = diasUteisPassados
 	}
 
-	t.cache.Set(cacheKey, stats, 1*time.Hour)
+	t.cache.Set(cacheKey, copyStats(stats), 1*time.Hour)
 	return stats, nil
+}
+
+func copyStats(stats map[string]interface{}) map[string]interface{} {
+	copied := make(map[string]interface{}, len(stats))
+	for k, v := range stats {
+		copied[k] = v
+	}
+	return copied
 }

@@ -9,8 +9,8 @@ import (
 
 func (t *TeamworkAPI) GetProjects() ([]Project, error) {
 	cacheKey := "projects"
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.([]Project), nil
+	if cached, found := getCached[[]Project](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	if !t.IsConfigured() {

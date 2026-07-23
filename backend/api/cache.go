@@ -21,6 +21,26 @@ func NewCache() *Cache {
 	}
 }
 
+// getCached lê um valor do cache verificando o tipo. Um valor gravado com tipo
+// inesperado é descartado e tratado como ausente, em vez de derrubar a
+// aplicação com um panic de type assertion.
+func getCached[T any](c *Cache, key string) (T, bool) {
+	var zero T
+
+	raw, found := c.Get(key)
+	if !found {
+		return zero, false
+	}
+
+	typed, ok := raw.(T)
+	if !ok {
+		c.Delete(key)
+		return zero, false
+	}
+
+	return typed, true
+}
+
 func (c *Cache) Get(key string) (interface{}, bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

@@ -11,28 +11,45 @@ import (
 )
 
 var (
-	httpClient *http.Client
-	once       sync.Once
+	httpClient     *http.Client
+	once           sync.Once
+	downloadClient *http.Client
+	downloadOnce   sync.Once
 )
 
 func (t *TeamworkAPI) IsConfigured() bool {
-	return t.Config.AuthToken != "" && t.Config.ApiHost != ""
+	return t.Config.AuthToken != "" && t.BaseURL() != ""
+}
+
+// BaseURL devolve o host da API já normalizado para https. Hosts inválidos ou
+// http são reduzidos a "" para que createRequest recuse a requisição em vez de
+// vazar o token em claro.
+func (t *TeamworkAPI) BaseURL() string {
+	normalized, err := NormalizeHost(t.Config.ApiHost)
+	if err != nil {
+		return ""
+	}
+	return normalized
 }
 
 func (t *TeamworkAPI) buildURL(path string) string {
-	baseURL := t.Config.ApiHost
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-	return fmt.Sprintf("%s%s", baseURL, path)
+	return t.BaseURL() + path
 }
 
-func (t *TeamworkAPI) createRequest(method, url string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, url, body)
+func (t *TeamworkAPI) createRequest(method, rawURL string, body io.Reader) (*http.Request, error) {
+	// Última barreira antes de enviar o token: o Basic auth expõe o segredo em
+	// base64 no cabeçalho, então nenhuma requisição sai fora de https.
+	if !strings.HasPrefix(strings.ToLower(rawURL), "https://") {
+		return nil, fmt.Errorf("requisição bloqueada: apenas https é permitido, recebido %q", rawURL)
+	}
+
+	req, err := http.NewRequest(method, rawURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
 	}
 
+	// Tokens de API do Teamwork são usados como usuário do Basic auth, com
+	// qualquer valor como senha.
 	auth := base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
 	req.Header.Set("Authorization", "Basic "+auth)
 	req.Header.Set("Accept", "application/json")
@@ -60,6 +77,39 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
+// getDownloadClient serve downloads de relatório, que podem levar bem mais que
+// o timeout curto usado nas chamadas de API.
+func getDownloadClient() *http.Client {
+	downloadOnce.Do(func() {
+		downloadClient = &http.Client{
+			Timeout:   2 * time.Minute,
+			Transport: getHTTPClient().Transport,
+		}
+	})
+	return downloadClient
+}
+
+// GetJSON faz um GET autenticado num caminho da API e devolve corpo e status.
+// Existe para que quem está fora do pacote não precise montar o cabeçalho de
+// autenticação — e portanto não precise enxergar o token.
+func (t *TeamworkAPI) GetJSON(path string) ([]byte, int, error) {
+	if !t.IsConfigured() {
+		return nil, 0, fmt.Errorf("API não configurada")
+	}
+
+	req, err := t.createRequest("GET", t.buildURL(path), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	resp, body, err := t.doRequest(req)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return body, resp.StatusCode, nil
+}
+
 func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, error) {
 	client := getHTTPClient()
 	resp, err := client.Do(req)
@@ -78,22 +128,19 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	return resp, body, nil
 }
 
-func (t *TeamworkAPI) TestConnection(config Config) (bool, string) {
-	tempAPI := &TeamworkAPI{
-		Config: config,
-	}
-
-	if !tempAPI.IsConfigured() {
+// TestConnection valida a configuração já armazenada. Não recebe credenciais do
+// frontend: o token vem do cofre do sistema, carregado na inicialização.
+func (t *TeamworkAPI) TestConnection() (bool, string) {
+	if !t.IsConfigured() {
 		return false, "API não configurada"
 	}
 
-	url := tempAPI.buildURL("/projects/api/v3/me.json")
-	req, err := tempAPI.createRequest("GET", url, nil)
+	req, err := t.createRequest("GET", t.buildURL("/projects/api/v3/me.json"), nil)
 	if err != nil {
 		return false, fmt.Sprintf("Erro ao criar requisição: %v", err)
 	}
 
-	resp, _, err := tempAPI.doRequest(req)
+	resp, _, err := t.doRequest(req)
 	if err != nil {
 		return false, fmt.Sprintf("Erro na requisição: %v", err)
 	}

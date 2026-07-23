@@ -1,21 +1,19 @@
 export namespace api {
 	
-	export class Config {
-	    authToken: string;
-	    userId: number;
-	    apiHost: string;
-	    minutosPorDia: number;
+	export class DeleteTimeEntryResult {
+	    entryId: number;
+	    success: boolean;
+	    message: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Config(source);
+	        return new DeleteTimeEntryResult(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.authToken = source["authToken"];
-	        this.userId = source["userId"];
-	        this.apiHost = source["apiHost"];
-	        this.minutosPorDia = source["minutosPorDia"];
+	        this.entryId = source["entryId"];
+	        this.success = source["success"];
+	        this.message = source["message"];
 	    }
 	}
 	export class TimeEntry {
@@ -72,6 +70,79 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class Holiday {
+	    date: string;
+	    name: string;
+	    description?: string;
+	    type: string;
+	    isOptional: boolean;
+	    source?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Holiday(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.type = source["type"];
+	        this.isOptional = source["isOptional"];
+	        this.source = source["source"];
+	    }
+	}
+	export class LoggedTimeResponse {
+	    STATUS: string;
+	    // Go type: struct { Billable [][3]string "json:\"billable\""; Firstname string "json:\"firstname\""; Lastname string "json:\"lastname\""; Nonbillable [][3]string "json:\"nonbillable\""; ID string "json:\"id\""; Endepoch string "json:\"endepoch\""; Startepoch string "json:\"startepoch\"" }
+	    user: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoggedTimeResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.STATUS = source["STATUS"];
+	        this.user = this.convertValues(source["user"], Object);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LoginResponse {
+	    success: boolean;
+	    message: string;
+	    userId: number;
+	    instanceId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LoginResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.userId = source["userId"];
+	        this.instanceId = source["instanceId"];
+	    }
+	}
 	export class Project {
 	    id: number;
 	    name: string;
@@ -111,12 +182,31 @@ export namespace api {
 		    return a;
 		}
 	}
+	export class PublicConfig {
+	    configured: boolean;
+	    apiHost: string;
+	    userId: number;
+	    minutosPorDia: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PublicConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.apiHost = source["apiHost"];
+	        this.userId = source["userId"];
+	        this.minutosPorDia = source["minutosPorDia"];
+	    }
+	}
 	export class Task {
 	    taskId: number;
 	    taskName: string;
 	    projectId: number;
 	    projectName: string;
 	    entries: TimeEntry[];
+	    workingDays?: number[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Task(source);
@@ -129,6 +219,7 @@ export namespace api {
 	        this.projectId = source["projectId"];
 	        this.projectName = source["projectName"];
 	        this.entries = this.convertValues(source["entries"], TimeEntry);
+	        this.workingDays = source["workingDays"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -272,6 +363,62 @@ export namespace api {
 		}
 	}
 	
+	export class TimeEntryReport {
+	    id: number;
+	    projectId: number;
+	    projectName: string;
+	    taskId: number;
+	    taskName: string;
+	    tasklistId: number;
+	    tasklistName: string;
+	    userId: number;
+	    userFirstName: string;
+	    userLastName: string;
+	    date: string;
+	    hours: number;
+	    minutes: number;
+	    description: string;
+	    isBillable: boolean;
+	    isBilled: boolean;
+	    startTime: string;
+	    endTime: string;
+	    status?: string;
+	    createdAt?: string;
+	    updatedAt?: string;
+	    deletedAt?: string;
+	    deletedBy?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeEntryReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.projectId = source["projectId"];
+	        this.projectName = source["projectName"];
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.tasklistId = source["tasklistId"];
+	        this.tasklistName = source["tasklistName"];
+	        this.userId = source["userId"];
+	        this.userFirstName = source["userFirstName"];
+	        this.userLastName = source["userLastName"];
+	        this.date = source["date"];
+	        this.hours = source["hours"];
+	        this.minutes = source["minutes"];
+	        this.description = source["description"];
+	        this.isBillable = source["isBillable"];
+	        this.isBilled = source["isBilled"];
+	        this.startTime = source["startTime"];
+	        this.endTime = source["endTime"];
+	        this.status = source["status"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.deletedAt = source["deletedAt"];
+	        this.deletedBy = source["deletedBy"];
+	    }
+	}
 	export class TimeLogResult {
 	    success: boolean;
 	    message: string;
@@ -289,6 +436,43 @@ export namespace api {
 	        this.date = source["date"];
 	        this.taskId = source["taskId"];
 	    }
+	}
+	export class TimeTotal {
+	    // Go type: struct { TotalCost float64 "json:\"totalCost\""; TotalCostBillable float64 "json:\"totalCostBillable\""; TotalCostBilled float64 "json:\"totalCostBilled\"" }
+	    financialTotals: any;
+	    // Go type: struct { EstimatedMinutes int "json:\"estimatedMinutes\""; Minutes int "json:\"minutes\""; MinutesBillable int "json:\"minutesBillable\"" }
+	    subTasks: any;
+	    // Go type: struct { EstimatedMinutes int "json:\"estimatedMinutes\""; EstimatedMinutesActive int "json:\"estimatedMinutesActive\""; EstimatedMinutesCompleted int "json:\"estimatedMinutesCompleted\""; EstimatedMinutesFiltered int "json:\"estimatedMinutesFiltered\""; EstimatedMinutesWithLoggedTime int "json:\"estimatedMinutesWithLoggedTime\""; Minutes int "json:\"minutes\""; MinutesBillable int "json:\"minutesBillable\""; MinutesBilled int "json:\"minutesBilled\""; MinutesNonBillable int "json:\"minutesNonBillable\""; MinutesNonBilled int "json:\"minutesNonBilled\"" }
+	    "time-totals": any;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimeTotal(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.financialTotals = this.convertValues(source["financialTotals"], Object);
+	        this.subTasks = this.convertValues(source["subTasks"], Object);
+	        this["time-totals"] = this.convertValues(source["time-totals"], Object);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class WorkDay {
 	    date: string;
