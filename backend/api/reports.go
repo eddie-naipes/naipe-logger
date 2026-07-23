@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+// maxTimeEntryPages limita a paginação de entradas de tempo. Com pageSize=500
+// isso cobre 25 mil entradas — muito acima de qualquer período real de um
+// usuário — e serve como rede de segurança contra laço infinito.
+const maxTimeEntryPages = 50
+
 type TimeTotal struct {
 	FinancialTotals struct {
 		TotalCost         float64 `json:"totalCost"`
@@ -120,8 +125,11 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriod(startDate, endDate string) ([]Time
 	}
 
 	allEntries := response.TimeEntries
-	page := 2
-	for response.Meta.Page.HasMore {
+
+	// Teto de páginas: sem ele, uma API que devolvesse hasMore=true de forma
+	// permanente (ou que ignorasse o parâmetro page) prenderia a aplicação num
+	// laço infinito consumindo memória.
+	for page := 2; page <= maxTimeEntryPages && response.Meta.Page.HasMore; page++ {
 		pageUrl := fmt.Sprintf("%s&page=%d", url, page)
 		req, err := t.createRequest("GET", pageUrl, nil)
 		if err != nil {
@@ -137,8 +145,19 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriod(startDate, endDate string) ([]Time
 			break
 		}
 
+		// Página vazia com hasMore=true significa que a paginação não está
+		// avançando; continuar só repetiria a mesma requisição.
+		if len(response.TimeEntries) == 0 {
+			t.logDebug("Paginação interrompida na página %d: resposta sem entradas", page)
+			break
+		}
+
 		allEntries = append(allEntries, response.TimeEntries...)
-		page++
+
+		if page == maxTimeEntryPages && response.Meta.Page.HasMore {
+			t.logDebug("Limite de %d páginas atingido; podem existir mais entradas no período %s a %s",
+				maxTimeEntryPages, startDate, endDate)
+		}
 	}
 
 	return allEntries, nil

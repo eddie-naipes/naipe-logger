@@ -110,22 +110,66 @@ func (t *TeamworkAPI) GetJSON(path string) ([]byte, int, error) {
 	return body, resp.StatusCode, nil
 }
 
+// doRequest executa a requisição, repetindo em rate limit (429) e, para métodos
+// idempotentes, em falha de rede ou erro 5xx. Sem isso um lote grande de
+// lançamentos era abandonado inteiro no primeiro 429 do Teamwork.
 func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, error) {
 	client := getHTTPClient()
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, nil, fmt.Errorf("erro na requisição: %v", err)
-	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
+	idempotent := isIdempotent(req.Method)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return resp, nil, fmt.Errorf("erro ao ler resposta: %v", err)
+	var retryAfter time.Duration
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			espera := backoffDuration(attempt, retryAfter)
+			t.logDebug("Tentativa %d/%d para %s %s em %v", attempt+1, maxRetries+1,
+				req.Method, req.URL.Path, espera)
+			time.Sleep(espera)
+			retryAfter = 0
+		}
+
+		attemptReq := req.Clone(req.Context())
+		if req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, nil, fmt.Errorf("erro ao preparar corpo da requisição: %v", err)
+			}
+			attemptReq.Body = body
+		}
+
+		resp, err := client.Do(attemptReq)
+		if err != nil {
+			lastErr = fmt.Errorf("erro na requisição: %v", err)
+			// Numa falha de rede em POST não dá para saber se o servidor
+			// processou; repetir poderia duplicar o lançamento.
+			if !idempotent || attempt == maxRetries {
+				return nil, nil, lastErr
+			}
+			continue
+		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		if readErr != nil {
+			lastErr = fmt.Errorf("erro ao ler resposta: %v", readErr)
+			if !idempotent || attempt == maxRetries {
+				return resp, nil, lastErr
+			}
+			continue
+		}
+
+		if attempt < maxRetries && shouldRetryStatus(resp.StatusCode, idempotent) {
+			retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
+			lastErr = fmt.Errorf("resposta %d %s", resp.StatusCode, resp.Status)
+			continue
+		}
+
+		return resp, body, nil
 	}
 
-	return resp, body, nil
+	return nil, nil, lastErr
 }
 
 // TestConnection valida a configuração já armazenada. Não recebe credenciais do

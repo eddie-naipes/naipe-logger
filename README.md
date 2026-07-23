@@ -42,7 +42,7 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 ### Backend (Go 1.24)
 - **Wails v2.10.1** — aplicação desktop híbrida
 - **go-keyring** — cofre de credenciais do SO
-- **HTTP client** com connection pooling e timeouts
+- **HTTP client** com connection pooling, timeouts e repetição com backoff exponencial
 - **Cache em memória** com TTL por tipo de dado
 - **Goroutines com semáforo** para lançamentos concorrentes (limite de 3 simultâneos)
 
@@ -67,6 +67,7 @@ teamwork-logger/
 │   │   ├── tasks.go        # Tarefas
 │   │   ├── projects.go     # Projetos
 │   │   ├── reports.go      # Relatórios e exportação PDF
+│   │   ├── retry.go        # Política de repetição (rate limit e falhas de rede)
 │   │   ├── time_entries.go # CRUD de apontamentos e distribuição
 │   │   ├── Holiday.go      # Feriados (BrasilAPI + fallback)
 │   │   └── types.go
@@ -121,6 +122,8 @@ Fins de semana e feriados são excluídos automaticamente do plano.
 **Detecção de duplicatas:** ao gerar o plano, o aplicativo consulta os lançamentos já existentes no período e destaca os dias que já possuem tempo registrado, indicando quais colidem com a *mesma tarefa* do plano. Se houver colisão, o botão de envio muda de cor e exige confirmação explícita. Se a verificação em si falhar, o envio também pede confirmação — em vez de seguir em silêncio.
 
 **Desfazer lançamento:** após executar, o painel de resultados oferece um botão que apaga do Teamwork as entradas criadas por aquele lote. Útil quando parte das entradas falha, ou quando o plano estava errado.
+
+**Repetição automática:** um lote grande costuma esbarrar no rate limit da API. Requisições recusadas com `429` são repetidas até 3 vezes, com backoff exponencial (500 ms, 1 s, 2 s…, teto de 8 s), respeitando o cabeçalho `Retry-After` quando o servidor o envia. Falhas de rede e erros `5xx` só são repetidos em métodos idempotentes — **um `POST` que falha nunca é reenviado**, porque não há como saber se o lançamento chegou a ser criado, e repetir duplicaria horas. Nesses casos a entrada aparece como falha no painel de resultados e pode ser reenviada manualmente.
 
 > **Atenção:** o desfazer depende do identificador que o Teamwork devolve ao criar cada entrada. Se algum lançamento vier sem esse identificador, o painel informa quantos ficaram de fora — esses precisam ser removidos pelo Gerenciador de Apontamentos.
 >
@@ -229,6 +232,8 @@ O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar pa
 ## 🗺️ Limitações conhecidas
 
 - O desfazer de lote depende do ID devolvido pela API; entradas sem ID precisam ser removidas manualmente
+- A leitura de apontamentos de um período pagina até 50 páginas (25 mil entradas). O teto existe para evitar laço infinito caso a API devolva `hasMore` indefinidamente; períodos reais ficam muito abaixo disso
+- Um `POST` que falha por rede ou erro do servidor não é reenviado automaticamente (evita duplicar horas) — só o rate limit `429` dispara repetição
 - Sem auto-update
 - Sem modo offline — toda operação requer conexão
 - Sem backup automático das configurações
