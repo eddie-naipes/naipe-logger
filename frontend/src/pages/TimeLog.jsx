@@ -27,6 +27,9 @@ const TimeLog = () => {
         endDate: format(new Date(), 'yyyy-MM-dd')
     });
     const [workDays, setWorkDays] = useState([]);
+    const [conflicts, setConflicts] = useState([]);
+    const [isCheckingConflicts, setIsCheckingConflicts] = useState(false);
+    const [conflictCheckFailed, setConflictCheckFailed] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState([]);
@@ -202,6 +205,8 @@ const TimeLog = () => {
 
         setIsGenerating(true);
         setWorkDays([]);
+        setConflicts([]);
+        setConflictCheckFailed(false);
         setError(null);
 
         try {
@@ -239,6 +244,8 @@ const TimeLog = () => {
             console.log('Plano gerado:', plan);
             setWorkDays(plan);
             toast.success(`Plano gerado com sucesso para ${plan.length} dias!`);
+
+            await checkConflicts(plan);
         } catch (error) {
             console.error('Erro ao gerar plano:', error);
             toast.error('Erro ao gerar plano de lançamento.');
@@ -248,9 +255,63 @@ const TimeLog = () => {
         }
     };
 
+    // Verifica se os dias do plano já têm tempo lançado no Teamwork. Como não
+    // existe rollback, um lote duplicado só se desfaz apagando entrada a entrada.
+    const checkConflicts = async (plan) => {
+        setIsCheckingConflicts(true);
+        setConflictCheckFailed(false);
+        try {
+            const found = await window.go.backend.App.CheckPlanConflicts(plan);
+            setConflicts(found || []);
+
+            if (found && found.length > 0) {
+                toast.warning(`${found.length} dia(s) do plano já possuem lançamentos. Revise antes de enviar.`);
+            }
+        } catch (error) {
+            console.error('Erro ao verificar lançamentos existentes:', error);
+            setConflicts([]);
+            setConflictCheckFailed(true);
+        } finally {
+            setIsCheckingConflicts(false);
+        }
+    };
+
+    const buildConflictWarning = () => {
+        const dias = conflicts.map(c => {
+            const horasExistentes = (c.existingMinutes / 60).toFixed(1);
+            const mesmaTarefa = (c.sameTask && c.sameTask.length > 0)
+                ? ` — ${c.sameTask.length} na(s) MESMA(S) tarefa(s) do plano`
+                : '';
+            return `• ${c.date}: já tem ${horasExistentes}h em ${c.existingEntries} entrada(s)${mesmaTarefa}`;
+        }).join('\n');
+
+        return `ATENÇÃO: ${conflicts.length} dia(s) do plano já possuem tempo lançado.\n\n`
+            + `${dias}\n\n`
+            + `Enviar mesmo assim vai DUPLICAR essas horas. Não há como desfazer `
+            + `automaticamente — a correção seria apagar cada entrada manualmente.\n\n`
+            + `Deseja continuar?`;
+    };
+
     const submitPlan = async () => {
         if (workDays.length === 0) {
             toast.warning('Gere um plano antes de lançar horas.');
+            return;
+        }
+
+        if (isCheckingConflicts) {
+            toast.info('Aguarde a verificação de lançamentos existentes.');
+            return;
+        }
+
+        if (conflicts.length > 0 && !window.confirm(buildConflictWarning())) {
+            return;
+        }
+
+        if (conflictCheckFailed && !window.confirm(
+            'Não foi possível verificar se já existem lançamentos nos dias do plano.\n\n'
+            + 'Enviar sem essa verificação pode duplicar horas, e não há como desfazer '
+            + 'automaticamente.\n\nDeseja continuar mesmo assim?'
+        )) {
             return;
         }
 
@@ -617,6 +678,67 @@ const TimeLog = () => {
                         </div>
                     </div>
 
+                    {isCheckingConflicts && (
+                        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center">
+                            <FiLoader className="w-4 h-4 mr-2 animate-spin text-gray-500"/>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Verificando lançamentos já existentes...
+                            </p>
+                        </div>
+                    )}
+
+                    {conflictCheckFailed && (
+                        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 border-l-4 border-gray-400 rounded-lg">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                                Não foi possível verificar lançamentos existentes. Confira manualmente
+                                antes de enviar — horas duplicadas não podem ser desfeitas automaticamente.
+                            </p>
+                        </div>
+                    )}
+
+                    {conflicts.length > 0 && (
+                        <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-lg">
+                            <div className="flex items-start">
+                                <FiAlertCircle className="w-5 h-5 mr-3 mt-0.5 text-amber-500 flex-shrink-0"/>
+                                <div className="flex-1">
+                                    <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                        {conflicts.length} dia(s) já possuem lançamentos
+                                    </h3>
+                                    <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                                        Enviar o plano vai <strong>somar</strong> as horas abaixo, não substituí-las.
+                                        Não há como desfazer automaticamente.
+                                    </p>
+                                    <ul className="mt-3 space-y-1.5">
+                                        {conflicts.map(conflict => (
+                                            <li key={conflict.date} className="text-sm text-amber-800 dark:text-amber-300">
+                                                <span className="font-medium">{formatDate(conflict.date)}</span>
+                                                {' — já tem '}
+                                                <span className="font-medium">
+                                                    {(conflict.existingMinutes / 60).toFixed(1)}h
+                                                </span>
+                                                {` em ${conflict.existingEntries} entrada(s); plano adiciona `}
+                                                <span className="font-medium">
+                                                    {(conflict.plannedMinutes / 60).toFixed(1)}h
+                                                </span>
+                                                {conflict.sameTask && conflict.sameTask.length > 0 && (
+                                                    <ul className="ml-4 mt-1 space-y-0.5">
+                                                        {conflict.sameTask.map(task => (
+                                                            <li key={task.taskId} className="text-xs text-amber-900 dark:text-amber-200">
+                                                                ⚠ mesma tarefa
+                                                                {task.taskName ? ` "${task.taskName}"` : ` #${task.taskId}`}
+                                                                : {(task.existingMinutes / 60).toFixed(1)}h já lançadas
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {getTaskDaysSummary() && (
                         <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <p className="text-sm text-blue-700 dark:text-blue-300">
@@ -691,13 +813,18 @@ const TimeLog = () => {
                         <button
                             type="button"
                             onClick={submitPlan}
-                            disabled={isSubmitting}
-                            className="btn-success flex items-center justify-center"
+                            disabled={isSubmitting || isCheckingConflicts}
+                            className={`flex items-center justify-center ${conflicts.length > 0 ? 'btn-warning' : 'btn-success'}`}
                         >
                             {isSubmitting ? (
                                 <>
                                     <FiLoader className="w-5 h-5 mr-2 animate-spin"/>
                                     Enviando...
+                                </>
+                            ) : conflicts.length > 0 ? (
+                                <>
+                                    <FiAlertCircle className="w-5 h-5 mr-2"/>
+                                    Executar mesmo com {conflicts.length} dia(s) já lançado(s)
                                 </>
                             ) : (
                                 <>

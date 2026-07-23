@@ -115,6 +115,26 @@ type Template struct {
 	TotalMin int    `json:"totalMin"`
 }
 
+// TaskConflict detalha, dentro de um dia, quanto já existe lançado numa tarefa
+// que o plano também pretende lançar.
+type TaskConflict struct {
+	TaskID          int    `json:"taskId"`
+	TaskName        string `json:"taskName"`
+	ExistingMinutes int    `json:"existingMinutes"`
+	PlannedMinutes  int    `json:"plannedMinutes"`
+}
+
+// DayConflict descreve um dia do plano que já possui tempo lançado no Teamwork.
+// SameTask separa as tarefas em que a colisão é direta — o caso mais provável
+// de duplicata real — das demais, que apenas ocupam o mesmo dia.
+type DayConflict struct {
+	Date            string         `json:"date"`
+	ExistingMinutes int            `json:"existingMinutes"`
+	ExistingEntries int            `json:"existingEntries"`
+	PlannedMinutes  int            `json:"plannedMinutes"`
+	SameTask        []TaskConflict `json:"sameTask"`
+}
+
 type TimeLogResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`

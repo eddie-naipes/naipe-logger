@@ -10,6 +10,10 @@ export function CalculateTotalMinutes(arg1) {
   return window['go']['backend']['App']['CalculateTotalMinutes'](arg1);
 }
 
+export function CheckPlanConflicts(arg1) {
+  return window['go']['backend']['App']['CheckPlanConflicts'](arg1);
+}
+
 export function ClearHolidayCache() {
   return window['go']['backend']['App']['ClearHolidayCache']();
 }

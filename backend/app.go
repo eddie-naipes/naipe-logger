@@ -169,6 +169,13 @@ func (a *App) CreateDistributionPlan(diasUteis []string, tarefas []api.Task) []a
 	return a.api().CreateDistributionPlan(diasUteis, tarefas)
 }
 
+// CheckPlanConflicts avisa quais dias do plano já possuem tempo lançado, para
+// que o usuário confirme antes de enviar. A ferramenta não tem rollback, então
+// um lote duplicado só se desfaz apagando entrada por entrada.
+func (a *App) CheckPlanConflicts(workDays []api.WorkDay) ([]api.DayConflict, error) {
+	return a.api().CheckPlanConflicts(workDays)
+}
+
 func (a *App) LogMultipleTimes(workDays []api.WorkDay) ([]*api.TimeLogResult, error) {
 	return a.api().LogMultipleTimes(workDays)
 }

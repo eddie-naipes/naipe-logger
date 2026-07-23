@@ -62,6 +62,8 @@ teamwork-logger/
 │   │   ├── client.go       # HTTP client, autenticação e barreira de HTTPS
 │   │   ├── host.go         # Normalização e validação do host
 │   │   ├── cache.go        # Cache com TTL
+│   │   ├── conflicts.go    # Detecção de lançamentos duplicados
+│   │   ├── dates.go        # Parsing das datas devolvidas pela API
 │   │   ├── tasks.go        # Tarefas
 │   │   ├── projects.go     # Projetos
 │   │   ├── reports.go      # Relatórios e exportação PDF
@@ -116,9 +118,11 @@ Fluxo:
 
 Fins de semana e feriados são excluídos automaticamente do plano.
 
+**Detecção de duplicatas:** ao gerar o plano, o aplicativo consulta os lançamentos já existentes no período e destaca os dias que já possuem tempo registrado, indicando quais colidem com a *mesma tarefa* do plano. Se houver colisão, o botão de envio muda de cor e exige confirmação explícita. Se a verificação em si falhar, o envio também pede confirmação — em vez de seguir em silêncio.
+
 > **Atenção:** não há rollback. Se parte dos lançamentos falhar, os que tiveram sucesso permanecem registrados no Teamwork. Use o Gerenciador de Apontamentos para corrigir.
 >
-> Também não há detecção de duplicatas: lançar o mesmo período duas vezes cria entradas duplicadas.
+> O aviso de duplicata não bloqueia o envio: lançamentos são **somados**, não substituídos.
 
 ### 📋 Gerenciamento de Tarefas
 
@@ -222,8 +226,7 @@ O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar pa
 
 ## 🗺️ Limitações conhecidas
 
-- Sem rollback em lançamentos parcialmente falhos
-- Sem detecção de lançamentos duplicados
+- Sem rollback em lançamentos parcialmente falhos (há aviso de duplicata, mas não desfazimento)
 - Sem auto-update
 - Sem modo offline — toda operação requer conexão
 - Sem backup automático das configurações

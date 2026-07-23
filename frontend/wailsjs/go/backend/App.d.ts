@@ -7,6 +7,8 @@ export function ApplyTemplate(arg1:string):Promise<void>;
 
 export function CalculateTotalMinutes(arg1:Array<api.Task>):Promise<number>;
 
+export function CheckPlanConflicts(arg1:Array<api.WorkDay>):Promise<Array<api.DayConflict>>;
+
 export function ClearHolidayCache():Promise<void>;
 
 export function ClearSavedTasks():Promise<void>;
