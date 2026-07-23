@@ -1,16 +1,13 @@
 package api
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -197,40 +194,20 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 	}
 
 	userID := strconv.Itoa(t.Config.UserID)
-	baseURL := t.Config.ApiHost
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-
-	url := fmt.Sprintf("%s/people/%s/loggedtime.json?m=%d&y=%d&projectId=0&page=1&pageSize=100",
-		baseURL, userID, month, year)
+	url := t.buildURL(fmt.Sprintf("/people/%s/loggedtime.json?m=%d&y=%d&projectId=0&page=1&pageSize=100",
+		userID, month, year))
 
 	t.logDebug("Obtendo dados de tempo do endpoint de calendário: %s", url)
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
+		return nil, err
 	}
-
-	var auth string
-	if strings.Contains(t.Config.AuthToken, ":") {
-		auth = base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken))
-	} else {
-		auth = base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
-	}
-	req.Header.Set("Authorization", "Basic "+auth)
-	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "TeamworkGoClient/1.0")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, body, err := t.doRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("erro na requisição HTTP: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
+		return nil, err
 	}
 
 	if resp.StatusCode != 200 {
@@ -269,11 +246,6 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 	startDateFormatted := startTime.Format("2006-01-02T15:04:05+00:00")
 	endDateFormatted := endTime.Add(23*time.Hour + 59*time.Minute + 59*time.Second).Format("2006-01-02T15:04:05+00:00")
 
-	baseURL := t.Config.ApiHost
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-
 	params := url.Values{}
 	params.Set("assignedTeamIds", "")
 	params.Set("billableType", "all")
@@ -292,17 +264,16 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 	params.Set("projectStatuses", "all")
 	params.Set("projectCompanyIds", "")
 
-	downloadURL := fmt.Sprintf("%s/projects/api/v3/time.pdf?%s", baseURL, params.Encode())
+	downloadURL := t.buildURL("/projects/api/v3/time.pdf?" + params.Encode())
 
 	t.logDebug("Baixando relatório PDF de %s a %s...", startDate, endDate)
-	t.logDebug("URL: %s", downloadURL)
 
 	req, err := t.createRequest("GET", downloadURL, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := getDownloadClient().Do(req)
 	if err != nil {
 		return fmt.Errorf("erro na requisição HTTP: %v", err)
 	}

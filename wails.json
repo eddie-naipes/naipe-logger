@@ -23,7 +23,7 @@
   ],
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
-  "wailsjsdir": "./frontend/src/wailsjs",
+  "wailsjsdir": "./frontend",
   "debounceMS": 100,
   "nsis": {
     "installMode": "currentUser",

@@ -1,9 +1,20 @@
 package api
 
+// Config é a configuração da API em memória. O AuthToken vive apenas no cofre
+// de credenciais do sistema: `json:"-"` garante que ele nunca seja gravado em
+// config.json nem serializado para o frontend.
 type Config struct {
-	AuthToken     string `json:"authToken"`
+	AuthToken     string `json:"-"`
 	UserID        int    `json:"userId"`
 	ApiHost       string `json:"apiHost"`
+	MinutosPorDia int    `json:"minutosPorDia"`
+}
+
+// PublicConfig é o que o frontend pode enxergar: nunca inclui o segredo.
+type PublicConfig struct {
+	Configured    bool   `json:"configured"`
+	ApiHost       string `json:"apiHost"`
+	UserID        int    `json:"userId"`
 	MinutosPorDia int    `json:"minutosPorDia"`
 }
 
@@ -130,10 +141,11 @@ type ProjectsResponse struct {
 	ItemsOnPage int       `json:"itemsOnPage"`
 }
 
+// LoginResponse é devolvido ao frontend após a validação do token. Não carrega
+// o token: o segredo não atravessa a fronteira Go -> JavaScript.
 type LoginResponse struct {
 	Success    bool   `json:"success"`
 	Message    string `json:"message"`
-	Token      string `json:"token"`
 	UserID     int    `json:"userId"`
 	InstanceID string `json:"instanceId"`
 }

@@ -1,9 +1,32 @@
-*.exe
-*.msi
+# Dependências
+node_modules/
+
+# Artefatos de build
 build/
 dist/
-LICENSE.txt
-README.txt
+*.exe
+*.msi
+*.dmg
+*.AppImage
+frontend/package.json.md5
+
+# Instalador
 installer-build.nsi
 nsis-output.txt
 nsis-error.txt
+LICENSE.txt
+README.txt
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# SO
+.DS_Store
+Thumbs.db
+
+# Configuração local, caso o app a deixe ao lado do executável durante o dev.
+# Contém host, ID de usuário e tarefas salvas (o token fica no cofre do SO).
+/config.json
+/templates.json

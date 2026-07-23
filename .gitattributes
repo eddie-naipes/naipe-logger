@@ -1,0 +1,31 @@
+# Normaliza finais de linha no repositório para LF. Sem isto, os arquivos .go
+# ficam com CRLF no Windows e `gofmt -l` acusa todos eles, quebrando o CI.
+* text=auto eol=lf
+
+*.go        text eol=lf
+*.mod       text eol=lf
+*.sum       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.ts        text eol=lf
+*.json      text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sh        text eol=lf
+
+# Scripts que só rodam no Windows precisam de CRLF.
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+*.nsi       text eol=crlf
+*.nsh       text eol=crlf
+
+# Binários: nunca converter.
+*.png       binary
+*.ico       binary
+*.exe       binary
+*.msi       binary
+*.dmg       binary
+*.AppImage  binary

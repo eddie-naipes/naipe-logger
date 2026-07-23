@@ -44,9 +44,8 @@ function App() {
 
     const checkIfConfigured = async () => {
         try {
-            const config = await window.go.backend.App.GetConfig();
-            const configured = config.authToken && config.authToken.length > 0 &&
-                config.apiHost && config.apiHost.length > 0;
+            // O frontend só recebe um booleano; o token vive no cofre do sistema.
+            const configured = await window.go.backend.App.IsConfigured();
 
             setIsConfigured(configured);
 

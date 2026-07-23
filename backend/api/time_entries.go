@@ -2,11 +2,10 @@ package api
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net/http"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -188,7 +187,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 				resp.StatusCode, resp.Status, string(body))
 		}
 
-		return result, fmt.Errorf(result.Message)
+		return result, errors.New(result.Message)
 	}
 }
 
@@ -200,9 +199,9 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 
 	entriesByDay := make(map[string][]map[string]interface{})
 	for _, entry := range entries {
-		date := entry["date"].(string)
-		if _, ok := entriesByDay[date]; !ok {
-			entriesByDay[date] = make([]map[string]interface{}, 0)
+		date, ok := entry["date"].(string)
+		if !ok {
+			continue
 		}
 		entriesByDay[date] = append(entriesByDay[date], entry)
 	}
@@ -218,8 +217,9 @@ func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, task
 
 		totalMin := 0
 		for _, entry := range dayEntries {
-			mins := int(entry["minutes"].(int64))
-			totalMin += mins
+			if mins, ok := entry["minutes"].(int64); ok {
+				totalMin += int(mins)
+			}
 		}
 
 		if len(tasks) > 0 {
@@ -631,8 +631,8 @@ func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[str
 
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 	cacheKey := "recent_activities"
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.([]map[string]interface{}), nil
+	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	projects, err := t.GetProjects()
@@ -953,8 +953,11 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, inclu
 		parsedDate, _ := time.Parse("2006-01-02T15:04:05Z", entry.Date)
 		formattedDate := parsedDate.Format("2006-01-02")
 
-		totalMinutes := int(entry.HoursDecimal * 60)
-		if entry.Minutes > 0 {
+		// hoursDecimal é a duração total em horas decimais; hours/minutes são as
+		// partes inteira e fracionária da MESMA duração. Somar hours*60+minutes
+		// só é válido como fallback — usar o total evita truncar 1.75h em 1h.
+		totalMinutes := int(math.Round(entry.HoursDecimal * 60))
+		if totalMinutes == 0 {
 			totalMinutes = int(entry.Hours)*60 + entry.Minutes
 		}
 
@@ -990,43 +993,6 @@ func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, e
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	dateFormatted := strings.ReplaceAll(date, "-", "")
-
-	baseURL := t.Config.ApiHost
-	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
-		baseURL = "https://" + baseURL
-	}
-
-	url := fmt.Sprintf("%s/app/time/all?startdate=%s&enddate=%s&userid=%d&includearchivedprojects=true",
-		baseURL, dateFormatted, dateFormatted, t.Config.UserID)
-
-	t.logDebug("Obtendo todas as entradas de tempo para %s: %s", date, url)
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
-	}
-
-	auth := base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
-	req.Header.Set("Authorization", "Basic "+auth)
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("erro na requisição: %v", err)
-	}
-	defer resp.Body.Close()
-
-	_, err = io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao ler resposta: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s", resp.StatusCode, resp.Status)
-	}
-
 	return t.GetTimeEntriesForPeriodV2(date, date, false)
 }
 
@@ -1041,25 +1007,14 @@ func (t *TeamworkAPI) DeleteTimeEntryV2(entryID int) error {
 
 	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
 
-	req, err := http.NewRequest("DELETE", url, nil)
+	req, err := t.createRequest("DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("erro ao criar requisição: %v", err)
+		return err
 	}
 
-	auth := base64.StdEncoding.EncodeToString([]byte(t.Config.AuthToken + ":X"))
-	req.Header.Set("Authorization", "Basic "+auth)
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	resp, body, err := t.doRequest(req)
 	if err != nil {
-		return fmt.Errorf("erro na requisição: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("erro ao ler resposta: %v", err)
+		return err
 	}
 
 	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
@@ -1143,6 +1098,6 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 				resp.StatusCode, resp.Status, string(body))
 		}
 
-		return result, fmt.Errorf(result.Message)
+		return result, errors.New(result.Message)
 	}
 }

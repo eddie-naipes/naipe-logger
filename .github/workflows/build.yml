@@ -4,118 +4,182 @@ on:
   push:
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
 
+# Versões fixas: `@latest` tornava o build irreprodutível e dependente do que
+# estivesse publicado no dia. WAILS_VERSION deve acompanhar go.mod.
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '20'
+  WAILS_VERSION: 'v2.10.1'
+
+permissions:
+  contents: read
+
 jobs:
+  verify:
+    name: Verificação
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l backend/ main.go)
+          if [ -n "$unformatted" ]; then
+            echo "Arquivos fora do padrão gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Verificar go.mod atualizado
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Instalar dependências do frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
   build-windows:
+    needs: verify
     runs-on: windows-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm install
+        working-directory: frontend
+        run: npm ci
 
       - name: Build Windows with NSIS
         run: wails build -platform windows/amd64
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: naipe-logger-windows
           path: build/bin/*.exe
 
   build-linux:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          
+
           # Try to install webkit2gtk-4.0 first, fallback to 4.1
           if ! sudo apt-get install -y libwebkit2gtk-4.0-dev; then
             echo "Installing webkit2gtk-4.1 and creating compatibility symlink..."
             sudo apt-get install -y libwebkit2gtk-4.1-dev
-          
+
             # Create symlink for pkg-config compatibility
             sudo mkdir -p /usr/lib/x86_64-linux-gnu/pkgconfig/
             sudo ln -sf webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
-          
+
             # Also check common locations
             if [ -f /usr/lib/pkgconfig/webkit2gtk-4.1.pc ]; then
               sudo ln -sf /usr/lib/pkgconfig/webkit2gtk-4.1.pc /usr/lib/pkgconfig/webkit2gtk-4.0.pc
             fi
           fi
-          
+
           sudo apt-get install -y build-essential pkg-config libgtk-3-dev libfuse2
-          
+
           # Verify webkit2gtk is available
           pkg-config --exists webkit2gtk-4.0 || pkg-config --exists webkit2gtk-4.1 || echo "WARNING: No webkit2gtk found"
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm install
+        working-directory: frontend
+        run: npm ci
 
       - name: Build Linux
         run: wails build -platform linux/amd64
 
       - name: Create AppImage
         run: |
-          # First, check what files were actually built
           echo "=== Files in build/bin/ ==="
           ls -la build/bin/
-          
+
           # Download AppImageTool
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          
+
           # Create AppImage directory structure
           mkdir -p NaipeLogger.AppDir/usr/bin
           mkdir -p NaipeLogger.AppDir/usr/share/applications
           mkdir -p NaipeLogger.AppDir/usr/share/pixmaps
-          
+
           # Find the actual binary name and copy it
           BINARY_NAME=$(ls build/bin/ | grep -v "\.exe$" | head -n 1)
           echo "Found binary: $BINARY_NAME"
           cp build/bin/$BINARY_NAME NaipeLogger.AppDir/usr/bin/naipe-logger
           chmod +x NaipeLogger.AppDir/usr/bin/naipe-logger
-          
-          # Create a simple placeholder icon (256x256 PNG as recommended)
+
+          # Use the real app icon instead of a generated placeholder
           sudo apt-get install -y imagemagick
-          convert -size 256x256 xc:blue -fill white -gravity center -pointsize 48 -annotate +0+0 'NL' NaipeLogger.AppDir/naipe-logger.png
-          
+          convert build/appicon.png -resize 256x256 NaipeLogger.AppDir/naipe-logger.png
+
           # Create desktop file with proper formatting
           cat > NaipeLogger.AppDir/naipe-logger.desktop << 'DESKTOP_EOF'
           [Desktop Entry]
@@ -127,10 +191,9 @@ jobs:
           Comment=Teamwork Time Logger Application
           StartupNotify=true
           DESKTOP_EOF
-          
-          # Copy desktop file to applications directory
+
           cp NaipeLogger.AppDir/naipe-logger.desktop NaipeLogger.AppDir/usr/share/applications/
-          
+
           # Create AppRun script
           cat > NaipeLogger.AppDir/AppRun << 'APPRUN_EOF'
           #!/bin/bash
@@ -138,15 +201,15 @@ jobs:
           exec "$APPDIR/usr/bin/naipe-logger" "$@"
           APPRUN_EOF
           chmod +x NaipeLogger.AppDir/AppRun
-          
+
           # Create the AppImage using --appimage-extract-and-run to bypass FUSE requirement
           ./appimagetool-x86_64.AppImage --appimage-extract-and-run NaipeLogger.AppDir naipe-logger-linux.AppImage
-          
+
           echo "=== Final files created ==="
           ls -la naipe-logger-linux.AppImage build/bin/
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: naipe-logger-linux
           path: |
@@ -154,56 +217,48 @@ jobs:
             naipe-logger-linux.AppImage
 
   build-macos:
+    needs: verify
     runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: go.sum
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Wails
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm install
+        working-directory: frontend
+        run: npm ci
 
       - name: Build macOS Universal Binary
-        run: |
-          # Build para both arquiteturas (Intel + Apple Silicon)
-          wails build -platform darwin/universal
+        run: wails build -platform darwin/universal
 
       - name: Create DMG
         run: |
-          # Verificar arquivos criados
           echo "=== Files in build/bin/ ==="
           ls -la build/bin/
-          
-          # Encontrar o .app bundle
+
           APP_NAME=$(ls build/bin/ | grep "\.app$" | head -n 1)
-          
+
           if [ -n "$APP_NAME" ]; then
             echo "Found app bundle: $APP_NAME"
-          
-            # Criar pasta temporária para o DMG
             mkdir -p dmg-temp
             cp -R "build/bin/$APP_NAME" dmg-temp/
-          
-            # Criar DMG usando hdiutil (nativo do macOS)
             hdiutil create -volname "Naipe Logger" -srcfolder dmg-temp -ov -format UDZO naipe-logger-macos.dmg
-          
-            # Limpeza
             rm -rf dmg-temp
-          
             echo "=== DMG created successfully ==="
             ls -la naipe-logger-macos.dmg
           else
@@ -222,7 +277,7 @@ jobs:
           fi
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: naipe-logger-macos
           path: |
@@ -237,34 +292,32 @@ jobs:
       contents: write
     steps:
       - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: naipe-logger-windows
           path: ./windows/
 
       - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: naipe-logger-linux
           path: ./linux/
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: naipe-logger-macos
           path: ./macos/
 
-      - name: List downloaded files
+      - name: Gerar checksums
         run: |
-          echo "=== Windows files ==="
-          ls -la ./windows/
-          echo "=== Linux files ==="
-          ls -la ./linux/
-          echo "=== macOS files ==="
-          ls -la ./macos/
+          echo "=== Arquivos baixados ==="
+          ls -laR ./windows/ ./linux/ ./macos/
+          sha256sum windows/*.exe linux/naipe-logger-linux.AppImage macos/*.dmg macos/*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Naipe Logger ${{ github.ref_name }}
           draft: false
@@ -275,3 +328,4 @@ jobs:
             linux/naipe-logger-linux.AppImage
             macos/*.dmg
             macos/*.zip
+            SHA256SUMS.txt

@@ -11,8 +11,8 @@ import (
 
 func (t *TeamworkAPI) GetTasks() ([]TeamworkTask, error) {
 	cacheKey := fmt.Sprintf("tasks_user_%d", t.Config.UserID)
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.([]TeamworkTask), nil
+	if cached, found := getCached[[]TeamworkTask](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	if !t.IsConfigured() {
@@ -205,8 +205,8 @@ func (t *TeamworkAPI) GetTaskCount() (int, error) {
 
 func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
 	cacheKey := fmt.Sprintf("tasks_project_%d", projectID)
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.([]TeamworkTask), nil
+	if cached, found := getCached[[]TeamworkTask](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	if !t.IsConfigured() {
@@ -689,8 +689,8 @@ func (t *TeamworkAPI) fallbackGetTasksByProject(projectID int) ([]TeamworkTask, 
 func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
 
 	cacheKey := "upcoming_tasks"
-	if cachedData, found := t.cache.Get(cacheKey); found {
-		return cachedData.([]map[string]interface{}), nil
+	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	projects, err := t.GetProjects()
