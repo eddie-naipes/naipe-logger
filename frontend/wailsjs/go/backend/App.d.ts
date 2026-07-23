@@ -25,8 +25,6 @@ export function DeleteTemplate(arg1:string):Promise<void>;
 
 export function DeleteTimeEntry(arg1:number):Promise<void>;
 
-export function DeleteTimeEntryV2(arg1:number):Promise<void>;
-
 export function DownloadCurrentMonthReport():Promise<string>;
 
 export function DownloadTimeReport(arg1:string,arg2:string):Promise<string>;

@@ -856,15 +856,17 @@ func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEnt
 		return []DeleteTimeEntryResult{}, nil
 	}
 
-	results := make([]DeleteTimeEntryResult, 0, len(entryIDs))
-	resultChan := make(chan DeleteTimeEntryResult, len(entryIDs))
+	// Cada goroutine escreve na sua própria posição: o painel de resultados da
+	// interface é lido de cima para baixo, então a ordem precisa ser a mesma em
+	// que as entradas foram pedidas — e não a ordem em que terminaram.
+	results := make([]DeleteTimeEntryResult, len(entryIDs))
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 3)
 
-	for _, entryID := range entryIDs {
+	for i, entryID := range entryIDs {
 		wg.Add(1)
-		go func(id int) {
+		go func(pos, id int) {
 			defer wg.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
@@ -882,19 +884,15 @@ func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEnt
 				result.Message = "Entrada deletada com sucesso"
 			}
 
-			resultChan <- result
-			time.Sleep(200 * time.Millisecond)
-		}(entryID)
+			results[pos] = result
+
+			// Respiro entre chamadas para não esbarrar no rate limit. Sai antes
+			// se o aplicativo estiver fechando.
+			_ = sleepContext(t.requestContext(), 200*time.Millisecond)
+		}(i, entryID)
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultChan)
-	}()
-
-	for result := range resultChan {
-		results = append(results, result)
-	}
+	wg.Wait()
 
 	return results, nil
 }
@@ -1041,37 +1039,6 @@ func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, e
 	}
 
 	return t.GetTimeEntriesForPeriodV2(date, date, false)
-}
-
-func (t *TeamworkAPI) DeleteTimeEntryV2(entryID int) error {
-	if !t.IsConfigured() {
-		return fmt.Errorf("API não configurada")
-	}
-
-	entryIDStr := strconv.Itoa(entryID)
-	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
-	url := t.buildURL(path)
-
-	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
-
-	req, err := t.createRequest("DELETE", url, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return err
-	}
-
-	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
-
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-	}
-
-	return nil
 }
 
 func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEntryReport, error) {

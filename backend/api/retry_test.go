@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -107,8 +109,75 @@ func TestParseRetryAfter(t *testing.T) {
 	}
 }
 
+func TestSleepContext(t *testing.T) {
+	// Duração não-positiva devolve na hora, sem consultar o contexto.
+	cancelado, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := sleepContext(cancelado, 0); err != nil {
+		t.Errorf("sleepContext(0) = %v, esperava nil", err)
+	}
+
+	// Espera normal, sem cancelamento.
+	inicio := time.Now()
+	if err := sleepContext(context.Background(), 20*time.Millisecond); err != nil {
+		t.Errorf("sleepContext devolveu %v, esperava nil", err)
+	}
+	if decorrido := time.Since(inicio); decorrido < 20*time.Millisecond {
+		t.Errorf("sleepContext voltou em %v, esperava ao menos 20ms", decorrido)
+	}
+
+	// Cancelamento durante a espera corta o sono em vez de esperar o fim.
+	ctx, cancelDepois := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancelDepois()
+	}()
+
+	inicio = time.Now()
+	err := sleepContext(ctx, 10*time.Second)
+	decorrido := time.Since(inicio)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("sleepContext devolveu %v, esperava context.Canceled", err)
+	}
+	if decorrido > 2*time.Second {
+		t.Errorf("sleepContext levou %v; deveria ter cortado a espera no cancelamento", decorrido)
+	}
+}
+
 // Os testes abaixo exercitam doRequest contra um servidor real. doRequest não
 // valida esquema (essa barreira está em createRequest), então http basta.
+
+func TestDoRequestAbortaEsperaQuandoContextoCancela(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Retry-After longo: sem respeitar o contexto, doRequest ficaria preso
+		// no backoff mesmo com o aplicativo já fechando.
+		w.Header().Set("Retry-After", "8")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	api := &TeamworkAPI{cache: NewCache()}
+	req, err := http.NewRequestWithContext(ctx, "GET", server.URL, nil)
+	if err != nil {
+		t.Fatalf("erro ao criar requisição: %v", err)
+	}
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	inicio := time.Now()
+	if _, _, err := api.doRequest(req); err == nil {
+		t.Fatal("doRequest devolveu sucesso, esperava erro pelo cancelamento")
+	}
+
+	if decorrido := time.Since(inicio); decorrido > 3*time.Second {
+		t.Errorf("doRequest levou %v; deveria desistir assim que o contexto é cancelado", decorrido)
+	}
+}
 
 func TestDoRequestRepeteEm429(t *testing.T) {
 	var chamadas int32

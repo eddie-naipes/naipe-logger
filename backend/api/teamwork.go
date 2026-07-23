@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +10,12 @@ import (
 type TeamworkAPI struct {
 	Config Config
 	cache  *Cache
+
+	// ctx é o contexto de vida da aplicação. Toda requisição o carrega, de modo
+	// que fechar o aplicativo aborta as chamadas em voo e interrompe as esperas
+	// de backoff em vez de deixá-las rodando até o fim.
+	ctxMutex sync.RWMutex
+	ctx      context.Context
 }
 
 func NewTeamworkAPI(config Config) *TeamworkAPI {
@@ -20,6 +27,24 @@ func NewTeamworkAPI(config Config) *TeamworkAPI {
 		Config: config,
 		cache:  NewCache(),
 	}
+}
+
+// SetContext associa o contexto da aplicação ao cliente. Chamado ao criar ou
+// substituir o cliente; sem ele as requisições usam context.Background().
+func (t *TeamworkAPI) SetContext(ctx context.Context) {
+	t.ctxMutex.Lock()
+	defer t.ctxMutex.Unlock()
+	t.ctx = ctx
+}
+
+// requestContext devolve o contexto a usar numa requisição, sempre não-nulo.
+func (t *TeamworkAPI) requestContext() context.Context {
+	t.ctxMutex.RLock()
+	defer t.ctxMutex.RUnlock()
+	if t.ctx == nil {
+		return context.Background()
+	}
+	return t.ctx
 }
 
 func m(a, b int) int {

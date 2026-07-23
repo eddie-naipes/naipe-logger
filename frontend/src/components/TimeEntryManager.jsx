@@ -170,26 +170,10 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         setShowResults(false);
 
         try {
-            const results = [];
-
-            for (const entryId of activeEntries) {
-                try {
-                    await window.go.backend.App.DeleteTimeEntryV2(entryId);
-                    results.push({
-                        entryId: entryId,
-                        success: true,
-                        message: 'Entrada deletada com sucesso'
-                    });
-                } catch (error) {
-                    results.push({
-                        entryId: entryId,
-                        success: false,
-                        message: error.message || 'Erro ao deletar entrada'
-                    });
-                }
-
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
+            // O backend faz o lote com 3 exclusões simultâneas, respiro entre
+            // elas e repetição em rate limit. Um laço aqui no JS seria serial e
+            // desistiria de cada entrada no primeiro 429.
+            const results = (await window.go.backend.App.DeleteMultipleTimeEntries(activeEntries)) || [];
 
             setDeleteResults(results);
             setShowResults(true);

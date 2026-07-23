@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -66,6 +67,25 @@ func backoffDuration(attempt int, retryAfter time.Duration) time.Duration {
 		}
 	}
 	return wait
+}
+
+// sleepContext espera a duração pedida, mas desiste assim que o contexto for
+// cancelado. Um time.Sleep puro deixaria o aplicativo preso por até maxBackoff
+// depois de o usuário já ter fechado a janela no meio de um lote.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // parseRetryAfter interpreta o cabeçalho Retry-After, que pode vir em segundos

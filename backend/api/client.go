@@ -43,7 +43,9 @@ func (t *TeamworkAPI) createRequest(method, rawURL string, body io.Reader) (*htt
 		return nil, fmt.Errorf("requisição bloqueada: apenas https é permitido, recebido %q", rawURL)
 	}
 
-	req, err := http.NewRequest(method, rawURL, body)
+	// O contexto da aplicação viaja com a requisição: fechar o aplicativo
+	// cancela o que estiver em voo em vez de esperar o timeout do cliente.
+	req, err := http.NewRequestWithContext(t.requestContext(), method, rawURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar requisição: %v", err)
 	}
@@ -125,7 +127,12 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 			espera := backoffDuration(attempt, retryAfter)
 			t.logDebug("Tentativa %d/%d para %s %s em %v", attempt+1, maxRetries+1,
 				req.Method, req.URL.Path, espera)
-			time.Sleep(espera)
+			if err := sleepContext(req.Context(), espera); err != nil {
+				if lastErr != nil {
+					return nil, nil, fmt.Errorf("%v; espera interrompida: %v", lastErr, err)
+				}
+				return nil, nil, fmt.Errorf("espera interrompida: %v", err)
+			}
 			retryAfter = 0
 		}
 

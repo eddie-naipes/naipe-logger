@@ -31,9 +31,14 @@ func (a *App) api() *api.TeamworkAPI {
 	return a.teamworkAPI
 }
 
+// setAPI substitui o cliente e lhe entrega o contexto da aplicação, para que as
+// requisições do cliente novo também sejam abortadas no encerramento.
 func (a *App) setAPI(client *api.TeamworkAPI) {
 	a.apiMutex.Lock()
 	defer a.apiMutex.Unlock()
+	if a.ctx != nil {
+		client.SetContext(a.ctx)
+	}
 	a.teamworkAPI = client
 }
 
@@ -43,18 +48,23 @@ func NewApp(ctx context.Context) (*App, error) {
 		return nil, fmt.Errorf("erro ao inicializar gerenciador de configurações: %v", err)
 	}
 
-	teamworkConfig := configManager.GetTeamworkConfig()
-	teamworkAPI := api.NewTeamworkAPI(teamworkConfig)
+	app := &App{configManager: configManager}
+	app.setContext(ctx)
+	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 
-	return &App{
-		ctx:           ctx,
-		configManager: configManager,
-		teamworkAPI:   teamworkAPI,
-	}, nil
+	return app, nil
+}
+
+// setContext guarda o contexto sob o mesmo lock que protege o cliente, já que
+// setAPI o lê para repassá-lo a cada cliente novo.
+func (a *App) setContext(ctx context.Context) {
+	a.apiMutex.Lock()
+	defer a.apiMutex.Unlock()
+	a.ctx = ctx
 }
 
 func (a *App) Startup(ctx context.Context) {
-	a.ctx = ctx
+	a.setContext(ctx)
 	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
 
 	defer func() {
@@ -507,14 +517,6 @@ func (a *App) GetDeletedTimeEntries(startDate, endDate string) ([]api.TimeEntryR
 	}
 
 	return a.api().GetDeletedTimeEntries(startDate, endDate)
-}
-
-func (a *App) DeleteTimeEntryV2(entryID int) error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
-	}
-
-	return a.api().DeleteTimeEntryV2(entryID)
 }
 
 func (a *App) UpdateTimeEntry(entryID int, entry api.TimeEntry) (*api.TimeLogResult, error) {

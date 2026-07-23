@@ -125,6 +125,8 @@ Fins de semana e feriados são excluídos automaticamente do plano.
 
 **Repetição automática:** um lote grande costuma esbarrar no rate limit da API. Requisições recusadas com `429` são repetidas até 3 vezes, com backoff exponencial (500 ms, 1 s, 2 s…, teto de 8 s), respeitando o cabeçalho `Retry-After` quando o servidor o envia. Falhas de rede e erros `5xx` só são repetidos em métodos idempotentes — **um `POST` que falha nunca é reenviado**, porque não há como saber se o lançamento chegou a ser criado, e repetir duplicaria horas. Nesses casos a entrada aparece como falha no painel de resultados e pode ser reenviada manualmente.
 
+Fechar o aplicativo cancela o que estiver em voo: as requisições carregam o contexto da aplicação, e a espera do backoff é interrompida em vez de segurar o encerramento por até 8 segundos.
+
 > **Atenção:** o desfazer depende do identificador que o Teamwork devolve ao criar cada entrada. Se algum lançamento vier sem esse identificador, o painel informa quantos ficaram de fora — esses precisam ser removidos pelo Gerenciador de Apontamentos.
 >
 > O aviso de duplicata não bloqueia o envio: lançamentos são **somados**, não substituídos.
@@ -160,10 +162,11 @@ Templates são salvos em `templates.json`. Não há versionamento nem exportaç�
 ### 🗂️ Gerenciador de Apontamentos
 
 - Listagem das entradas de tempo por período
+- Filtros por projeto, tarefa, faixa de horas e billable
 - Edição de uma entrada (duração, horário, descrição, billable)
-- Exclusão de uma entrada
+- **Exclusão em lote**: selecione as entradas pela caixa de marcação (ou "Selecionar todas") e apague de uma vez, com um painel mostrando o resultado de cada uma
 
-> Exclusão em lote existe no backend (`DeleteMultipleTimeEntries`) mas ainda não está exposta na interface.
+A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclusões simultâneas, respiro entre elas e a mesma política de repetição em rate limit das demais chamadas. Entradas já deletadas não são selecionáveis.
 
 ### 📅 Calendário Mensal
 

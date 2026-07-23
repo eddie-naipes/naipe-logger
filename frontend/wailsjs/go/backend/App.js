@@ -46,10 +46,6 @@ export function DeleteTimeEntry(arg1) {
   return window['go']['backend']['App']['DeleteTimeEntry'](arg1);
 }
 
-export function DeleteTimeEntryV2(arg1) {
-  return window['go']['backend']['App']['DeleteTimeEntryV2'](arg1);
-}
-
 export function DownloadCurrentMonthReport() {
   return window['go']['backend']['App']['DownloadCurrentMonthReport']();
 }
