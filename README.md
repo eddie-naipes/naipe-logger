@@ -94,8 +94,12 @@ teamwork-logger/
 - Horas lançadas no mês, com comparação percentual ao mês anterior
 - Contagem de dias úteis do mês (decorridos e restantes)
 - Tarefas pendentes e projetos ativos
+- **Atividades recentes**: seus últimos 5 lançamentos de tempo dos últimos 30 dias
+- **Próximos prazos**: as 5 tarefas atribuídas a você com vencimento mais próximo. Tarefas sem prazo definido no Teamwork não aparecem
 - Calendário visual do mês
 - Exportação do relatório PDF do mês corrente
+
+Se um desses cards falhar ao carregar, ele fica vazio e o restante do dashboard continua funcionando.
 
 ### ⏰ Lançamento de Horas
 

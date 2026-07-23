@@ -629,55 +629,64 @@ func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[str
 	return entries, totalHoras, ultimoLancamento, nil
 }
 
+const (
+	// Janela e limite usados no card de atividades recentes do dashboard.
+	recentActivitiesDays  = 30
+	recentActivitiesLimit = 5
+)
+
+// GetRecentActivities devolve os últimos lançamentos de tempo do usuário.
+//
+// A versão anterior listava tarefas do primeiro projeto e preenchia data e
+// duração com valores gerados (`now.AddDate(0,0,-i)` e 60 minutos fixos), que o
+// dashboard exibia como se fossem reais. Agora todos os campos vêm da API; se
+// não houver lançamentos, o card fica vazio em vez de mostrar dado inventado.
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 	cacheKey := "recent_activities"
 	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
-	projects, err := t.GetProjects()
-	if err != nil || len(projects) == 0 {
-		return []map[string]interface{}{}, nil
-	}
-
-	projectID := projects[0].ID
-
-	tasks, err := t.GetTasksByProject(projectID)
-	if err != nil || len(tasks) == 0 {
-		return []map[string]interface{}{}, nil
-	}
-
-	atividades := make([]map[string]interface{}, 0)
-
-	sort.Slice(tasks, func(i, j int) bool {
-		time1, _ := time.Parse(time.RFC3339, tasks[i].CreatedAt)
-		time2, _ := time.Parse(time.RFC3339, tasks[j].CreatedAt)
-		return time1.After(time2)
-	})
-
-	limit := 5
-	if len(tasks) < limit {
-		limit = len(tasks)
+	if !t.IsConfigured() {
+		return nil, fmt.Errorf("API não configurada")
 	}
 
 	now := time.Now()
+	entries, err := t.GetTimeEntriesForPeriodV2(
+		now.AddDate(0, 0, -recentActivitiesDays).Format("2006-01-02"),
+		now.Format("2006-01-02"),
+		false,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao obter lançamentos recentes: %v", err)
+	}
 
-	for i := 0; i < limit; i++ {
-		task := tasks[i]
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Date > entries[j].Date
+	})
 
-		atividadeInfo := map[string]interface{}{
-			"id":          task.ID,
-			"type":        "task",
-			"description": "Tarefa atualizada: " + task.Content,
-			"minutes":     60.0,
-			"date":        now.AddDate(0, 0, -i).Format("2006-01-02"),
-			"projectId":   task.ProjectID,
-			"projectName": task.ProjectName,
-			"taskId":      task.ID,
-			"taskName":    task.Content,
+	if len(entries) > recentActivitiesLimit {
+		entries = entries[:recentActivitiesLimit]
+	}
+
+	atividades := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		descricao := entry.Description
+		if descricao == "" {
+			descricao = entry.TaskName
 		}
 
-		atividades = append(atividades, atividadeInfo)
+		atividades = append(atividades, map[string]interface{}{
+			"id":          entry.ID,
+			"type":        "timelog",
+			"description": descricao,
+			"minutes":     entry.Minutes,
+			"date":        entry.Date,
+			"projectId":   entry.ProjectID,
+			"projectName": entry.ProjectName,
+			"taskId":      entry.TaskID,
+			"taskName":    entry.TaskName,
+		})
 	}
 
 	t.cache.Set(cacheKey, atividades, 30*time.Minute)

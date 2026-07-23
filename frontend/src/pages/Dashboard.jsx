@@ -47,6 +47,20 @@ const StatCard = ({ title, icon, value, description, change, className }) => {
     );
 };
 
+// A API pode omitir a data; format() do date-fns lança em data inválida.
+const formatDateSafe = (value) => {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    return format(parsed, 'dd/MM/yyyy');
+};
+
+const formatHours = (minutes) => {
+    const value = Number(minutes);
+    if (!Number.isFinite(value) || value <= 0) return '0h';
+    return `${Math.round((value / 60) * 10) / 10}h`;
+};
+
 const ActivityItem = ({ activity }) => {
     return (
         <div className="border-b border-gray-200 dark:border-gray-700 py-3 last:border-0">
@@ -59,10 +73,10 @@ const ActivityItem = ({ activity }) => {
                         {activity.description || "Tempo registrado"}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {activity.projectName} • {Math.round(activity.minutes / 60 * 10) / 10}h
+                        {activity.projectName} • {formatHours(activity.minutes)}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {format(new Date(activity.date), 'dd/MM/yyyy')}
+                        {formatDateSafe(activity.date)}
                     </p>
                 </div>
             </div>
@@ -85,7 +99,7 @@ const UpcomingTaskItem = ({ task }) => {
                         {task.projectName}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Vencimento: {format(new Date(task.dueDate), 'dd/MM/yyyy')}
+                        Vencimento: {formatDateSafe(task.dueDate)}
                     </p>
                 </div>
             </div>
@@ -147,12 +161,36 @@ const Dashboard = () => {
             const startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
             const endDate = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-            const [dashboardStats, recentActivitiesData, upcomingTasksData, timeReport] = await Promise.all([
-                window.go.backend.App.GetDashboardStats(),
-                window.go.backend.App.GetRecentActivities(),
-                window.go.backend.App.GetTasksWithUpcomingDeadlines(),
-                window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate)
-            ]);
+            // allSettled em vez de all: os cards de atividades e prazos são
+            // secundários e não devem derrubar o dashboard inteiro se falharem.
+            const [statsResult, activitiesResult, upcomingResult, timeReportResult] =
+                await Promise.allSettled([
+                    window.go.backend.App.GetDashboardStats(),
+                    window.go.backend.App.GetRecentActivities(),
+                    window.go.backend.App.GetTasksWithUpcomingDeadlines(),
+                    window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate)
+                ]);
+
+            if (statsResult.status === 'rejected') {
+                throw statsResult.reason;
+            }
+
+            const dashboardStats = statsResult.value;
+            const timeReport = timeReportResult.status === 'fulfilled' ? timeReportResult.value : null;
+
+            let recentActivitiesData = [];
+            if (activitiesResult.status === 'fulfilled') {
+                recentActivitiesData = activitiesResult.value;
+            } else {
+                console.error('Erro ao carregar atividades recentes:', activitiesResult.reason);
+            }
+
+            let upcomingTasksData = [];
+            if (upcomingResult.status === 'fulfilled') {
+                upcomingTasksData = upcomingResult.value;
+            } else {
+                console.error('Erro ao carregar tarefas com prazo:', upcomingResult.reason);
+            }
 
             let horasLogadas = dashboardStats.horasLogadas || 0;
 

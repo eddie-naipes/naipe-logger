@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -686,63 +687,81 @@ func (t *TeamworkAPI) fallbackGetTasksByProject(projectID int) ([]TeamworkTask, 
 	return tasks, nil
 }
 
-func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
+// upcomingDeadlinesLimit é quantas tarefas o card do dashboard exibe.
+const upcomingDeadlinesLimit = 5
 
+// GetTasksWithUpcomingDeadlines devolve as próximas tarefas do usuário com data
+// de vencimento definida, ordenadas da mais próxima para a mais distante.
+//
+// A versão anterior gerava a data com `now.AddDate(0, 0, i+1)` — ou seja, a
+// primeira tarefa "vencia" amanhã, a segunda depois de amanhã, e assim por
+// diante, independentemente do prazo real — e fixava a prioridade em "Normal".
+// Ambos os campos já vinham da API e simplesmente não eram usados. Tarefas sem
+// prazo definido são omitidas em vez de receberem um prazo inventado.
+func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
 	cacheKey := "upcoming_tasks"
 	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
-	projects, err := t.GetProjects()
-	if err != nil || len(projects) == 0 {
-		return []map[string]interface{}{}, nil
+	tasks, err := t.GetTasks()
+	if err != nil {
+		return nil, fmt.Errorf("erro ao obter tarefas: %v", err)
 	}
 
-	allTasks := []TeamworkTask{}
-
-	for _, project := range projects {
-		tasks, err := t.GetTasksByProject(project.ID)
-		if err == nil && len(tasks) > 0 {
-			allTasks = append(allTasks, tasks...)
-		}
-
-		if len(allTasks) > 10 {
-			break
-		}
-	}
-
-	if len(allTasks) == 0 {
-		return []map[string]interface{}{}, nil
-	}
-
-	tarefas := make([]map[string]interface{}, 0)
-
-	now := time.Now()
-
-	limit := 5
-	if len(allTasks) < limit {
-		limit = len(allTasks)
-	}
-
-	for i := 0; i < limit; i++ {
-		task := allTasks[i]
-
-		dueDate := now.AddDate(0, 0, i+1).Format("2006-01-02")
-
-		tarefaInfo := map[string]interface{}{
-			"id":          task.ID,
-			"name":        task.Content,
-			"dueDate":     dueDate,
-			"priority":    "Normal",
-			"projectId":   task.ProjectID,
-			"projectName": task.ProjectName,
-		}
-
-		tarefas = append(tarefas, tarefaInfo)
-	}
+	tarefas := filtrarEOrdenarPrazos(tasks, startOfToday(), upcomingDeadlinesLimit)
 
 	t.cache.Set(cacheKey, tarefas, 30*time.Minute)
 	return tarefas, nil
+}
+
+// filtrarEOrdenarPrazos mantém apenas as tarefas com prazo real a partir de
+// hoje, ordena da mais próxima para a mais distante e corta no limite.
+// Tarefas sem prazo, ou com prazo irreconhecível, são descartadas.
+func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []map[string]interface{} {
+	type tarefaComPrazo struct {
+		task TeamworkTask
+		due  time.Time
+	}
+
+	comPrazo := make([]tarefaComPrazo, 0, len(tasks))
+	for _, task := range tasks {
+		due, ok := parseTeamworkDate(task.DueDate)
+		if !ok || due.Before(hoje) {
+			continue
+		}
+		comPrazo = append(comPrazo, tarefaComPrazo{task: task, due: due})
+	}
+
+	sort.Slice(comPrazo, func(i, j int) bool {
+		if comPrazo[i].due.Equal(comPrazo[j].due) {
+			return comPrazo[i].task.ID < comPrazo[j].task.ID
+		}
+		return comPrazo[i].due.Before(comPrazo[j].due)
+	})
+
+	if len(comPrazo) > limite {
+		comPrazo = comPrazo[:limite]
+	}
+
+	tarefas := make([]map[string]interface{}, 0, len(comPrazo))
+	for _, item := range comPrazo {
+		nome := item.task.Content
+		if nome == "" {
+			nome = item.task.Name
+		}
+
+		tarefas = append(tarefas, map[string]interface{}{
+			"id":          item.task.ID,
+			"name":        nome,
+			"dueDate":     item.due.Format("2006-01-02"),
+			"priority":    item.task.Priority,
+			"projectId":   item.task.ProjectID,
+			"projectName": item.task.ProjectName,
+		})
+	}
+
+	return tarefas
 }
 
 func (t *TeamworkAPI) GetCompletedTasksByProject(projectID int) (int, error) {
