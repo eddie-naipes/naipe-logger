@@ -10,7 +10,8 @@ import {
     FiList,
     FiLoader,
     FiPlay,
-    FiRefreshCw
+    FiRefreshCw,
+    FiTrash2
 } from 'react-icons/fi';
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
@@ -34,6 +35,7 @@ const TimeLog = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [results, setResults] = useState([]);
     const [showResults, setShowResults] = useState(false);
+    const [isUndoing, setIsUndoing] = useState(false);
     const [error, setError] = useState(null);
     const [processingProgress, setProcessingProgress] = useState(0);
     const [nonWorkingDays, setNonWorkingDays] = useState({});
@@ -122,13 +124,16 @@ const TimeLog = () => {
         loadNonWorkingDays();
     }, [dateRange]);
 
-    const refreshCalendar = () => {
+    const reloadCalendar = () => {
         setCalendarKey(prev => prev + 1);
 
         if (calendarRef.current && calendarRef.current.refresh) {
             calendarRef.current.refresh();
         }
+    };
 
+    const refreshCalendar = () => {
+        reloadCalendar();
         toast.success('Calendário atualizado com os novos lançamentos!');
     };
 
@@ -345,6 +350,12 @@ const TimeLog = () => {
             const successes = results.filter(r => r.success).length;
             const failures = results.length - successes;
 
+            // Os dias agora possuem lançamento: reavalia para que um segundo
+            // envio do mesmo plano seja sinalizado como duplicata.
+            if (successes > 0) {
+                await checkConflicts(workDays);
+            }
+
             if (failures === 0) {
                 toast.success(`${successes} lançamentos realizados com sucesso!`);
 
@@ -368,6 +379,55 @@ const TimeLog = () => {
         } finally {
             setIsSubmitting(false);
             setProcessingProgress(100);
+        }
+    };
+
+    // Só dá para desfazer o que veio com ID: sem ele o Teamwork criou a entrada
+    // mas não temos como identificá-la para apagar.
+    const undoableEntries = results.filter(r => r.success && r.entryId > 0);
+    const notUndoableCount = results.filter(r => r.success && !(r.entryId > 0)).length;
+
+    const undoBatch = async () => {
+        if (undoableEntries.length === 0) return;
+
+        const confirmacao =
+            `Desfazer o lançamento apagará ${undoableEntries.length} entrada(s) do Teamwork.\n\n`
+            + (notUndoableCount > 0
+                ? `${notUndoableCount} entrada(s) NÃO serão apagadas porque o Teamwork não devolveu `
+                  + `o identificador delas — remova-as pelo Gerenciador de Apontamentos.\n\n`
+                : '')
+            + `Esta ação não pode ser revertida. Continuar?`;
+
+        if (!window.confirm(confirmacao)) return;
+
+        setIsUndoing(true);
+        try {
+            const entryIds = undoableEntries.map(r => r.entryId);
+            const undoResults = await window.go.backend.App.DeleteMultipleTimeEntries(entryIds);
+
+            const removed = (undoResults || []).filter(r => r.success).length;
+            const failed = (undoResults || []).length - removed;
+
+            if (failed === 0) {
+                toast.success(`${removed} lançamento(s) desfeito(s).`);
+                // Só limpa o painel quando tudo saiu; senão o usuário perde a
+                // lista do que ainda precisa remover à mão.
+                setResults([]);
+                setShowResults(false);
+            } else {
+                toast.warning(`${removed} desfeito(s), ${failed} não puderam ser removidos.`);
+                setResults(prev => prev.filter(r => {
+                    const undone = (undoResults || []).find(u => u.entryId === r.entryId && u.success);
+                    return !undone;
+                }));
+            }
+
+            reloadCalendar();
+        } catch (error) {
+            console.error('Erro ao desfazer lançamentos:', error);
+            toast.error('Erro ao desfazer lançamentos: ' + (error.message || error));
+        } finally {
+            setIsUndoing(false);
         }
     };
 
@@ -901,6 +961,36 @@ const TimeLog = () => {
                                 </p>
                             </div>
                         </div>
+
+                        {undoableEntries.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                <button
+                                    onClick={undoBatch}
+                                    disabled={isUndoing}
+                                    className="w-full flex items-center justify-center px-3 py-2 text-sm bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-lg transition-colors"
+                                >
+                                    {isUndoing ? (
+                                        <>
+                                            <FiLoader className="w-4 h-4 mr-2 animate-spin"/>
+                                            Desfazendo...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiTrash2 className="w-4 h-4 mr-2"/>
+                                            Desfazer {undoableEntries.length} lançamento(s)
+                                        </>
+                                    )}
+                                </button>
+
+                                {notUndoableCount > 0 && (
+                                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                                        {notUndoableCount} lançamento(s) não podem ser desfeitos automaticamente
+                                        porque o Teamwork não devolveu o identificador da entrada. Remova-os
+                                        pelo Gerenciador de Apontamentos.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                             <button

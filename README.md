@@ -120,7 +120,9 @@ Fins de semana e feriados são excluídos automaticamente do plano.
 
 **Detecção de duplicatas:** ao gerar o plano, o aplicativo consulta os lançamentos já existentes no período e destaca os dias que já possuem tempo registrado, indicando quais colidem com a *mesma tarefa* do plano. Se houver colisão, o botão de envio muda de cor e exige confirmação explícita. Se a verificação em si falhar, o envio também pede confirmação — em vez de seguir em silêncio.
 
-> **Atenção:** não há rollback. Se parte dos lançamentos falhar, os que tiveram sucesso permanecem registrados no Teamwork. Use o Gerenciador de Apontamentos para corrigir.
+**Desfazer lançamento:** após executar, o painel de resultados oferece um botão que apaga do Teamwork as entradas criadas por aquele lote. Útil quando parte das entradas falha, ou quando o plano estava errado.
+
+> **Atenção:** o desfazer depende do identificador que o Teamwork devolve ao criar cada entrada. Se algum lançamento vier sem esse identificador, o painel informa quantos ficaram de fora — esses precisam ser removidos pelo Gerenciador de Apontamentos.
 >
 > O aviso de duplicata não bloqueia o envio: lançamentos são **somados**, não substituídos.
 
@@ -226,7 +228,7 @@ O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar pa
 
 ## 🗺️ Limitações conhecidas
 
-- Sem rollback em lançamentos parcialmente falhos (há aviso de duplicata, mas não desfazimento)
+- O desfazer de lote depende do ID devolvido pela API; entradas sem ID precisam ser removidas manualmente
 - Sem auto-update
 - Sem modo offline — toda operação requer conexão
 - Sem backup automático das configurações

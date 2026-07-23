@@ -140,6 +140,10 @@ type TimeLogResult struct {
 	Message string `json:"message"`
 	Date    string `json:"date"`
 	TaskID  int    `json:"taskId"`
+	// EntryID é o ID da entrada criada no Teamwork. Sem ele o lançamento não
+	// pode ser desfeito automaticamente; fica 0 quando a resposta da API não
+	// traz um ID reconhecível.
+	EntryID int `json:"entryId"`
 }
 
 type Project struct {

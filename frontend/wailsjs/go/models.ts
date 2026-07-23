@@ -481,6 +481,7 @@ export namespace api {
 	    message: string;
 	    date: string;
 	    taskId: number;
+	    entryId: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimeLogResult(source);
@@ -492,6 +493,7 @@ export namespace api {
 	        this.message = source["message"];
 	        this.date = source["date"];
 	        this.taskId = source["taskId"];
+	        this.entryId = source["entryId"];
 	    }
 	}
 	export class TimeTotal {

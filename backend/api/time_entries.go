@@ -163,13 +163,13 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		result.Message = fmt.Sprintf("Entrada de tempo enviada com sucesso: %s %s",
 			entry.Date, entry.Time)
 
-		var successResponse struct {
-			ID     int    `json:"id"`
-			Status string `json:"status"`
-		}
-
-		if err := json.Unmarshal(body, &successResponse); err == nil && successResponse.ID > 0 {
-			result.Message += fmt.Sprintf(" (ID: %d)", successResponse.ID)
+		if entryID, found := extractTimelogID(body); found {
+			result.EntryID = entryID
+			result.Message += fmt.Sprintf(" (ID: %d)", entryID)
+		} else {
+			// Sem o ID a entrada existe no Teamwork mas não pode ser desfeita
+			// pela ferramenta. Registrar o corpo ajuda a mapear o formato.
+			t.logDebug("Lançamento criado sem ID reconhecível na resposta: %s", string(body))
 		}
 
 		return result, nil
@@ -189,6 +189,44 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 
 		return result, errors.New(result.Message)
 	}
+}
+
+// extractTimelogID procura o ID da entrada criada na resposta do POST. O
+// formato varia conforme a versão do endpoint, então tentamos as formas
+// conhecidas em vez de assumir uma só. Sem esse ID o lançamento não pode ser
+// desfeito pela ferramenta.
+func extractTimelogID(body []byte) (int, bool) {
+	var shapes struct {
+		ID        int `json:"id"`
+		TimelogID int `json:"timelogId"`
+		Timelog   struct {
+			ID int `json:"id"`
+		} `json:"timelog"`
+		TimeEntry struct {
+			ID int `json:"id"`
+		} `json:"timeEntry"`
+		TimeLog struct {
+			ID int `json:"id"`
+		} `json:"timeLog"`
+	}
+
+	if err := json.Unmarshal(body, &shapes); err != nil {
+		return 0, false
+	}
+
+	for _, candidate := range []int{
+		shapes.ID,
+		shapes.TimelogID,
+		shapes.Timelog.ID,
+		shapes.TimeEntry.ID,
+		shapes.TimeLog.ID,
+	} {
+		if candidate > 0 {
+			return candidate, true
+		}
+	}
+
+	return 0, false
 }
 
 func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, tasks []Task) ([]WorkDay, error) {
