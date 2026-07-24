@@ -121,6 +121,8 @@ Fins de semana e feriados são excluídos automaticamente do plano.
 
 **Detecção de duplicatas:** ao gerar o plano, o aplicativo consulta os lançamentos já existentes no período e destaca os dias que já possuem tempo registrado, indicando quais colidem com a *mesma tarefa* do plano. Se houver colisão, o botão de envio muda de cor e exige confirmação explícita. Se a verificação em si falhar, o envio também pede confirmação — em vez de seguir em silêncio.
 
+**Reenviar as que falharam:** se parte do lote falhar (rede, rate limit), o painel de resultados oferece um botão que reenvia **apenas** as entradas que falharam, reconstruídas a partir do plano original. O casamento é por dia e tarefa, e reenvia no máximo a quantidade de falhas de cada combinação — nunca reenvia uma entrada que já deu certo, evitando duplicar horas. Os sucessos anteriores são preservados, inclusive para o desfazer.
+
 **Desfazer lançamento:** após executar, o painel de resultados oferece um botão que apaga do Teamwork as entradas criadas por aquele lote. Útil quando parte das entradas falha, ou quando o plano estava errado.
 
 **Repetição automática:** um lote grande costuma esbarrar no rate limit da API. Requisições recusadas com `429` são repetidas até 3 vezes, com backoff exponencial (500 ms, 1 s, 2 s…, teto de 8 s), respeitando o cabeçalho `Retry-After` quando o servidor o envia. Falhas de rede e erros `5xx` só são repetidos em métodos idempotentes — **um `POST` que falha nunca é reenviado**, porque não há como saber se o lançamento chegou a ser criado, e repetir duplicaria horas. Nesses casos a entrada aparece como falha no painel de resultados e pode ser reenviada manualmente.
@@ -166,7 +168,7 @@ Templates são salvos em `templates.json`. Não há versionamento nem exportaç�
 - Edição de uma entrada (duração, horário, descrição, billable)
 - **Exclusão em lote**: selecione as entradas pela caixa de marcação (ou "Selecionar todas") e apague de uma vez, com um painel mostrando o resultado de cada uma
 
-A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclusões simultâneas, respiro entre elas e a mesma política de repetição em rate limit das demais chamadas. Entradas já deletadas não são selecionáveis.
+A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclusões simultâneas, respiro entre elas e a mesma política de repetição em rate limit das demais chamadas. Entradas já deletadas não são selecionáveis. Se alguma exclusão falhar, o painel de resultados oferece **reenviar só as que falharam**.
 
 ### 📅 Calendário Mensal
 
@@ -230,7 +232,22 @@ wails build
 
 O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar para as três plataformas e, em tags `v*`, publica uma release com checksums SHA-256.
 
-> O instalador Windows **não é assinado digitalmente**. O SmartScreen exibirá um aviso na primeira execução.
+### Aviso do SmartScreen no Windows
+
+O instalador Windows **não é assinado digitalmente** (um certificado de assinatura de código tem custo anual). Por isso, na primeira execução o **Microsoft Defender SmartScreen** mostra "O Windows protegeu o computador".
+
+Para prosseguir, o próprio usuário confirma que confia no arquivo:
+
+1. Clique em **Mais informações**
+2. Clique em **Executar assim mesmo**
+
+Antes disso, vale conferir que o download é autêntico comparando o hash do arquivo com o publicado em `SHA256SUMS.txt` na release:
+
+```powershell
+Get-FileHash .\teamwork-logger.exe -Algorithm SHA256
+```
+
+O valor deve bater com a linha correspondente no `SHA256SUMS.txt` daquela versão. O aviso desaparece quando o app ganha reputação suficiente no SmartScreen, ou de vez com um certificado de assinatura — nenhum dos dois está em vigor hoje.
 
 ## 🗺️ Limitações conhecidas
 

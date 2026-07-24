@@ -166,17 +166,21 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
             return;
         }
 
+        await performDelete(activeEntries);
+    };
+
+    // performDelete concentra a exclusão em lote para que o botão principal e o
+    // "reenviar só as que falharam" compartilhem a mesma lógica. O backend faz o
+    // lote com 3 exclusões simultâneas, respiro entre elas e repetição em rate
+    // limit — um laço serial aqui desistiria de cada entrada no primeiro 429.
+    const performDelete = async (ids) => {
+        if (!ids || ids.length === 0) return;
+
         setDeleting(true);
         setShowResults(false);
 
         try {
-            // O backend faz o lote com 3 exclusões simultâneas, respiro entre
-            // elas e repetição em rate limit. Um laço aqui no JS seria serial e
-            // desistiria de cada entrada no primeiro 429.
-            const results = (await window.go.backend.App.DeleteMultipleTimeEntries(activeEntries)) || [];
-
-            setDeleteResults(results);
-            setShowResults(true);
+            const results = (await window.go.backend.App.DeleteMultipleTimeEntries(ids)) || [];
 
             const successCount = results.filter(r => r.success).length;
             const failureCount = results.length - successCount;
@@ -189,7 +193,12 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                 toast.warning(`${successCount} entradas deletadas, ${failureCount} falharam.`);
             }
 
+            // loadTimeEntries recarrega a lista, limpa a seleção e esconde o
+            // painel. Reexibimos o painel só quando há falhas — é quando o botão
+            // de reenvio importa; num sucesso total, some como antes.
             await loadTimeEntries();
+            setDeleteResults(results);
+            setShowResults(failureCount > 0);
 
             if (onEntriesDeleted) {
                 onEntriesDeleted();
@@ -201,6 +210,12 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         } finally {
             setDeleting(false);
         }
+    };
+
+    const retryFailedDeletes = async () => {
+        const failedIds = deleteResults.filter(r => !r.success).map(r => r.entryId);
+        if (failedIds.length === 0) return;
+        await performDelete(failedIds);
     };
 
     const openEditModal = (entry) => {
@@ -627,6 +642,23 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                                     </div>
                                 ))}
                             </div>
+
+                            {deleteResults.some(r => !r.success) && (
+                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                    <button
+                                        onClick={retryFailedDeletes}
+                                        disabled={deleting}
+                                        className="flex items-center px-3 py-2 text-sm bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg disabled:opacity-50"
+                                    >
+                                        {deleting ? (
+                                            <FiLoader className="w-4 h-4 mr-2 animate-spin"/>
+                                        ) : (
+                                            <FiRefreshCw className="w-4 h-4 mr-2"/>
+                                        )}
+                                        Reenviar {deleteResults.filter(r => !r.success).length} que falharam
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
