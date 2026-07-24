@@ -36,6 +36,7 @@ const TimeLog = () => {
     const [results, setResults] = useState([]);
     const [showResults, setShowResults] = useState(false);
     const [isUndoing, setIsUndoing] = useState(false);
+    const [isRetrying, setIsRetrying] = useState(false);
     const [error, setError] = useState(null);
     const [processingProgress, setProcessingProgress] = useState(0);
     const [nonWorkingDays, setNonWorkingDays] = useState({});
@@ -428,6 +429,90 @@ const TimeLog = () => {
             toast.error('Erro ao desfazer lançamentos: ' + (error.message || error));
         } finally {
             setIsUndoing(false);
+        }
+    };
+
+    const failedEntries = results.filter(r => !r.success);
+
+    // Reconstrói apenas as entradas que falharam a partir do plano original.
+    // Como os resultados voltam fora de ordem (goroutines concorrentes), o
+    // casamento é por (data, tarefa); e reenviamos no máximo a quantidade de
+    // falhas de cada chave, para nunca reenviar uma entrada que já deu certo e
+    // acabar duplicando horas.
+    const buildRetryWorkDays = () => {
+        const restante = {};
+        for (const r of results) {
+            if (r.success) continue;
+            const chave = `${r.date}::${r.taskId}`;
+            restante[chave] = (restante[chave] || 0) + 1;
+        }
+
+        const dias = [];
+        for (const dia of workDays) {
+            const entradas = (dia.entries || []).filter(entrada => {
+                const chave = `${dia.date}::${entrada.taskId}`;
+                if (restante[chave] > 0) {
+                    restante[chave]--;
+                    return true;
+                }
+                return false;
+            });
+            if (entradas.length > 0) {
+                dias.push({...dia, entries: entradas});
+            }
+        }
+        return dias;
+    };
+
+    const retryFailed = async () => {
+        if (failedEntries.length === 0) return;
+
+        const retryWorkDays = buildRetryWorkDays();
+        if (retryWorkDays.length === 0) {
+            toast.info('Não há entradas para reenviar.');
+            return;
+        }
+
+        setIsRetrying(true);
+        const toastId = toast.info('Reenviando lançamentos que falharam...', {
+            autoClose: false,
+            closeButton: false
+        });
+
+        try {
+            const retryResults = await window.go.backend.App.LogMultipleTimes(retryWorkDays);
+            toast.dismiss(toastId);
+
+            if (!retryResults || retryResults.length === 0) {
+                toast.error('Não foram recebidos resultados do reenvio.');
+                return;
+            }
+
+            // Mantém os sucessos anteriores e troca as falhas pelo resultado do
+            // reenvio, preservando os entryId para que o desfazer continue válido.
+            setResults([...results.filter(r => r.success), ...retryResults]);
+
+            const novosSucessos = retryResults.filter(r => r.success).length;
+            const aindaFalha = retryResults.length - novosSucessos;
+
+            if (novosSucessos > 0) {
+                await checkConflicts(workDays);
+                setTimeout(() => refreshCalendar(), 1000);
+            }
+
+            if (aindaFalha === 0) {
+                toast.success(`${novosSucessos} lançamento(s) reenviado(s) com sucesso!`);
+            } else if (novosSucessos === 0) {
+                toast.error(`Falha novamente em ${aindaFalha} lançamento(s).`);
+            } else {
+                toast.warning(`${novosSucessos} reenviado(s), ${aindaFalha} ainda falharam.`);
+            }
+        } catch (error) {
+            toast.dismiss(toastId);
+            console.error('Erro ao reenviar lançamentos:', error);
+            toast.error('Erro ao reenviar lançamentos: ' + (error.message || error));
+        } finally {
+            setIsRetrying(false);
         }
     };
 
@@ -962,11 +1047,33 @@ const TimeLog = () => {
                             </div>
                         </div>
 
+                        {failedEntries.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                                <button
+                                    onClick={retryFailed}
+                                    disabled={isRetrying || isUndoing}
+                                    className="w-full flex items-center justify-center px-3 py-2 text-sm bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg transition-colors"
+                                >
+                                    {isRetrying ? (
+                                        <>
+                                            <FiLoader className="w-4 h-4 mr-2 animate-spin"/>
+                                            Reenviando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <FiRefreshCw className="w-4 h-4 mr-2"/>
+                                            Reenviar {failedEntries.length} que falharam
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        )}
+
                         {undoableEntries.length > 0 && (
                             <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                                 <button
                                     onClick={undoBatch}
-                                    disabled={isUndoing}
+                                    disabled={isUndoing || isRetrying}
                                     className="w-full flex items-center justify-center px-3 py-2 text-sm bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-lg transition-colors"
                                 >
                                     {isUndoing ? (
