@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"logTime-go/backend/logging"
 )
 
 var (
@@ -147,8 +149,8 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			espera := backoffDuration(attempt, retryAfter)
-			t.logDebug("Tentativa %d/%d para %s %s em %v", attempt+1, maxRetries+1,
-				req.Method, req.URL.Path, espera)
+			slog.Debug("Repetindo requisição", "tentativa", attempt+1, "max", maxRetries+1,
+				"metodo", req.Method, "caminho", req.URL.Path, "espera", espera)
 			if err := sleepContext(req.Context(), espera); err != nil {
 				if lastErr != nil {
 					return nil, nil, fmt.Errorf("%v; espera interrompida: %v", lastErr, err)
@@ -201,48 +203,24 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	return nil, nil, lastErr
 }
 
-// debugLogging liga os logs de diagnóstico. Desligado por padrão: um lote de
-// lançamentos gerava uma linha por tarefa×dia e despejava corpos de resposta
-// inteiros no console. Defina TEAMWORK_LOGGER_DEBUG=1 para investigar.
-var debugLogging = isTruthy(os.Getenv("TEAMWORK_LOGGER_DEBUG"))
-
-func isTruthy(value string) bool {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "1", "true", "yes", "on", "sim":
-		return true
-	default:
-		return false
-	}
-}
-
-// logDebug registra mensagens de diagnóstico, só quando debugLogging está
-// ligado. Os argumentos passam por sanitizeForLog.
-func (t *TeamworkAPI) logDebug(format string, args ...interface{}) {
-	if !debugLogging {
-		return
-	}
-	t.logAlways(format, args...)
-}
-
-// logWarn registra falhas que o usuário (ou quem der suporte) precisa ver
-// mesmo sem o modo de diagnóstico ligado.
-func (t *TeamworkAPI) logWarn(format string, args ...interface{}) {
-	t.logAlways(format, args...)
-}
-
-func (t *TeamworkAPI) logAlways(format string, args ...interface{}) {
-	safeArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		safeArgs[i] = sanitizeForLog(arg)
-	}
-	fmt.Printf(format+"\n", safeArgs...)
-}
-
+// sanitizeForLog mascara um valor antes de ele ir para o log. O handler de
+// backend/logging já aplica a mesma regra a todo atributo; chamar aqui deixa
+// explícito, nos pontos que logam corpos de resposta, que eles podem conter
+// dados sensíveis.
 func sanitizeForLog(data interface{}) interface{} {
 	if str, ok := data.(string); ok {
-		if strings.Contains(str, "password") || strings.Contains(str, "token") {
-			return "[REDACTED]"
-		}
+		return logging.Sanitize(str)
 	}
 	return data
+}
+
+// registerSecretForLogs avisa ao logger que o token (e sua forma em Basic
+// auth, que é o que vai no cabeçalho) nunca pode aparecer em log. Chamado em
+// todo ponto onde um token entra no cliente.
+func registerSecretForLogs(token string) {
+	if token == "" {
+		return
+	}
+	logging.AddSecret(token)
+	logging.AddSecret(base64.StdEncoding.EncodeToString([]byte(token + ":X")))
 }

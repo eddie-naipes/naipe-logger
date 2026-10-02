@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -142,7 +143,7 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriod(startDate, endDate string) ([]Time
 	path := fmt.Sprintf("/projects/api/v3/time.json?startDate=%s&endDate=%s&userId=%d&assignedToUserIds=%d",
 		startDate, endDate, t.Config.UserID, t.Config.UserID)
 
-	t.logDebug("Obtendo entradas de tempo de %s a %s...", startDate, endDate)
+	slog.Debug("Obtendo entradas de tempo", "inicio", startDate, "fim", endDate)
 
 	allEntries := make([]TimeEntryReport, 0)
 	err = t.fetchPages(t.buildURL(path), timeEntryPageSize, maxTimeEntryPages, "entradas de tempo",
@@ -209,7 +210,7 @@ func (t *TeamworkAPI) GetTimeTotalsForPeriod(startDate, endDate string) (*TimeTo
 		startDate, endDate, t.Config.UserID)
 	url := t.buildURL(path)
 
-	t.logDebug("Obtendo totais de tempo de %s a %s...", startDate, endDate)
+	slog.Debug("Obtendo totais de tempo", "inicio", startDate, "fim", endDate)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -243,7 +244,7 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 	url := t.buildURL(fmt.Sprintf("/people/%s/loggedtime.json?m=%d&y=%d&projectId=0&page=1&pageSize=100",
 		userID, month, year))
 
-	t.logDebug("Obtendo dados de tempo do endpoint de calendário: %s", url)
+	slog.Debug("Obtendo dados de tempo do endpoint de calendário", "url", url)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -257,7 +258,7 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 	}
 
 	if resp.StatusCode != 200 {
-		t.logDebug("Resposta do calendário: %s", truncateForError(body, 300))
+		slog.Debug("Resposta do calendário", "status", resp.StatusCode, "corpo", sanitizeForLog(truncateForError(body, 300)))
 		return nil, fmt.Errorf("erro ao obter dados de tempo (status %d): %s",
 			resp.StatusCode, resp.Status)
 	}
@@ -312,7 +313,7 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 
 	downloadURL := t.buildURL("/projects/api/v3/time.pdf?" + params.Encode())
 
-	t.logDebug("Baixando relatório PDF de %s a %s...", startDate, endDate)
+	slog.Debug("Baixando relatório PDF", "inicio", startDate, "fim", endDate)
 
 	req, err := t.createRequest("GET", downloadURL, nil)
 	if err != nil {
@@ -357,7 +358,7 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 		return fmt.Errorf("erro ao mover arquivo para destino final: %v", err)
 	}
 
-	t.logDebug("Relatório PDF salvo em: %s", filePath)
+	slog.Info("Relatório PDF salvo", "arquivo", filePath)
 	return nil
 }
 

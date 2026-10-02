@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 	path := "/projects/api/v3/me.json"
 	url := t.buildURL(path)
 
-	t.logDebug("Consultando API do Teamwork em: %s", url)
+	slog.Debug("Consultando API do Teamwork", "url", url)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -26,7 +27,7 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 		return 0, err
 	}
 
-	t.logDebug("Resposta da API (primeiros 500 caracteres): %s", string(body[:min(len(body), 500)]))
+	slog.Debug("Resposta da API", "status", resp.StatusCode, "corpo", sanitizeForLog(string(body[:min(len(body), 500)])))
 
 	if resp.StatusCode != 200 {
 		return 0, fmt.Errorf("erro ao obter informações do usuário: %d %s - %s",
@@ -123,6 +124,10 @@ func ValidateToken(token, host string) (*LoginResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Registrado antes da primeira requisição: um erro de rede logado durante
+	// a validação já precisa sair mascarado.
+	registerSecretForLogs(token)
 
 	tempAPI := &TeamworkAPI{Config: Config{AuthToken: token, ApiHost: baseURL}}
 

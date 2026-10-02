@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -50,7 +51,7 @@ var (
 // BrasilAPI - API pública de feriados nacionais
 type BrasilAPIProvider struct{}
 
-func (b *BrasilAPIProvider) GetName() string  { return "BrasilAPI" }
+func (b *BrasilAPIProvider) GetName() string  { return brasilAPIName }
 func (b *BrasilAPIProvider) GetPriority() int { return 1 }
 func (b *BrasilAPIProvider) GetHolidays(ctx context.Context, year int) ([]Holiday, error) {
 	url := fmt.Sprintf("%s/%d", brasilAPIBaseURL, year)
@@ -97,7 +98,7 @@ func (b *BrasilAPIProvider) GetHolidays(ctx context.Context, year int) ([]Holida
 			Name:       h.Name,
 			Type:       "nacional",
 			IsOptional: false,
-			Source:     "BrasilAPI",
+			Source:     brasilAPIName,
 		}
 		holidays = append(holidays, holiday)
 	}
@@ -209,10 +210,23 @@ var (
 	holidayInflight = make(map[int]*holidayFetch)
 )
 
-// fallbackOnlyHolidayTTL é a validade do cache quando a BrasilAPI falhou e só
-// o calendário local respondeu. Sem isso, uma queda momentânea da API deixava
-// o fallback valendo até o fim do ano.
-const fallbackOnlyHolidayTTL = 6 * time.Hour
+const (
+	// fallbackOnlyHolidayTTL é a validade do cache quando a BrasilAPI falhou e
+	// só o calendário local respondeu. Sem isso, uma queda momentânea da API
+	// deixava o fallback valendo até o fim do ano. É também o intervalo até a
+	// próxima tentativa quando a revalidação de um cache vencido falha.
+	fallbackOnlyHolidayTTL = 6 * time.Hour
+
+	// holidayFreshTTL é por quanto tempo um ano vindo da BrasilAPI é servido
+	// sem consultar a rede. Feriados nacionais quase nunca mudam depois de
+	// publicados; passado esse prazo o cache continua sendo usado e é
+	// revalidado em segundo plano.
+	holidayFreshTTL = 30 * 24 * time.Hour
+)
+
+// holidayBackground acompanha as revalidações em segundo plano; os testes
+// esperam por ele.
+var holidayBackground sync.WaitGroup
 
 type holidayFetch struct {
 	done     chan struct{}
@@ -228,21 +242,77 @@ func init() {
 	}
 }
 
+// authoritative informa se o cache veio da BrasilAPI. Só esses dados valem
+// mais que o calendário local mesmo vencidos, e só eles vão para o disco.
+func (c *HolidayCache) authoritative() bool {
+	return c != nil && containsString(c.Sources, brasilAPIName)
+}
+
+const brasilAPIName = "BrasilAPI"
+
+// GetBrazilianHolidays devolve os feriados do ano. Ordem de consulta: memória,
+// disco (~/.teamwork-logger/cache), BrasilAPI e, se ela falhar, o último dado
+// da BrasilAPI que houver ou o calendário local.
 func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error) {
 	holidayCacheLock.RLock()
 	cache, exists := holidayCache[year]
 	holidayCacheLock.RUnlock()
 
-	// Caminho rápido. É chamado uma vez por dia verificado em GetWorkingDays,
-	// por isso não loga nada aqui.
-	if exists && time.Now().Before(cache.ExpiresAt) {
-		return cache.Holidays, nil
+	if !exists {
+		cache, exists = loadHolidayYearFromDisk(year)
 	}
 
+	// Caminho rápido. É chamado uma vez por dia verificado em GetWorkingDays,
+	// por isso não loga nada aqui.
+	if exists {
+		if time.Now().Before(cache.ExpiresAt) {
+			return cache.Holidays, nil
+		}
+		if cache.authoritative() {
+			// Vencido, mas da BrasilAPI: responde já e atualiza por trás, em
+			// vez de fazer o usuário esperar a rede por um dado que quase
+			// certamente não mudou.
+			t.revalidateHolidaysInBackground(year)
+			return cache.Holidays, nil
+		}
+	}
+
+	return t.fetchAndStoreHolidays(year)
+}
+
+// revalidateHolidaysInBackground dispara uma busca do ano se não houver outra
+// em andamento. Uma falha não apaga o cache: storeFetchedHolidays mantém o
+// dado antigo e adia a próxima tentativa.
+func (t *TeamworkAPI) revalidateHolidaysInBackground(year int) {
+	holidayCacheLock.RLock()
+	_, inFlight := holidayInflight[year]
+	holidayCacheLock.RUnlock()
+	if inFlight {
+		return
+	}
+
+	holidayBackground.Add(1)
+	go func() {
+		defer holidayBackground.Done()
+		// Um panic numa goroutine derrubaria o app inteiro.
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("Panic ao revalidar feriados", "ano", year, "panic", r)
+			}
+		}()
+		if _, err := t.fetchAndStoreHolidays(year); err != nil {
+			slog.Warn("Erro ao revalidar feriados", "ano", year, "err", err)
+		}
+	}()
+}
+
+// fetchAndStoreHolidays busca o ano na rede, com uma única busca por ano em
+// voo: chamadas concorrentes esperam a mesma resposta.
+func (t *TeamworkAPI) fetchAndStoreHolidays(year int) (map[string]Holiday, error) {
 	ctx := t.requestContext()
 
 	holidayCacheLock.Lock()
-	if cache, exists = holidayCache[year]; exists && time.Now().Before(cache.ExpiresAt) {
+	if cache, exists := holidayCache[year]; exists && time.Now().Before(cache.ExpiresAt) {
 		holidayCacheLock.Unlock()
 		return cache.Holidays, nil
 	}
@@ -267,23 +337,10 @@ func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error)
 	holidays, sources, err := t.fetchHolidays(ctx, year)
 
 	// Só trava de novo para gravar o resultado.
+	var persist *HolidayCache
 	holidayCacheLock.Lock()
 	if err == nil {
-		expiresAt := calculateCacheExpiration(year)
-		if !containsString(sources, "BrasilAPI") {
-			if curto := time.Now().Add(fallbackOnlyHolidayTTL); curto.Before(expiresAt) {
-				expiresAt = curto
-			}
-		}
-		holidayCache[year] = &HolidayCache{
-			Year:      year,
-			Holidays:  holidays,
-			CachedAt:  time.Now(),
-			Sources:   sources,
-			ExpiresAt: expiresAt,
-		}
-		t.logDebug("Cache de feriados atualizado para %d com %d feriados de %v (expira em %v)",
-			year, len(holidays), sources, expiresAt)
+		holidays, persist = storeFetchedHolidaysLocked(year, holidays, sources)
 	}
 	delete(holidayInflight, year)
 	holidayCacheLock.Unlock()
@@ -291,7 +348,56 @@ func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error)
 	fetch.holidays, fetch.err = holidays, err
 	close(fetch.done)
 
+	// Disco fora do lock: um disco lento não pode travar as leituras.
+	if persist != nil {
+		persistHolidayCache(persist)
+	}
+
 	return holidays, err
+}
+
+// storeFetchedHolidaysLocked grava o resultado de uma busca e devolve os
+// feriados que devem valer, mais o cache a persistir (nil se nada vai ao
+// disco). Exige holidayCacheLock travado para escrita.
+func storeFetchedHolidaysLocked(year int, holidays map[string]Holiday, sources []string) (map[string]Holiday, *HolidayCache) {
+	now := time.Now()
+
+	if containsString(sources, brasilAPIName) {
+		cache := &HolidayCache{
+			Year:      year,
+			Holidays:  holidays,
+			CachedAt:  now,
+			Sources:   sources,
+			ExpiresAt: now.Add(holidayFreshTTL),
+		}
+		holidayCache[year] = cache
+		slog.Debug("Cache de feriados atualizado", "ano", year, "feriados", len(holidays),
+			"fontes", sources, "expira", cache.ExpiresAt)
+		return holidays, cache
+	}
+
+	// A BrasilAPI falhou. Um dado dela já conhecido (da memória ou do disco)
+	// vale mais que o calendário local, que não tem feriados avulsos: é
+	// mantido e a próxima tentativa fica para daqui a algumas horas.
+	if previous, ok := holidayCache[year]; ok && previous.authoritative() {
+		retry := *previous
+		retry.ExpiresAt = now.Add(fallbackOnlyHolidayTTL)
+		holidayCache[year] = &retry
+		slog.Warn("BrasilAPI indisponível; mantendo feriados em cache", "ano", year,
+			"obtidosEm", previous.CachedAt)
+		return previous.Holidays, nil
+	}
+
+	holidayCache[year] = &HolidayCache{
+		Year:      year,
+		Holidays:  holidays,
+		CachedAt:  now,
+		Sources:   sources,
+		ExpiresAt: now.Add(fallbackOnlyHolidayTTL),
+	}
+	slog.Debug("Cache de feriados com calendário local", "ano", year, "feriados", len(holidays),
+		"fontes", sources)
+	return holidays, nil
 }
 
 // fetchHolidays consulta os providers em ordem de prioridade e mescla os
@@ -304,7 +410,7 @@ func (t *TeamworkAPI) fetchHolidays(ctx context.Context, year int) (map[string]H
 	for _, provider := range holidayProviders {
 		providerHolidays, err := provider.GetHolidays(ctx, year)
 		if err != nil {
-			t.logWarn("Erro no provider de feriados %s para %d: %v", provider.GetName(), year, err)
+			slog.Warn("Erro no provider de feriados", "provider", provider.GetName(), "ano", year, "err", err)
 			lastError = err
 			continue
 		}
@@ -366,22 +472,6 @@ func (t *TeamworkAPI) GetHolidaysForMonth(year, month int) ([]Holiday, error) {
 	}
 
 	return monthHolidays, nil
-}
-
-func calculateCacheExpiration(year int) time.Time {
-	now := time.Now()
-	currentYear := now.Year()
-
-	if year < currentYear {
-		// Anos passados: cache por 1 ano
-		return now.AddDate(1, 0, 0)
-	} else if year == currentYear {
-		// Ano atual: cache até final do ano
-		return time.Date(year+1, 1, 1, 0, 0, 0, 0, time.UTC)
-	} else {
-		// Anos futuros: cache por 6 meses
-		return now.AddDate(0, 6, 0)
-	}
 }
 
 func getPriorityBySource(source string) int {
@@ -509,7 +599,7 @@ func (t *TeamworkAPI) ClearExpiredHolidayCache() {
 	for year, cache := range holidayCache {
 		if now.After(cache.ExpiresAt) {
 			delete(holidayCache, year)
-			t.logDebug("Cache de feriados removido para ano %d (expirado)", year)
+			slog.Debug("Cache de feriados expirado removido", "ano", year)
 		}
 	}
 }
@@ -521,10 +611,10 @@ func (t *TeamworkAPI) PreloadUpcomingHolidays() error {
 	for year := currentYear; year <= currentYear+2; year++ {
 		_, err := t.GetBrazilianHolidays(year)
 		if err != nil {
-			t.logDebug("Erro ao pré-carregar feriados para %d: %v", year, err)
+			slog.Debug("Erro ao pré-carregar feriados", "ano", year, "err", err)
 			continue
 		}
-		t.logDebug("Feriados pré-carregados para %d", year)
+		slog.Debug("Feriados pré-carregados", "ano", year)
 	}
 
 	return nil
@@ -584,10 +674,23 @@ func (t *TeamworkAPI) HolidayCacheSummary() HolidayCacheStats {
 	return stats
 }
 
+// ClearHolidaysCacheForYear esquece o ano na memória e no disco, forçando a
+// próxima consulta a ir à BrasilAPI.
 func (t *TeamworkAPI) ClearHolidaysCacheForYear(year int) {
 	holidayCacheLock.Lock()
-	defer holidayCacheLock.Unlock()
-
 	delete(holidayCache, year)
-	t.logDebug("Cache de feriados removido para ano %d", year)
+	holidayCacheLock.Unlock()
+
+	removeHolidayCacheFile(year)
+	slog.Debug("Cache de feriados removido", "ano", year)
+}
+
+// ClearAllHolidayCache apaga todo o cache de feriados, em memória e em disco.
+func (t *TeamworkAPI) ClearAllHolidayCache() {
+	holidayCacheLock.Lock()
+	holidayCache = make(map[int]*HolidayCache)
+	holidayCacheLock.Unlock()
+
+	removeAllHolidayCacheFiles()
+	slog.Info("Cache de feriados limpo")
 }

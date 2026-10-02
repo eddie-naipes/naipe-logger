@@ -4,20 +4,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"logTime-go/backend/api"
-	"logTime-go/backend/security"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"logTime-go/backend/api"
+	"logTime-go/backend/internal/fsutil"
+	"logTime-go/backend/security"
 )
 
 // Permissões dos arquivos de configuração: só o dono do perfil acessa. O token
 // não fica nesses arquivos, mas eles revelam host, ID de usuário e tarefas.
 const (
-	dirPerm  os.FileMode = 0700
-	filePerm os.FileMode = 0600
+	dirPerm  = fsutil.DirPerm
+	filePerm = fsutil.FilePerm
 )
 
 // Indireção sobre o cofre de credenciais para que os testes não dependam de um
@@ -57,6 +60,12 @@ type AppSettings struct {
 	AutoUpdate     bool   `json:"autoUpdate"`
 	StartMinimized bool   `json:"startMinimized"`
 	Language       string `json:"language"`
+	// CheckUpdatesOnStartup consulta as GitHub Releases ao abrir o app. Padrão
+	// true: como Load decodifica por cima de defaultAppConfig, um config.json
+	// de versão anterior (sem o campo) também fica ligado. O frontend deve
+	// salvar a partir do objeto de GetAppSettings, senão o campo ausente
+	// chega como false.
+	CheckUpdatesOnStartup bool `json:"checkUpdatesOnStartup"`
 }
 
 func NewManager() (*Manager, error) {
@@ -69,7 +78,7 @@ func NewManager() (*Manager, error) {
 	// diretório do executável também passe pelo expurgo da credencial antiga.
 	legacyPurged, err := CheckAndMoveConfigFromExecDir()
 	if err != nil {
-		fmt.Printf("Aviso: não foi possível migrar configurações do diretório do executável: %v\n", err)
+		slog.Warn("Não foi possível migrar configurações do diretório do executável", "err", err)
 	}
 
 	m, err := newManagerAt(configDir)
@@ -91,7 +100,8 @@ func defaultAppConfig() *AppConfig {
 		},
 		SavedTasks: []api.Task{},
 		AppSettings: AppSettings{
-			Language: "pt-BR",
+			Language:              "pt-BR",
+			CheckUpdatesOnStartup: true,
 		},
 	}
 }
@@ -132,7 +142,7 @@ func tightenPermissions(path string, perm os.FileMode) {
 		return
 	}
 	if err := os.Chmod(path, perm); err != nil {
-		fmt.Printf("Aviso: não foi possível ajustar permissões de %s: %v\n", path, err)
+		slog.Warn("Não foi possível ajustar permissões", "caminho", path, "err", err)
 	}
 }
 
@@ -158,12 +168,11 @@ func (m *Manager) CorruptedConfigBackups() []string {
 }
 
 func getConfigDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	dir, err := fsutil.AppDir()
 	if err != nil {
 		return "", fmt.Errorf("erro ao obter diretório do usuário: %v", err)
 	}
-
-	return filepath.Join(homeDir, ".teamwork-logger"), nil
+	return dir, nil
 }
 
 func (m *Manager) GetTeamworkConfig() api.Config {
@@ -406,7 +415,7 @@ func (m *Manager) Load() error {
 				if err := m.saveLocked(); err != nil {
 					return fmt.Errorf("erro ao remover credencial antiga do disco: %v", err)
 				}
-				fmt.Println("Aviso: credencial antiga (email:senha) removida de config.json. Gere um token de API e troque sua senha do Teamwork.")
+				slog.Warn("Credencial antiga (email:senha) removida de config.json; gere um token de API e troque a senha do Teamwork")
 			}
 		}
 	} else if !os.IsNotExist(err) {
@@ -421,7 +430,7 @@ func (m *Manager) Load() error {
 	case errors.Is(err, security.ErrNoToken):
 		// Ainda não configurado: o usuário será levado à tela de configuração.
 	default:
-		fmt.Printf("Aviso: %v\n", err)
+		slog.Warn("Não foi possível ler a credencial do cofre do sistema", "err", err)
 	}
 
 	if data, err := os.ReadFile(m.templatesFile); err == nil {
@@ -450,10 +459,10 @@ func (m *Manager) quarantineLocked(path string, cause error) {
 	if err := os.Rename(path, backup); err != nil {
 		// Sem conseguir renomear, a próxima gravação substitui o arquivo
 		// corrompido; ainda assim avisamos o usuário de onde ele estava.
-		fmt.Printf("Aviso: %s está corrompido (%v) e não pôde ser renomeado: %v\n", path, cause, err)
+		slog.Error("Arquivo de configuração corrompido e não renomeado", "caminho", path, "causa", cause, "err", err)
 		backup = path
 	} else {
-		fmt.Printf("Aviso: %s está corrompido (%v); movido para %s e substituído pela configuração padrão.\n", path, cause, backup)
+		slog.Error("Arquivo de configuração corrompido; movido e substituído pela configuração padrão", "caminho", path, "causa", cause, "backup", backup)
 	}
 	m.corruptedBackups = append(m.corruptedBackups, backup)
 }
@@ -500,43 +509,8 @@ func (m *Manager) saveTemplatesLocked() error {
 	return nil
 }
 
-// writeFileAtomic grava data em path sem nunca deixar um arquivo pela metade:
-// escreve num temporário do mesmo diretório, força para o disco e o renomeia
-// por cima do destino. Uma queda de energia ou um crash no meio da escrita
-// deixa o arquivo antigo intacto em vez de um JSON truncado.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) (err error) {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	closed := false
-	defer func() {
-		if err != nil {
-			if !closed {
-				_ = tmp.Close()
-			}
-			_ = os.Remove(tmpName)
-		}
-	}()
-
-	if _, err = tmp.Write(data); err != nil {
-		return err
-	}
-	if err = tmp.Sync(); err != nil {
-		return err
-	}
-	closed = true
-	if err = tmp.Close(); err != nil {
-		return err
-	}
-	// O rename leva junto as permissões do temporário, de modo que um destino
-	// antigo com permissões abertas passa a ter perm.
-	if err = os.Chmod(tmpName, perm); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
-}
+// writeFileAtomic é a gravação atômica compartilhada com o cache de feriados.
+var writeFileAtomic = fsutil.WriteFileAtomic
 
 // CheckAndMoveConfigFromExecDir migra config.json/templates.json deixados ao
 // lado do executável (versões antigas) para ~/.teamwork-logger. Devolve true
@@ -589,14 +563,14 @@ func migrateLegacyFiles(execDir, configDir string) (legacyPurged bool, err error
 			// assim — mantê-la em disco é o risco que o expurgo evita.
 			if name == "config.json" && hasLegacyCredential(data) {
 				if rmErr := os.Remove(src); rmErr != nil {
-					fmt.Printf("Aviso: %s contém credencial antiga (email:senha) e não pôde ser apagado: %v\n", src, rmErr)
+					slog.Error("Arquivo com credencial antiga (email:senha) não pôde ser apagado", "caminho", src, "err", rmErr)
 				} else {
 					legacyPurged = true
-					fmt.Printf("Aviso: %s com credencial antiga (email:senha) apagado. Gere um token de API e troque sua senha do Teamwork.\n", src)
+					slog.Warn("Arquivo com credencial antiga (email:senha) apagado; gere um token de API e troque a senha do Teamwork", "caminho", src)
 				}
 				continue
 			}
-			fmt.Printf("Aviso: %s não foi migrado porque %s já existe; o arquivo antigo foi mantido.\n", src, dst)
+			slog.Warn("Arquivo não migrado porque o destino já existe; o antigo foi mantido", "origem", src, "destino", dst)
 			continue
 		} else if !os.IsNotExist(statErr) {
 			errs = append(errs, statErr)
@@ -614,7 +588,7 @@ func migrateLegacyFiles(execDir, configDir string) (legacyPurged bool, err error
 
 		if rmErr := os.Remove(src); rmErr != nil {
 			// O destino já existe, então isto não se repete a cada abertura.
-			fmt.Printf("Aviso: %s foi migrado para %s, mas o original não pôde ser removido: %v\n", src, dst, rmErr)
+			slog.Warn("Arquivo migrado, mas o original não pôde ser removido", "origem", src, "destino", dst, "err", rmErr)
 		}
 	}
 

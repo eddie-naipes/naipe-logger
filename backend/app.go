@@ -7,11 +7,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"logTime-go/backend/internal/fsutil"
+	"logTime-go/backend/logging"
+	"logTime-go/backend/update"
 )
 
 // errAPINaoConfigurada é devolvido por todo binding que precisa falar com o
@@ -26,6 +31,24 @@ type App struct {
 	// enquanto outros bindings o leem em paralelo.
 	apiMutex    sync.RWMutex
 	teamworkAPI *api.TeamworkAPI
+
+	// logsDir é a pasta dos logs configurada em main.go ("" se o arquivo
+	// não pôde ser aberto).
+	logsDir string
+
+	// version é a versão embutida no binário (wails.json, injetada pelo CI).
+	version string
+
+	// updater consulta as GitHub Releases; nil nos testes que montam App{}.
+	updater *update.Updater
+}
+
+// Options reúne o que main.go descobre antes de criar a App.
+type Options struct {
+	// LogsDir é a pasta onde backend/logging grava app.log.
+	LogsDir string
+	// Version é info.productVersion do wails.json embutido (ver ParseProductVersion).
+	Version string
 }
 
 // api devolve o cliente atual sob lock de leitura.
@@ -70,17 +93,35 @@ func (a *App) setContext(ctx context.Context) {
 	}
 }
 
-func NewApp(ctx context.Context) (*App, error) {
+func NewApp(ctx context.Context, opts Options) (*App, error) {
 	configManager, err := config.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao inicializar gerenciador de configurações: %v", err)
 	}
 
-	app := &App{configManager: configManager}
+	app := &App{configManager: configManager, logsDir: opts.LogsDir, version: opts.Version}
+	app.updater = update.New(app.GetAppVersion(), goos())
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 
+	setupHolidayDiskCache()
+
 	return app, nil
+}
+
+// setupHolidayDiskCache liga o cache de feriados em ~/.teamwork-logger/cache e
+// carrega o que já estava salvo. Sem disco o app segue só com a memória.
+func setupHolidayDiskCache() {
+	appDir, err := fsutil.AppDir()
+	if err != nil {
+		slog.Warn("Cache de feriados em disco desligado", "err", err)
+		return
+	}
+	if err := api.SetHolidayCacheDir(filepath.Join(appDir, "cache")); err != nil {
+		slog.Warn("Cache de feriados em disco desligado", "err", err)
+		return
+	}
+	api.LoadHolidayCacheFromDisk()
 }
 
 // Startup recebe o contexto da aplicação. O cliente criado em NewApp é mantido
@@ -89,27 +130,30 @@ func NewApp(ctx context.Context) (*App, error) {
 func (a *App) Startup(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Erro crítico durante a inicialização: %v\n", r)
+			slog.Error("Erro crítico durante a inicialização", "panic", r)
 		}
 	}()
 
 	a.setContext(ctx)
 
+	// O cache de feriados não é mais podado aqui: um ano vencido vindo da
+	// BrasilAPI continua valendo e é revalidado em segundo plano.
 	client := a.api()
-	client.ClearExpiredHolidayCache()
 
 	go func() {
 		// Um panic numa goroutine derruba o processo inteiro; o recover do
 		// Startup não a alcança.
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("Erro ao pré-carregar feriados: %v\n", r)
+				slog.Error("Panic ao pré-carregar feriados", "panic", r)
 			}
 		}()
 		if err := client.PreloadUpcomingHolidays(); err != nil {
-			fmt.Printf("Aviso: erro ao pré-carregar feriados: %v\n", err)
+			slog.Warn("Erro ao pré-carregar feriados", "err", err)
 		}
 	}()
+
+	go a.checkUpdatesOnStartup()
 }
 
 // GetPublicConfig devolve ao frontend apenas o que ele precisa saber. O token
@@ -174,6 +218,8 @@ func (a *App) Logout() error {
 	if err := a.configManager.ClearConnection(); err != nil {
 		return err
 	}
+	// O token antigo não precisa mais ficar na lista de mascaramento.
+	logging.ClearSecrets()
 	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
 	return nil
 }

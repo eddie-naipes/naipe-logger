@@ -13,8 +13,10 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Templates**: salve conjuntos de tarefas e aplique-os ao módulo de lançamento
 - **Calendário mensal**: visualize as horas já lançadas e os dias não úteis
 - **Gerenciador de apontamentos**: liste, edite e exclua entradas de tempo de um período
-- **Feriados brasileiros**: obtidos da BrasilAPI, com fallback local (inclui feriados móveis via algoritmo de Gauss)
+- **Feriados brasileiros**: obtidos da BrasilAPI, com cache em disco e fallback local (inclui feriados móveis via algoritmo de Gauss)
 - **Relatórios em PDF**: exportação do relatório de horas do Teamwork por período
+- **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
+- **Logs em arquivo** para diagnóstico, com o token sempre mascarado
 - **Tema claro/escuro**
 
 ## 🔒 Segurança
@@ -26,6 +28,8 @@ O modelo de credenciais é deliberadamente simples:
 - **O token não atravessa para o frontend.** O processo Go monta o cabeçalho de autenticação; o webview recebe apenas dados já autenticados e um booleano de "configurado".
 - **Somente HTTPS.** A autenticação é Basic — o token viaja em base64 em toda requisição. Endereços `http://` são recusados, e há uma verificação final antes de cada requisição sair.
 - **Arquivos locais com permissão `0600`.**
+- **O token nunca aparece em log.** Todo log passa por um filtro que troca o token (e sua forma em Basic auth) por `[REDACTED]`, esteja ele na mensagem, num atributo ou dentro de um erro.
+- **Atualizações verificadas.** O instalador baixado só é executado se o SHA-256 bater com o `SHA256SUMS.txt` da mesma release, e só de hosts do GitHub via HTTPS.
 
 ### Migração de versões anteriores
 
@@ -43,8 +47,10 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 - **Wails v2.10.1** — aplicação desktop híbrida
 - **go-keyring** — cofre de credenciais do SO
 - **HTTP client** com connection pooling, timeouts e repetição com backoff exponencial
-- **Cache em memória** com TTL por tipo de dado
+- **Cache em memória** com TTL por tipo de dado; feriados também em disco
 - **Goroutines com semáforo** para lançamentos concorrentes (limite de 3 simultâneos)
+- **log/slog** com arquivo rotativo próprio (sem dependências)
+- **golang.org/x/sys/windows/registry** para detectar instalações antigas
 
 ### Frontend (React 18)
 - **React Router**, **TailwindCSS**, **React Icons (Feather)**
@@ -75,6 +81,10 @@ teamwork-logger/
 │   │   └── config.go       # Persistência de config, tarefas e templates
 │   ├── security/
 │   │   └── credentials.go  # Token no cofre do SO
+│   ├── logging/            # slog, arquivo rotativo e mascaramento de segredos
+│   ├── update/             # Verificação/download de releases do GitHub
+│   ├── legacy/             # Detecção da instalação antiga (Windows/HKLM)
+│   ├── internal/fsutil/    # Gravação atômica e pasta ~/.teamwork-logger
 │   ├── app.go              # Ciclo de vida, conexão e fronteira do token
 │   └── app_*.go            # Bindings expostos ao frontend, por domínio
 ├── frontend/
@@ -181,8 +191,13 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 
 ```
 ~/.teamwork-logger/
-├── config.json      # host, userId, jornada diária, tarefas salvas, preferências (0600)
-└── templates.json   # templates de trabalho (0600)
+├── config.json              # host, userId, jornada diária, tarefas salvas, preferências (0600)
+├── templates.json           # templates de trabalho (0600)
+├── cache/
+│   └── holidays-<ano>.json  # feriados da BrasilAPI por ano (0600)
+└── logs/
+    ├── app.log              # log atual (0600)
+    └── app.log.1 … .3       # logs anteriores
 ```
 
 O token de API **não** fica nesses arquivos — ele reside no cofre de credenciais do sistema operacional.
@@ -192,7 +207,24 @@ O token de API **não** fica nesses arquivos — ele reside no cofre de credenci
 - Se `config.json` ou `templates.json` estiver corrompido, o aplicativo abre mesmo assim com a configuração padrão e renomeia o arquivo para `<nome>.corrompido-<data-hora>` na mesma pasta, para inspeção.
 - Versões antigas gravavam esses arquivos ao lado do executável; eles são migrados para `~/.teamwork-logger/` só se ainda não houver configuração lá.
 
-O cache (projetos, tarefas, feriados, estatísticas) é mantido apenas em memória e se perde ao fechar o aplicativo.
+O cache de projetos, tarefas e estatísticas é mantido apenas em memória e se perde ao fechar o aplicativo.
+
+### Cache de feriados
+
+Os feriados de cada ano vindos da BrasilAPI são gravados em `cache/holidays-<ano>.json` (gravação atômica) e carregados na inicialização:
+
+- Por **30 dias** o ano é servido do cache, sem rede.
+- Depois disso o dado antigo continua sendo usado na hora e é **revalidado em segundo plano**.
+- Se a BrasilAPI estiver fora, vale o último dado dela em disco (nova tentativa em 6 h); sem nada em disco, entra o calendário local, que não vai para o disco.
+- "Limpar cache" e "Atualizar ano" no gerenciador de feriados apagam também os arquivos.
+
+### Logs
+
+O aplicativo registra eventos e erros em `~/.teamwork-logger/logs/app.log` (formato texto do `log/slog`). O arquivo gira ao passar de **5 MB**, mantendo os 3 anteriores (`app.log.1` a `app.log.3`) — no máximo ~20 MB. A tela do app oferece abrir a pasta de logs para anexar a um pedido de suporte.
+
+- Nível padrão **Info**. Para diagnóstico detalhado (requisições, corpos de resposta resumidos), defina `TEAMWORK_LOGGER_DEBUG=1` antes de abrir o app.
+- Em `wails dev` (ou com o debug ligado) o log também sai no terminal.
+- O token de API nunca é gravado: é mascarado como `[REDACTED]`. Valores rotulados com "token" ou "password" também são descartados.
 
 ## 🔧 Desenvolvimento
 
@@ -260,6 +292,22 @@ Tags fora do formato `vX.Y.Z` (ex.: `v1.2.0-rc1`) falham no build, porque o Wind
 
 Os nomes "Naipe Logger"/"Teamwork Logger" convivem por compatibilidade: o diretório de configuração (`~/.teamwork-logger`), o identificador no cofre do sistema (`com.teamwork-logger`) e os nomes dos artefatos publicados são mantidos para não quebrar instalações e links existentes.
 
+A versão é embutida no binário: `main.go` faz `//go:embed wails.json` e lê `info.productVersion` (exposta ao frontend por `GetAppVersion`). Builds de `wails dev` recebem o sufixo `-dev` (ex.: `1.0.0-dev`).
+
+### Atualização automática
+
+O app consulta a API pública do GitHub (`/repos/eddie-naipes/naipe-logger/releases/latest`) — sem servidor próprio nem custo:
+
+- Na inicialização, se a preferência **"Verificar atualizações ao iniciar"** (`checkUpdatesOnStartup`, ligada por padrão) estiver ativa. O resultado fica em cache por 1 h, para respeitar o limite de 60 consultas/h da API anônima.
+- Rascunhos e pré-releases nunca são oferecidos.
+- **Windows:** o app baixa `TeamworkLogger-amd64-installer.exe` e o `SHA256SUMS.txt` da **mesma** release, confere o SHA-256, executa o instalador e se fecha. Downloads só são aceitos via HTTPS de `github.com`, `api.github.com`, `objects.githubusercontent.com` e `release-assets.githubusercontent.com` (inclusive em cada redirecionamento); checksum divergente ou ausente descarta o arquivo.
+- **macOS/Linux:** o app avisa da versão nova e abre a página da release para download manual.
+- **Builds de desenvolvimento** (versão com sufixo, ex. `-dev`) verificam, mas nunca instalam.
+
+### Instalação antiga (Windows)
+
+Versões anteriores instalavam como administrador em `C:\Program Files\...` e registravam o desinstalador em `HKLM` (*Naipe Logger* ou *Teamwork Logger*). O instalador atual é por usuário, então quem atualiza pode ficar com duas cópias. O app detecta a instalação antiga (chaves `HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\*` com esses nomes, em pasta diferente da do executável em uso) e oferece rodar o desinstalador dela — o Windows pede confirmação de administrador (UAC). As configurações em `~/.teamwork-logger` não são afetadas.
+
 ### Aviso do SmartScreen no Windows
 
 O instalador Windows **não é assinado digitalmente** (um certificado de assinatura de código tem custo anual). Por isso, na primeira execução o **Microsoft Defender SmartScreen** mostra "O Windows protegeu o computador".
@@ -282,8 +330,9 @@ O valor deve bater com a linha correspondente no `SHA256SUMS.txt` daquela versã
 - O desfazer de lote depende do ID devolvido pela API; entradas sem ID precisam ser removidas manualmente
 - A leitura de apontamentos de um período pagina até 50 páginas (25 mil entradas). O teto existe para evitar laço infinito caso a API devolva `hasMore` indefinidamente; períodos reais ficam muito abaixo disso
 - Um `POST` que falha por rede ou erro do servidor não é reenviado automaticamente (evita duplicar horas) — só o rate limit `429` dispara repetição
-- Sem auto-update
-- Sem modo offline — toda operação requer conexão
+- A atualização automática só instala sozinha no Windows; no macOS e no Linux o download é manual pela página da release
+- O instalador não é assinado: após uma atualização automática o SmartScreen pode avisar de novo
+- Sem modo offline — toda operação requer conexão (só os feriados ficam em disco)
 - Sem backup automático das configurações
 - Interface disponível apenas em português
 

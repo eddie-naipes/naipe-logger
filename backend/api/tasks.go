@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,7 @@ func (t *TeamworkAPI) GetTasks() ([]TeamworkTask, error) {
 	path := fmt.Sprintf("/projects/api/v3/tasks.json?assignedTo=%d&filter=active&include=%s&includeTasklists=true&includeTaskAssignees=true&includeCompletionStatus=true&includeEstimatedTime=true&includeTaskTags=true",
 		t.Config.UserID, taskIncludes)
 
-	t.logDebug("Buscando tarefas do usuário %d", t.Config.UserID)
+	slog.Debug("Buscando tarefas do usuário", "usuario", t.Config.UserID)
 
 	tasks, err := t.fetchTaskPages(t.buildURL(path), "tarefas")
 	if err != nil {
@@ -135,7 +136,7 @@ func (t *TeamworkAPI) GetTaskDetails(taskID int) (TeamworkTask, error) {
 	path := fmt.Sprintf("/projects/api/v3/tasks/%s.json?include=projects,tasklists,timeTotals,tags", taskIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Buscando detalhes da tarefa ID %d...", taskID)
+	slog.Debug("Buscando detalhes da tarefa", "tarefa", taskID)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -292,13 +293,13 @@ func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
 	path := fmt.Sprintf("/projects/api/v3/projects/%d/tasks.json?include=%s,users,companies,teams,timeTotals,tags,completedBy&includeCustomFields=true&includeLoggedTime=true",
 		projectID, taskIncludes)
 
-	t.logDebug("Buscando tarefas do projeto %d", projectID)
+	slog.Debug("Buscando tarefas do projeto", "projeto", projectID)
 
 	tasks, err := t.fetchTaskPages(t.buildURL(path), "tarefas do projeto")
 	if err != nil {
 		// Caminho alternativo para contas em que o endpoint por projeto falha:
 		// monta a lista a partir das listas de tarefas (e, por fim, da v1).
-		t.logDebug("Erro ao obter tarefas do projeto %d (API v3): %v", projectID, err)
+		slog.Debug("Erro ao obter tarefas do projeto pela API v3", "projeto", projectID, "err", err)
 		tasks, err = t.getTasksByTasklists(projectID)
 		if err != nil {
 			return nil, err
@@ -404,7 +405,7 @@ func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask) {
 
 	taskDetail, err := t.GetTaskDetails(taskPtr.ID)
 	if err != nil {
-		t.logDebug("Erro ao buscar detalhes da tarefa %d: %v", taskPtr.ID, err)
+		slog.Debug("Erro ao buscar detalhes da tarefa", "tarefa", taskPtr.ID, "err", err)
 		return
 	}
 
@@ -439,16 +440,16 @@ func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask) {
 }
 
 func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error) {
-	t.logDebug("Tentando método alternativo: obter tarefas através das listas de tarefas")
+	slog.Debug("Tentando método alternativo: obter tarefas através das listas de tarefas", "projeto", projectID)
 
 	tasklists, err := t.GetTasklistsByProject(projectID)
 	if err != nil {
-		t.logDebug("Erro ao obter listas de tarefas: %v\nTentando fallback para API v2...", err)
+		slog.Debug("Erro ao obter listas de tarefas; tentando fallback para API v2", "projeto", projectID, "err", err)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
 	if len(tasklists) == 0 {
-		t.logDebug("Nenhuma lista de tarefas encontrada. Tentando fallback para API v2...")
+		slog.Debug("Nenhuma lista de tarefas encontrada; tentando fallback para API v2", "projeto", projectID)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
@@ -469,7 +470,7 @@ func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error)
 
 			tasks, err := t.GetTasksByTasklist(tl.ID)
 			if err != nil {
-				t.logDebug("Erro ao obter tarefas da lista %d: %v", tl.ID, err)
+				slog.Debug("Erro ao obter tarefas da lista", "lista", tl.ID, "err", err)
 				return
 			}
 
@@ -493,7 +494,7 @@ func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error)
 	}
 
 	if len(allTasks) == 0 {
-		t.logDebug("Nenhuma tarefa encontrada via listas. Tentando fallback para API v2...")
+		slog.Debug("Nenhuma tarefa encontrada via listas; tentando fallback para API v2", "projeto", projectID)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
@@ -503,7 +504,7 @@ func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error)
 func (t *TeamworkAPI) GetTasklistsByProject(projectID int) ([]TaskListItem, error) {
 	path := fmt.Sprintf("/projects/api/v3/projects/%d/tasklists.json", projectID)
 
-	t.logDebug("Buscando listas de tarefas para o projeto %d", projectID)
+	slog.Debug("Buscando listas de tarefas", "projeto", projectID)
 
 	tasklists := make([]TaskListItem, 0)
 	err := t.fetchPages(t.buildURL(path), listPageSize, maxListPages, "listas de tarefas",
@@ -529,19 +530,19 @@ func (t *TeamworkAPI) GetTasksByTasklist(tasklistID int) ([]TeamworkTask, error)
 	path := fmt.Sprintf("/projects/api/v3/tasklists/%d/tasks.json?include=%s&includeTaskDetails=true",
 		tasklistID, taskIncludes)
 
-	t.logDebug("Buscando tarefas da lista %d", tasklistID)
+	slog.Debug("Buscando tarefas da lista", "lista", tasklistID)
 
 	return t.fetchTaskPages(t.buildURL(path), "tarefas da lista")
 }
 
 func (t *TeamworkAPI) fallbackGetTasksByProject(projectID int) ([]TeamworkTask, error) {
-	t.logDebug("Tentando método alternativo (API v2) para obter tarefas...")
+	slog.Debug("Tentando método alternativo (API v2) para obter tarefas", "projeto", projectID)
 
 	projectIDStr := strconv.Itoa(projectID)
 	path := fmt.Sprintf("/tasks.json?project_id=%s", projectIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Fazendo requisição alternativa para URL: %s", url)
+	slog.Debug("Fazendo requisição alternativa", "url", url)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {

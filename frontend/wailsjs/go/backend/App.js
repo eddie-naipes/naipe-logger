@@ -6,6 +6,14 @@ export function ApplyTemplate(arg1) {
   return window['go']['backend']['App']['ApplyTemplate'](arg1);
 }
 
+export function CheckForUpdate() {
+  return window['go']['backend']['App']['CheckForUpdate']();
+}
+
+export function CheckForUpdateNow() {
+  return window['go']['backend']['App']['CheckForUpdateNow']();
+}
+
 export function CheckPlanConflicts(arg1) {
   return window['go']['backend']['App']['CheckPlanConflicts'](arg1);
 }
@@ -38,6 +46,10 @@ export function DeleteTemplate(arg1) {
   return window['go']['backend']['App']['DeleteTemplate'](arg1);
 }
 
+export function DownloadAndInstallUpdate() {
+  return window['go']['backend']['App']['DownloadAndInstallUpdate']();
+}
+
 export function DownloadCurrentMonthReport() {
   return window['go']['backend']['App']['DownloadCurrentMonthReport']();
 }
@@ -54,6 +66,10 @@ export function GetAppSettings() {
   return window['go']['backend']['App']['GetAppSettings']();
 }
 
+export function GetAppVersion() {
+  return window['go']['backend']['App']['GetAppVersion']();
+}
+
 export function GetBrazilianHolidays(arg1) {
   return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
@@ -66,8 +82,16 @@ export function GetHolidayCacheStats() {
   return window['go']['backend']['App']['GetHolidayCacheStats']();
 }
 
+export function GetLegacyInstall() {
+  return window['go']['backend']['App']['GetLegacyInstall']();
+}
+
 export function GetLoggedTimeFromCalendarAPI(arg1, arg2) {
   return window['go']['backend']['App']['GetLoggedTimeFromCalendarAPI'](arg1, arg2);
+}
+
+export function GetLogsPath() {
+  return window['go']['backend']['App']['GetLogsPath']();
 }
 
 export function GetProjects() {
@@ -146,6 +170,14 @@ export function OpenDirectoryPath(arg1) {
   return window['go']['backend']['App']['OpenDirectoryPath'](arg1);
 }
 
+export function OpenLogsFolder() {
+  return window['go']['backend']['App']['OpenLogsFolder']();
+}
+
+export function OpenReleasePage() {
+  return window['go']['backend']['App']['OpenReleasePage']();
+}
+
 export function PreloadHolidays() {
   return window['go']['backend']['App']['PreloadHolidays']();
 }
@@ -156,6 +188,10 @@ export function RefreshHolidaysForYear(arg1) {
 
 export function RemoveTask(arg1) {
   return window['go']['backend']['App']['RemoveTask'](arg1);
+}
+
+export function RunLegacyUninstaller() {
+  return window['go']['backend']['App']['RunLegacyUninstaller']();
 }
 
 export function SaveAppSettings(arg1) {

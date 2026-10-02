@@ -34,3 +34,6 @@ Thumbs.db
 # Contém host, ID de usuário e tarefas salvas (o token fica no cofre do SO).
 /config.json
 /templates.json
+
+# Worktrees temporários criados pelo Claude Code para agentes em paralelo.
+.claude/worktrees/

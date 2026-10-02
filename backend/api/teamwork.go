@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -32,6 +33,7 @@ func NewTeamworkAPI(config Config) *TeamworkAPI {
 	if config.MinutosPorDia == 0 {
 		config.MinutosPorDia = 8 * 60
 	}
+	registerSecretForLogs(config.AuthToken)
 
 	return &TeamworkAPI{
 		Config:         config,
@@ -144,7 +146,7 @@ func (t *TeamworkAPI) GetDashboardSummary() (DashboardStats, error) {
 	}
 
 	if hoursLoggedErr != nil {
-		t.logWarn("Erro ao obter horas do mês: %v", hoursLoggedErr)
+		slog.Warn("Erro ao obter horas do mês", "err", hoursLoggedErr)
 	} else {
 		stats.HorasLogadas = horasLogadas
 		if hoursPrevErr == nil && horasLogadasAnterior > 0 {

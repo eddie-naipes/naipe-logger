@@ -45,6 +45,8 @@ func apontaBrasilAPIPara(t *testing.T, handler http.HandlerFunc, year int) {
 	limpar()
 
 	t.Cleanup(func() {
+		// Uma revalidação em segundo plano ainda pode estar lendo a URL.
+		holidayBackground.Wait()
 		brasilAPIBaseURL = original
 		server.Close()
 		limpar()
