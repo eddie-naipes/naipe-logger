@@ -36,8 +36,7 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 				continue
 			}
 
-			date := time.Unix(timestamp/1000, 0)
-			dateStr := date.Format("2006-01-02")
+			dateStr := loggedTimeDate(timestamp)
 
 			hours, _ := strconv.ParseFloat(entry[1], 64)
 			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
@@ -68,8 +67,7 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 				continue
 			}
 
-			date := time.Unix(timestamp/1000, 0)
-			dateStr := date.Format("2006-01-02")
+			dateStr := loggedTimeDate(timestamp)
 
 			hours, _ := strconv.ParseFloat(entry[1], 64)
 			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
@@ -91,13 +89,22 @@ func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]in
 		}
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		date1, _ := time.Parse("2006-01-02", entries[i]["date"].(string))
-		date2, _ := time.Parse("2006-01-02", entries[j]["date"].(string))
-		return date1.After(date2)
+	// YYYY-MM-DD ordena corretamente como texto; não há por que fazer parse
+	// de data a cada comparação.
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i]["date"].(string) > entries[j]["date"].(string)
 	})
 
 	return entries, nil
+}
+
+// loggedTimeDate converte o timestamp do endpoint de calendário
+// (loggedtime.json) em YYYY-MM-DD. O valor representa um dia, em milissegundos
+// desde a época, na meia-noite UTC. Formatar no fuso local deslocava as
+// entradas para o dia anterior em fusos a oeste de Greenwich — em
+// America/Sao_Paulo, 00:00 UTC é 21:00 da véspera.
+func loggedTimeDate(epochMillis int64) string {
+	return time.UnixMilli(epochMillis).UTC().Format("2006-01-02")
 }
 
 func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, error) {
