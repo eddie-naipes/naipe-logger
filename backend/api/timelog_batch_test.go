@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -152,6 +153,32 @@ func TestLancamentosInvalidamCacheDoDashboard(t *testing.T) {
 		t.Fatalf("LogMultipleTimes: %v", err)
 	}
 	conferir("LogMultipleTimes")
+}
+
+func TestUpdateTimeEntryDevolveIDDoLancamentoEmEntryID(t *testing.T) {
+	var corpo string
+	api, _ := newTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		corpo = string(b)
+		if r.URL.Path != "/projects/api/v3/time/5.json" {
+			t.Errorf("caminho = %q, esperava /projects/api/v3/time/5.json", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"timelog":{"id":5,"taskId":77}}`)
+	})
+
+	result, err := api.UpdateTimeEntry(5, TimeEntry{Minutes: 30, Date: "2025-09-01", Time: "09:00"})
+	if err != nil {
+		t.Fatalf("UpdateTimeEntry: %v", err)
+	}
+	if result.EntryID != 5 {
+		t.Errorf("EntryID = %d, esperava 5", result.EntryID)
+	}
+	if result.TaskID != 77 {
+		t.Errorf("TaskID = %d, esperava 77 (a tarefa do lançamento, não o ID do lançamento)", result.TaskID)
+	}
+	if strings.Contains(corpo, "taskId") {
+		t.Errorf("payload do PUT não deveria levar taskId: %s", corpo)
+	}
 }
 
 func TestCacheRemoveEntradaExpiradaNaLeitura(t *testing.T) {

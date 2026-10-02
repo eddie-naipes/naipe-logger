@@ -230,6 +230,24 @@ func extractTimelogID(body []byte) (int, bool) {
 	return 0, false
 }
 
+// extractTimelogTaskID lê a tarefa do lançamento na resposta do PUT, quando a
+// API a informa. Devolve 0 se não houver.
+func extractTimelogTaskID(body []byte) int {
+	var shapes struct {
+		Timelog struct {
+			TaskID int `json:"taskId"`
+		} `json:"timelog"`
+		TaskID int `json:"taskId"`
+	}
+	if err := json.Unmarshal(body, &shapes); err != nil {
+		return 0
+	}
+	if shapes.Timelog.TaskID > 0 {
+		return shapes.Timelog.TaskID
+	}
+	return shapes.TaskID
+}
+
 func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, tasks []Task) ([]WorkDay, error) {
 	entries, err := t.GetEntriesFromLoggedTime(month, year)
 	if err != nil {
@@ -1021,9 +1039,13 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 		return nil, err
 	}
 
+	// O payload (TimelogRequest) não leva tarefa: o PUT altera só o lançamento
+	// identificado na URL. O ID editado vai em EntryID — antes ia em TaskID,
+	// e quem lesse o resultado via um "ID de tarefa" que era de lançamento.
 	result := &TimeLogResult{
-		TaskID: entryID,
-		Date:   entry.Date,
+		EntryID: entryID,
+		TaskID:  extractTimelogTaskID(body),
+		Date:    entry.Date,
 	}
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
