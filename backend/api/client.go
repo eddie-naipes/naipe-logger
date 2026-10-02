@@ -4,10 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"logTime-go/backend/logging"
 )
 
 var (
@@ -24,8 +27,20 @@ func (t *TeamworkAPI) IsConfigured() bool {
 // BaseURL devolve o host da API já normalizado para https. Hosts inválidos ou
 // http são reduzidos a "" para que createRequest recuse a requisição em vez de
 // vazar o token em claro.
+//
+// A normalização é feita uma vez em NewTeamworkAPI. O host bruto que a gerou
+// fica guardado: se Config.ApiHost for trocado depois (ou se o cliente foi
+// montado sem o construtor, como em ValidateToken e nos testes), o valor é
+// recalculado em vez de servir um host desatualizado.
 func (t *TeamworkAPI) BaseURL() string {
-	normalized, err := NormalizeHost(t.Config.ApiHost)
+	if t.hostNormalized && t.normalizedFrom == t.Config.ApiHost {
+		return t.baseURL
+	}
+	return normalizeHostOrEmpty(t.Config.ApiHost)
+}
+
+func normalizeHostOrEmpty(host string) string {
+	normalized, err := NormalizeHost(host)
 	if err != nil {
 		return ""
 	}
@@ -79,6 +94,15 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
+// client devolve o cliente HTTP das chamadas de API. Os testes injetam o
+// cliente de um httptest.NewTLSServer, já que createRequest só aceita https.
+func (t *TeamworkAPI) client() *http.Client {
+	if t.httpClient != nil {
+		return t.httpClient
+	}
+	return getHTTPClient()
+}
+
 // getDownloadClient serve downloads de relatório, que podem levar bem mais que
 // o timeout curto usado nas chamadas de API.
 func getDownloadClient() *http.Client {
@@ -116,7 +140,7 @@ func (t *TeamworkAPI) GetJSON(path string) ([]byte, int, error) {
 // idempotentes, em falha de rede ou erro 5xx. Sem isso um lote grande de
 // lançamentos era abandonado inteiro no primeiro 429 do Teamwork.
 func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, error) {
-	client := getHTTPClient()
+	client := t.client()
 	idempotent := isIdempotent(req.Method)
 
 	var retryAfter time.Duration
@@ -125,8 +149,8 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			espera := backoffDuration(attempt, retryAfter)
-			t.logDebug("Tentativa %d/%d para %s %s em %v", attempt+1, maxRetries+1,
-				req.Method, req.URL.Path, espera)
+			slog.Debug("Repetindo requisição", "tentativa", attempt+1, "max", maxRetries+1,
+				"metodo", req.Method, "caminho", req.URL.Path, "espera", espera)
 			if err := sleepContext(req.Context(), espera); err != nil {
 				if lastErr != nil {
 					return nil, nil, fmt.Errorf("%v; espera interrompida: %v", lastErr, err)
@@ -179,43 +203,24 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	return nil, nil, lastErr
 }
 
-// TestConnection valida a configuração já armazenada. Não recebe credenciais do
-// frontend: o token vem do cofre do sistema, carregado na inicialização.
-func (t *TeamworkAPI) TestConnection() (bool, string) {
-	if !t.IsConfigured() {
-		return false, "API não configurada"
-	}
-
-	req, err := t.createRequest("GET", t.buildURL("/projects/api/v3/me.json"), nil)
-	if err != nil {
-		return false, fmt.Sprintf("Erro ao criar requisição: %v", err)
-	}
-
-	resp, _, err := t.doRequest(req)
-	if err != nil {
-		return false, fmt.Sprintf("Erro na requisição: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return false, fmt.Sprintf("Autenticação falhou: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	return true, "Conexão estabelecida com sucesso!"
-}
-
-func (t *TeamworkAPI) logDebug(format string, args ...interface{}) {
-	safeArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		safeArgs[i] = sanitizeForLog(arg)
-	}
-	fmt.Printf(format+"\n", safeArgs...)
-}
-
+// sanitizeForLog mascara um valor antes de ele ir para o log. O handler de
+// backend/logging já aplica a mesma regra a todo atributo; chamar aqui deixa
+// explícito, nos pontos que logam corpos de resposta, que eles podem conter
+// dados sensíveis.
 func sanitizeForLog(data interface{}) interface{} {
 	if str, ok := data.(string); ok {
-		if strings.Contains(str, "password") || strings.Contains(str, "token") {
-			return "[REDACTED]"
-		}
+		return logging.Sanitize(str)
 	}
 	return data
+}
+
+// registerSecretForLogs avisa ao logger que o token (e sua forma em Basic
+// auth, que é o que vai no cabeçalho) nunca pode aparecer em log. Chamado em
+// todo ponto onde um token entra no cliente.
+func registerSecretForLogs(token string) {
+	if token == "" {
+		return
+	}
+	logging.AddSecret(token)
+	logging.AddSecret(base64.StdEncoding.EncodeToString([]byte(token + ":X")))
 }

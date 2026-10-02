@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+
+    "allowJs": false,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+
+    // Bindings gerados pelo Wails (o mesmo alias existe no vite.config.ts).
+    // models.ts é checado junto com o código: uma struct anônima no Go gera
+    // TypeScript inválido e quebra o typecheck — dê nome à struct.
+    "paths": {
+      "@wailsjs/*": ["./wailsjs/*"]
+    }
+  },
+  "include": ["src"]
+}

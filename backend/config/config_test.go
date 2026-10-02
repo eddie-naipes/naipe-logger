@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"logTime-go/backend/api"
 	"logTime-go/backend/security"
 	"os"
@@ -11,7 +12,8 @@ import (
 )
 
 // fakeKeyring troca o cofre do sistema por um em memória durante o teste, para
-// não depender de Keychain/Secret Service nem sujar as credenciais reais.
+// não depender de Keychain/Secret Service nem sujar as credenciais reais. Imita
+// security.StoreToken: apara espaços e recusa token vazio.
 func fakeKeyring(t *testing.T) func() (string, bool) {
 	t.Helper()
 
@@ -19,6 +21,10 @@ func fakeKeyring(t *testing.T) func() (string, bool) {
 	origStore, origLoad, origDelete := storeToken, loadToken, deleteToken
 
 	storeToken = func(token string) error {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			return errors.New("token de API vazio")
+		}
 		stored = &token
 		return nil
 	}

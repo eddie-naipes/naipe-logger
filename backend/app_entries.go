@@ -9,11 +9,12 @@ import (
 // Bindings de CRUD de apontamentos de tempo e seus totais.
 
 func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
 
-	timeTotal, err := a.api().GetTimeTotalsForPeriod(startDate, endDate)
+	timeTotal, err := client.GetTimeTotalsForPeriod(startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao obter totais de tempo: %v", err)
 	}
@@ -22,65 +23,33 @@ func (a *App) GetTimeTotalsForPeriod(startDate, endDate string) (*api.TimeTotal,
 }
 
 func (a *App) GetTimeEntriesForPeriod(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetTimeEntriesForPeriod(startDate, endDate)
-}
-
-func (a *App) GetTimeEntriesWithDetails(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return a.api().GetTimeEntriesWithDetails(startDate, endDate)
+	return client.GetTimeEntriesForPeriod(startDate, endDate)
 }
 
 func (a *App) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]api.TimeEntryReport, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetTimeEntriesForPeriodV2(startDate, endDate, includeDeleted)
-}
-
-func (a *App) GetAllTimeEntriesForDay(date string) ([]api.TimeEntryReport, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return a.api().GetAllTimeEntriesForDay(date)
-}
-
-func (a *App) GetDeletedTimeEntries(startDate, endDate string) ([]api.TimeEntryReport, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return a.api().GetDeletedTimeEntries(startDate, endDate)
+	return client.GetTimeEntriesForPeriodV2(startDate, endDate, includeDeleted)
 }
 
 func (a *App) UpdateTimeEntry(entryID int, entry api.TimeEntry) (*api.TimeLogResult, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().UpdateTimeEntry(entryID, entry)
-}
-
-func (a *App) DeleteTimeEntry(entryID int) error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
-	}
-
-	return a.api().DeleteTimeEntry(entryID)
+	return client.UpdateTimeEntry(entryID, entry)
 }
 
 func (a *App) DeleteMultipleTimeEntries(entryIDs []int) ([]api.DeleteTimeEntryResult, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().DeleteMultipleTimeEntries(entryIDs)
+	return client.DeleteMultipleTimeEntries(entryIDs)
 }

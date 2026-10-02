@@ -148,6 +148,80 @@ export namespace api {
 	        this.source = source["source"];
 	    }
 	}
+	export class HolidayCacheDetail {
+	    holidays_count: number;
+	    // Go type: time
+	    cached_at: any;
+	    // Go type: time
+	    expires_at: any;
+	    sources: string[];
+	    is_expired: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new HolidayCacheDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.holidays_count = source["holidays_count"];
+	        this.cached_at = this.convertValues(source["cached_at"], null);
+	        this.expires_at = this.convertValues(source["expires_at"], null);
+	        this.sources = source["sources"];
+	        this.is_expired = source["is_expired"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class HolidayCacheStats {
+	    cached_years: number;
+	    years: number[];
+	    cache_details: Record<number, HolidayCacheDetail>;
+	
+	    static createFrom(source: any = {}) {
+	        return new HolidayCacheStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cached_years = source["cached_years"];
+	        this.years = source["years"];
+	        this.cache_details = this.convertValues(source["cache_details"], HolidayCacheDetail, true);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LoggedTimeResponse {
 	    STATUS: string;
 	    // Go type: struct { Billable [][3]string "json:\"billable\""; Firstname string "json:\"firstname\""; Lastname string "json:\"lastname\""; Nonbillable [][3]string "json:\"nonbillable\""; ID string "json:\"id\""; Endepoch string "json:\"endepoch\""; Startepoch string "json:\"startepoch\"" }
@@ -296,13 +370,12 @@ export namespace api {
 		    return a;
 		}
 	}
-	
-	export class  {
+	export class TaskAssignee {
 	    id: number;
 	    type: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new (source);
+	        return new TaskAssignee(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -311,12 +384,13 @@ export namespace api {
 	        this.type = source["type"];
 	    }
 	}
-	export class  {
+	
+	export class TaskTag {
 	    id: number;
 	    name: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new (source);
+	        return new TaskTag(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -339,8 +413,8 @@ export namespace api {
 	    dueDate?: string;
 	    tasklistId?: number;
 	    tasklistName?: string;
-	    tags?: [];
-	    assignees?: [];
+	    tags?: TaskTag[];
+	    assignees?: TaskAssignee[];
 	    loggedMinutes?: number;
 	
 	    static createFrom(source: any = {}) {
@@ -362,8 +436,8 @@ export namespace api {
 	        this.dueDate = source["dueDate"];
 	        this.tasklistId = source["tasklistId"];
 	        this.tasklistName = source["tasklistName"];
-	        this.tags = this.convertValues(source["tags"], );
-	        this.assignees = this.convertValues(source["assignees"], );
+	        this.tags = this.convertValues(source["tags"], TaskTag);
+	        this.assignees = this.convertValues(source["assignees"], TaskAssignee);
 	        this.loggedMinutes = source["loggedMinutes"];
 	    }
 	
@@ -570,6 +644,33 @@ export namespace api {
 
 }
 
+export namespace backend {
+	
+	export class UserProfile {
+	    id: number;
+	    firstName: string;
+	    lastName: string;
+	    email: string;
+	    avatarURL: string;
+	    fullName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.firstName = source["firstName"];
+	        this.lastName = source["lastName"];
+	        this.email = source["email"];
+	        this.avatarURL = source["avatarURL"];
+	        this.fullName = source["fullName"];
+	    }
+	}
+
+}
+
 export namespace config {
 	
 	export class AppSettings {
@@ -577,6 +678,7 @@ export namespace config {
 	    autoUpdate: boolean;
 	    startMinimized: boolean;
 	    language: string;
+	    checkUpdatesOnStartup: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -588,6 +690,59 @@ export namespace config {
 	        this.autoUpdate = source["autoUpdate"];
 	        this.startMinimized = source["startMinimized"];
 	        this.language = source["language"];
+	        this.checkUpdatesOnStartup = source["checkUpdatesOnStartup"];
+	    }
+	}
+
+}
+
+export namespace legacy {
+	
+	export class Install {
+	    found: boolean;
+	    displayName: string;
+	    installLocation: string;
+	    uninstallString: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Install(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.found = source["found"];
+	        this.displayName = source["displayName"];
+	        this.installLocation = source["installLocation"];
+	        this.uninstallString = source["uninstallString"];
+	    }
+	}
+
+}
+
+export namespace update {
+	
+	export class Info {
+	    available: boolean;
+	    currentVersion: string;
+	    latestVersion: string;
+	    releaseNotes: string;
+	    releaseUrl: string;
+	    publishedAt: string;
+	    canInstall: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.releaseNotes = source["releaseNotes"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.publishedAt = source["publishedAt"];
+	        this.canInstall = source["canInstall"];
 	    }
 	}
 

@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"logTime-go/backend/api"
@@ -9,33 +10,43 @@ import (
 
 // Bindings de feriados e dias não úteis.
 
-func (a *App) GetBrazilianHolidays(year int) (map[string]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+// GetBrazilianHolidays devolve os feriados do ano ordenados por data. Era um
+// mapa data->feriado: o gerador do Wails não emitia api.Holiday em models.ts
+// para valores de mapa (App.d.ts referenciava um tipo inexistente). O
+// frontend já fazia Object.values(...).sort, que funciona igual com a lista.
+func (a *App) GetBrazilianHolidays(year int) ([]api.Holiday, error) {
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetBrazilianHolidays(year)
+	holidays, err := client.GetBrazilianHolidays(year)
+	if err != nil {
+		return nil, err
+	}
+	return sortedHolidays(holidays), nil
 }
 
-func (a *App) GetHolidaysForMonth(year, month int) ([]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+func sortedHolidays(holidays map[string]api.Holiday) []api.Holiday {
+	list := make([]api.Holiday, 0, len(holidays))
+	for _, h := range holidays {
+		list = append(list, h)
 	}
-
-	return a.api().GetHolidaysForMonth(year, month)
+	sort.Slice(list, func(i, j int) bool { return list[i].Date < list[j].Date })
+	return list
 }
 
 func (a *App) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetAllNonWorkingDays(year, month)
+	return client.GetAllNonWorkingDays(year, month)
 }
 
 func (a *App) IsWorkDay(date string) (bool, error) {
-	if !a.api().IsConfigured() {
-		return false, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return false, err
 	}
 
 	dateObj, err := time.Parse("2006-01-02", date)
@@ -43,40 +54,48 @@ func (a *App) IsWorkDay(date string) (bool, error) {
 		return false, fmt.Errorf("formato de data inválido: %v", err)
 	}
 
-	return a.api().IsWorkDay(dateObj), nil
+	return client.IsWorkDay(dateObj), nil
 }
 
-func (a *App) GetHolidayCacheStats() (map[string]interface{}, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+// GetHolidayCacheStats devolve o estado do cache de feriados. Tipado (mesmo
+// JSON do antigo map[string]interface{}) para gerar o modelo em models.ts.
+func (a *App) GetHolidayCacheStats() (api.HolidayCacheStats, error) {
+	client, err := a.client()
+	if err != nil {
+		return api.HolidayCacheStats{}, err
 	}
-
-	return a.api().GetHolidayCacheStats(), nil
+	return client.HolidayCacheSummary(), nil
 }
 
 func (a *App) ClearHolidayCache() error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return err
 	}
-
-	a.api().ClearExpiredHolidayCache()
+	// A tela pede "limpar todo o cache"; antes só os anos vencidos saíam.
+	client.ClearAllHolidayCache()
 	return nil
 }
 
 func (a *App) PreloadHolidays() error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return err
 	}
-
-	return a.api().PreloadUpcomingHolidays()
+	return client.PreloadUpcomingHolidays()
 }
 
-func (a *App) RefreshHolidaysForYear(year int) (map[string]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+// RefreshHolidaysForYear descarta o ano (memória e disco) e o busca de novo.
+func (a *App) RefreshHolidaysForYear(year int) ([]api.Holiday, error) {
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
 
-	a.api().ClearHolidaysCacheForYear(year)
-
-	return a.api().GetBrazilianHolidays(year)
+	client.ClearHolidaysCacheForYear(year)
+	holidays, err := client.GetBrazilianHolidays(year)
+	if err != nil {
+		return nil, err
+	}
+	return sortedHolidays(holidays), nil
 }

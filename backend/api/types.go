@@ -52,38 +52,45 @@ type EntryTask struct {
 }
 
 type TeamworkTask struct {
-	ID           int    `json:"id"`
-	Content      string `json:"content"`
-	Name         string `json:"name,omitempty"`
-	Description  string `json:"description,omitempty"`
-	ProjectID    int    `json:"projectId"`
-	ProjectName  string `json:"projectName"`
-	Status       string `json:"status,omitempty"`
-	Priority     string `json:"priority,omitempty"`
-	CreatedAt    string `json:"createdAt,omitempty"`
-	StartDate    string `json:"startDate,omitempty"`
-	DueDate      string `json:"dueDate,omitempty"`
-	TasklistID   int    `json:"tasklistId,omitempty"`
-	TasklistName string `json:"tasklistName,omitempty"`
-	Tags         []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"tags,omitempty"`
-	Assignees []struct {
-		ID   int    `json:"id"`
-		Type string `json:"type"`
-	} `json:"assignees,omitempty"`
-	LoggedMinutes int `json:"loggedMinutes,omitempty"`
+	ID            int            `json:"id"`
+	Content       string         `json:"content"`
+	Name          string         `json:"name,omitempty"`
+	Description   string         `json:"description,omitempty"`
+	ProjectID     int            `json:"projectId"`
+	ProjectName   string         `json:"projectName"`
+	Status        string         `json:"status,omitempty"`
+	Priority      string         `json:"priority,omitempty"`
+	CreatedAt     string         `json:"createdAt,omitempty"`
+	StartDate     string         `json:"startDate,omitempty"`
+	DueDate       string         `json:"dueDate,omitempty"`
+	TasklistID    int            `json:"tasklistId,omitempty"`
+	TasklistName  string         `json:"tasklistName,omitempty"`
+	Tags          []TaskTag      `json:"tags,omitempty"`
+	Assignees     []TaskAssignee `json:"assignees,omitempty"`
+	LoggedMinutes int            `json:"loggedMinutes,omitempty"`
 }
 
-// types.go - Versão expandida do TasksResponse (OPCIONAL)
+// TaskTag e TaskAssignee têm nome próprio porque o gerador do Wails emite
+// structs anônimas como `export class  {`, TypeScript inválido em models.ts.
+type TaskTag struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
 
+type TaskAssignee struct {
+	ID   int    `json:"id"`
+	Type string `json:"type"`
+}
+
+// TasksResponse é uma página de tarefas da API v3. As tarefas vêm no formato
+// de transporte (taskWire) e são convertidas por resolvedTasks.
 type TasksResponse struct {
-	Tasks    []TeamworkTask `json:"tasks"`
+	Tasks    []taskWire `json:"tasks"`
 	Included struct {
 		TaskLists map[string]struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
+			ID        int    `json:"id"`
+			Name      string `json:"name"`
+			ProjectID int    `json:"projectId"`
 		} `json:"tasklists"`
 		Projects map[string]struct {
 			ID   int    `json:"id"`
@@ -95,18 +102,20 @@ type TasksResponse struct {
 			LastName  string `json:"lastName"`
 		} `json:"users,omitempty"`
 	} `json:"included,omitempty"`
-	Meta struct {
-		Page struct {
-			Count       int  `json:"count"`
-			HasMore     bool `json:"hasMore"`
-			ItemsOnPage int  `json:"itemsOnPage"`
-			Page        int  `json:"page"`
-			PageOffset  int  `json:"pageOffset"`
-			PageSize    int  `json:"pageSize"`
-			TotalItems  int  `json:"totalItems"`
-			TotalPages  int  `json:"totalPages"`
-		} `json:"page"`
-	} `json:"meta"`
+	pageMeta
+}
+
+// taskWire é a tarefa como a v3 a envia: além dos campos de TeamworkTask, a
+// lista e o projeto podem vir como relacionamentos {"id": ...}. Fica separada
+// para não adicionar esses campos ao JSON que o frontend recebe.
+type taskWire struct {
+	TeamworkTask
+	Tasklist *struct {
+		ID int `json:"id"`
+	} `json:"tasklist,omitempty"`
+	Project *struct {
+		ID int `json:"id"`
+	} `json:"project,omitempty"`
 }
 
 type Template struct {
@@ -163,6 +172,12 @@ type ProjectsResponse struct {
 	TotalPages  int       `json:"totalPages"`
 	TotalItems  int       `json:"totalItems"`
 	ItemsOnPage int       `json:"itemsOnPage"`
+	Meta        struct {
+		Page struct {
+			HasMore    bool `json:"hasMore"`
+			TotalItems int  `json:"totalItems"`
+		} `json:"page"`
+	} `json:"meta"`
 }
 
 // LoginResponse é devolvido ao frontend após a validação do token. Não carrega

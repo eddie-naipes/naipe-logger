@@ -3,12 +3,20 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// taskIncludes pede, junto com as tarefas, as listas e os projetos a que elas
+// pertencem. A v3 não traz projectId/nome do projeto na tarefa: o caminho é
+// tarefa -> tasklistId -> included.tasklists[id].projectId ->
+// included.projects[id].name. Sem isso toda tarefa parecia "incompleta" e
+// GetTasks fazia uma requisição de detalhe por tarefa (N+1).
+const taskIncludes = "projects,tasklists"
 
 func (t *TeamworkAPI) GetTasks() ([]TeamworkTask, error) {
 	cacheKey := fmt.Sprintf("tasks_user_%d", t.Config.UserID)
@@ -20,40 +28,103 @@ func (t *TeamworkAPI) GetTasks() ([]TeamworkTask, error) {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	path := fmt.Sprintf("/projects/api/v3/tasks.json?assignedTo=%d&filter=active&includeTasklists=true&includeTaskAssignees=true&includeCompletionStatus=true&includeEstimatedTime=true&includeTaskTags=true",
-		t.Config.UserID)
+	path := fmt.Sprintf("/projects/api/v3/tasks.json?assignedTo=%d&filter=active&include=%s&includeTasklists=true&includeTaskAssignees=true&includeCompletionStatus=true&includeEstimatedTime=true&includeTaskTags=true",
+		t.Config.UserID, taskIncludes)
 
-	url := t.buildURL(path)
-	t.logDebug("Fazendo requisição para URL: %s", url)
+	slog.Debug("Buscando tarefas do usuário", "usuario", t.Config.UserID)
 
-	req, err := t.createRequest("GET", url, nil)
+	tasks, err := t.fetchTaskPages(t.buildURL(path), "tarefas")
 	if err != nil {
 		return nil, err
 	}
 
-	resp, body, err := t.doRequest(req)
+	t.enrichTasksWithDetails(&tasks)
+
+	t.cache.Set(cacheKey, tasks, 15*time.Minute)
+	return tasks, nil
+}
+
+// fetchTaskPages percorre um endpoint v3 de tarefas e devolve as tarefas já
+// resolvidas com os dados de `included`.
+func (t *TeamworkAPI) fetchTaskPages(baseURL, what string) ([]TeamworkTask, error) {
+	tasks := make([]TeamworkTask, 0)
+
+	err := t.fetchPages(baseURL, listPageSize, maxListPages, what, func(body []byte) (pageInfo, error) {
+		var page TasksResponse
+		if err := json.Unmarshal(body, &page); err != nil {
+			return pageInfo{}, err
+		}
+		tasks = append(tasks, page.resolvedTasks()...)
+		return pageInfo{items: len(page.Tasks), hasMore: page.Meta.Page.HasMore}, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter tarefas: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
+	return tasks, nil
+}
+
+// resolvedTasks preenche lista, projeto e nome de cada tarefa a partir do
+// bloco `included` da própria resposta.
+func (r *TasksResponse) resolvedTasks() []TeamworkTask {
+	tasks := make([]TeamworkTask, 0, len(r.Tasks))
+
+	for _, wire := range r.Tasks {
+		task := wire.TeamworkTask
+
+		if task.TasklistID == 0 && wire.Tasklist != nil {
+			task.TasklistID = wire.Tasklist.ID
+		}
+		if task.ProjectID == 0 && wire.Project != nil {
+			task.ProjectID = wire.Project.ID
+		}
+
+		if task.TasklistID > 0 {
+			if tasklist, ok := r.Included.TaskLists[strconv.Itoa(task.TasklistID)]; ok {
+				task.TasklistName = tasklist.Name
+				if task.ProjectID == 0 {
+					task.ProjectID = tasklist.ProjectID
+				}
+			}
+		}
+
+		if task.ProjectID > 0 && task.ProjectName == "" {
+			if project, ok := r.Included.Projects[strconv.Itoa(task.ProjectID)]; ok {
+				task.ProjectName = project.Name
+			}
+		}
+
+		task.Content = taskDisplayName(task)
+		tasks = append(tasks, task)
 	}
 
-	var response TasksResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	return tasks
+}
+
+// taskDisplayName escolhe o nome exibido da tarefa: Content, depois Name.
+// O nome da lista de tarefas NÃO serve de fallback — antes ele era usado
+// quando Content vinha vazio (o normal na v3, que manda "name"), e todas as
+// tarefas da mesma lista apareciam com o mesmo título.
+func taskDisplayName(task TeamworkTask) string {
+	if task.Content != "" && !isPlaceholderName(task.Content) {
+		return task.Content
+	}
+	if task.Name != "" {
+		return task.Name
+	}
+	if task.Content != "" {
+		return task.Content
 	}
 
-	enrichTasksWithIncludedData(&response)
-
-	if len(response.Tasks) > 0 {
-		t.enrichTasksWithDetails(&response.Tasks)
+	projectInfo := ""
+	if task.ProjectName != "" {
+		projectInfo = fmt.Sprintf(" (%s)", task.ProjectName)
 	}
+	return fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
+}
 
-	t.cache.Set(cacheKey, response.Tasks, 15*time.Minute)
-	return response.Tasks, nil
+func isPlaceholderName(name string) bool {
+	return strings.HasPrefix(name, "Tarefa #")
 }
 
 func (t *TeamworkAPI) GetTaskDetails(taskID int) (TeamworkTask, error) {
@@ -62,10 +133,10 @@ func (t *TeamworkAPI) GetTaskDetails(taskID int) (TeamworkTask, error) {
 	}
 
 	taskIDStr := strconv.Itoa(taskID)
-	path := fmt.Sprintf("/projects/api/v3/tasks/%s.json?include=tags,assignees,time,project,tasklist", taskIDStr)
+	path := fmt.Sprintf("/projects/api/v3/tasks/%s.json?include=projects,tasklists,timeTotals,tags", taskIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Buscando detalhes da tarefa ID %d...", taskID)
+	slog.Debug("Buscando detalhes da tarefa", "tarefa", taskID)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -106,7 +177,8 @@ func parseTaskResponseV3(body []byte, taskIDStr string) (TeamworkTask, error) {
 				Name string `json:"name"`
 			} `json:"projects"`
 			Tasklists map[string]struct {
-				Name string `json:"name"`
+				Name      string `json:"name"`
+				ProjectID int    `json:"projectId"`
 			} `json:"tasklists"`
 			TimeTotals map[string]struct {
 				LoggedMinutes         int `json:"loggedMinutes"`
@@ -131,14 +203,18 @@ func parseTaskResponseV3(body []byte, taskIDStr string) (TeamworkTask, error) {
 		CreatedAt:   taskResponseV3.Task.CreatedAt,
 	}
 
-	projectIDStr := strconv.Itoa(taskResponseV3.Task.ProjectID)
-	if proj, ok := taskResponseV3.Included.Projects[projectIDStr]; ok {
-		result.ProjectName = proj.Name
-	}
-
 	tasklistIDStr := strconv.Itoa(taskResponseV3.Task.TasklistID)
 	if tlist, ok := taskResponseV3.Included.Tasklists[tasklistIDStr]; ok {
 		result.TasklistName = tlist.Name
+		// A tarefa v3 não traz projectId; ele vem da lista.
+		if result.ProjectID == 0 {
+			result.ProjectID = tlist.ProjectID
+		}
+	}
+
+	projectIDStr := strconv.Itoa(result.ProjectID)
+	if proj, ok := taskResponseV3.Included.Projects[projectIDStr]; ok {
+		result.ProjectName = proj.Name
 	}
 
 	if timeLog, ok := taskResponseV3.Included.TimeTotals[taskIDStr]; ok {
@@ -214,61 +290,28 @@ func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
 		return nil, fmt.Errorf("API não configurada")
 	}
 
-	projectIDStr := strconv.Itoa(projectID)
-	path := fmt.Sprintf("/projects/api/v3/projects/%s/tasks.json?include=projects,taskLists,users,companies,teams,timeTotals,tags,completedBy&includeCustomFields=true&includeLoggedTime=true",
-		projectIDStr)
-	url := t.buildURL(path)
+	path := fmt.Sprintf("/projects/api/v3/projects/%d/tasks.json?include=%s,users,companies,teams,timeTotals,tags,completedBy&includeCustomFields=true&includeLoggedTime=true",
+		projectID, taskIncludes)
 
-	t.logDebug("Buscando tarefas para o projeto %s: %s", projectIDStr, url)
+	slog.Debug("Buscando tarefas do projeto", "projeto", projectID)
 
-	req, err := t.createRequest("GET", url, nil)
+	tasks, err := t.fetchTaskPages(t.buildURL(path), "tarefas do projeto")
 	if err != nil {
-		return nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		t.logDebug("Erro ao obter tarefas do projeto (API v3): %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-		tasks, err := t.getTasksByTasklists(projectID)
-		if err == nil && len(tasks) > 0 {
-			t.enrichTasksWithProjectContext(&tasks, projectID)
-			t.cache.Set(cacheKey, tasks, 5*time.Minute)
+		// Caminho alternativo para contas em que o endpoint por projeto falha:
+		// monta a lista a partir das listas de tarefas (e, por fim, da v1).
+		slog.Debug("Erro ao obter tarefas do projeto pela API v3", "projeto", projectID, "err", err)
+		tasks, err = t.getTasksByTasklists(projectID)
+		if err != nil {
+			return nil, err
 		}
-		return tasks, err
 	}
 
-	tasks, err := parseProjectTasksV3(body, projectID, t)
-	if err == nil {
+	if len(tasks) > 0 {
 		t.enrichTasksWithProjectContext(&tasks, projectID)
-		t.cache.Set(cacheKey, tasks, 5*time.Minute)
-		return tasks, nil
 	}
 
-	var response TasksResponse
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		t.logDebug("Erro ao decodificar resposta: %v\nTentando método alternativo...", err)
-		tasks, err := t.getTasksByTasklists(projectID)
-		if err == nil && len(tasks) > 0 {
-			t.enrichTasksWithProjectContext(&tasks, projectID)
-			t.cache.Set(cacheKey, tasks, 5*time.Minute)
-		}
-		return tasks, err
-	}
-
-	enrichTasksWithIncludedData(&response)
-
-	if len(response.Tasks) > 0 {
-		t.enrichTasksWithProjectContext(&response.Tasks, projectID)
-	}
-
-	t.cache.Set(cacheKey, response.Tasks, 5*time.Minute) // Cache reduzido
-	return response.Tasks, nil
+	t.cache.Set(cacheKey, tasks, 5*time.Minute)
+	return tasks, nil
 }
 
 func (t *TeamworkAPI) enrichTasksWithProjectContext(tasks *[]TeamworkTask, expectedProjectID int) {
@@ -277,8 +320,15 @@ func (t *TeamworkAPI) enrichTasksWithProjectContext(tasks *[]TeamworkTask, expec
 	}
 
 	projectName := ""
+	needsProjectName := false
+	for _, task := range *tasks {
+		if task.ProjectName == "" {
+			needsProjectName = true
+			break
+		}
+	}
 
-	if expectedProjectID > 0 {
+	if expectedProjectID > 0 && needsProjectName {
 		projects, err := t.GetProjects()
 		if err == nil {
 			for _, p := range projects {
@@ -301,259 +351,150 @@ func (t *TeamworkAPI) enrichTasksWithProjectContext(tasks *[]TeamworkTask, expec
 			task.ProjectName = projectName
 		}
 
-		if strings.HasPrefix(task.Content, "Tarefa #") && task.Name != "" {
-			task.Content = task.Name
-		}
-
-		if task.Content == "" && task.Name != "" {
-			task.Content = task.Name
-		}
+		task.Content = taskDisplayName(*task)
 	}
 
 	t.enrichTasksWithDetails(tasks)
 }
 
-func parseProjectTasksV3(body []byte, projectID int, t *TeamworkAPI) ([]TeamworkTask, error) {
-	var responseV3 struct {
-		Tasks []struct {
-			ID          int    `json:"id"`
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Status      string `json:"status"`
-			ProjectID   int    `json:"projectId"`
-			TasklistID  int    `json:"tasklistId"`
-			CreatedAt   string `json:"createdAt"`
-		} `json:"tasks"`
-		Included struct {
-			Projects map[string]struct {
-				Name string `json:"name"`
-			} `json:"projects"`
-			Tasklists map[string]struct {
-				Name string `json:"name"`
-			} `json:"tasklists"`
-		} `json:"included"`
-	}
-
-	err := json.Unmarshal(body, &responseV3)
-	if err != nil {
-		return nil, err
-	}
-
-	var tasks []TeamworkTask
-	projectName := ""
-	projectIDStr := strconv.Itoa(projectID)
-
-	if proj, ok := responseV3.Included.Projects[projectIDStr]; ok {
-		projectName = proj.Name
-	} else {
-		projects, _ := t.GetProjects()
-		for _, p := range projects {
-			if p.ID == projectID {
-				projectName = p.Name
-				break
-			}
-		}
-	}
-
-	for _, task := range responseV3.Tasks {
-		tasklistName := ""
-		tasklistIDStr := strconv.Itoa(task.TasklistID)
-
-		if tlist, ok := responseV3.Included.Tasklists[tasklistIDStr]; ok {
-			tasklistName = tlist.Name
-		}
-
-		tasks = append(tasks, TeamworkTask{
-			ID:           task.ID,
-			Content:      task.Name,
-			Description:  task.Description,
-			ProjectID:    projectID,
-			ProjectName:  projectName,
-			Status:       task.Status,
-			CreatedAt:    task.CreatedAt,
-			TasklistID:   task.TasklistID,
-			TasklistName: tasklistName,
-		})
-	}
-
-	return tasks, nil
+// taskNeedsDetail diz se a tarefa ainda está sem nome real ou sem projeto
+// depois de aproveitar o `included`. Só essas justificam uma requisição de
+// detalhe.
+func taskNeedsDetail(task TeamworkTask) bool {
+	return task.Content == "" ||
+		isPlaceholderName(task.Content) ||
+		task.ProjectID == 0 ||
+		task.ProjectName == ""
 }
 
+// enrichTasksWithDetails busca o detalhe só das tarefas que realmente
+// precisam, com no máximo 5 requisições simultâneas.
 func (t *TeamworkAPI) enrichTasksWithDetails(tasks *[]TeamworkTask) {
-	if len(*tasks) == 0 {
-		return
-	}
-
-	// Para poucas tarefas, processar sequencialmente
-	if len(*tasks) <= 3 {
-		for i, task := range *tasks {
-			t.enrichTaskDetail(&(*tasks)[i], task)
-		}
+	if tasks == nil || len(*tasks) == 0 {
 		return
 	}
 
 	var wg sync.WaitGroup
-	tasksCopy := *tasks
 	semaphore := make(chan struct{}, 5)
 
-	for i, task := range tasksCopy {
-		needsEnrichment := task.Content == "" ||
-			task.ProjectID == 0 ||
-			task.ProjectName == "" ||
-			strings.HasPrefix(task.Content, "Tarefa #")
-
-		if needsEnrichment {
-			wg.Add(1)
-			go func(idx int, tsk TeamworkTask) {
-				defer wg.Done()
-				semaphore <- struct{}{}
-				defer func() { <-semaphore }()
-
-				t.enrichTaskDetail(&(*tasks)[idx], tsk)
-			}(i, task)
+	for i := range *tasks {
+		if !taskNeedsDetail((*tasks)[i]) {
+			continue
 		}
+
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			t.enrichTaskDetail(&(*tasks)[idx])
+		}(i)
 	}
 
 	wg.Wait()
 }
 
-func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask, task TeamworkTask) {
-	needsEnrichment := task.Content == "" ||
-		task.ProjectID == 0 ||
-		task.ProjectName == "" ||
-		strings.HasPrefix(task.Content, "Tarefa #") ||
-		(task.Content != "" && task.Name != "" && task.Content != task.Name)
+func (t *TeamworkAPI) enrichTaskDetail(taskPtr *TeamworkTask) {
+	// O nome da própria tarefa tem prioridade e não custa requisição.
+	taskPtr.Content = taskDisplayName(*taskPtr)
 
-	if needsEnrichment {
-		taskDetail, err := t.GetTaskDetails(task.ID)
-		if err == nil {
-			if (task.Content == "" || strings.HasPrefix(task.Content, "Tarefa #")) && taskDetail.Name != "" {
-				taskPtr.Content = taskDetail.Name
-			} else if taskDetail.Content != "" && task.Content == "" {
-				taskPtr.Content = taskDetail.Content
-			}
-
-			if taskPtr.ProjectID == 0 && taskDetail.ProjectID != 0 {
-				taskPtr.ProjectID = taskDetail.ProjectID
-			}
-			if taskPtr.ProjectName == "" && taskDetail.ProjectName != "" {
-				taskPtr.ProjectName = taskDetail.ProjectName
-			}
-
-			if task.Description == "" && taskDetail.Description != "" {
-				taskPtr.Description = taskDetail.Description
-			}
-			if task.TasklistName == "" && taskDetail.TasklistName != "" {
-				taskPtr.TasklistName = taskDetail.TasklistName
-			}
-			if taskDetail.LoggedMinutes > 0 {
-				taskPtr.LoggedMinutes = taskDetail.LoggedMinutes
-			}
-		} else {
-			t.logDebug("Erro ao buscar detalhes da tarefa %d: %v", task.ID, err)
-		}
-
-		if taskPtr.Content == "" || strings.HasPrefix(taskPtr.Content, "Tarefa #") {
-			projectInfo := ""
-			if taskPtr.ProjectName != "" {
-				projectInfo = fmt.Sprintf(" (%s)", taskPtr.ProjectName)
-			}
-
-			if task.Name != "" {
-				taskPtr.Content = fmt.Sprintf("%s%s", task.Name, projectInfo)
-			} else {
-				taskPtr.Content = fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
-			}
-		}
-	}
-}
-
-func enrichTasksWithIncludedData(response *TasksResponse) {
-	if response == nil || len(response.Tasks) == 0 {
+	if !taskNeedsDetail(*taskPtr) {
 		return
 	}
 
-	for i := range response.Tasks {
-		task := &response.Tasks[i]
+	taskDetail, err := t.GetTaskDetails(taskPtr.ID)
+	if err != nil {
+		slog.Debug("Erro ao buscar detalhes da tarefa", "tarefa", taskPtr.ID, "err", err)
+		return
+	}
 
-		if len(response.Included.TaskLists) > 0 && task.TasklistID > 0 {
-			tasklistIDStr := strconv.Itoa(task.TasklistID)
-			if tasklistInfo, exists := response.Included.TaskLists[tasklistIDStr]; exists {
-				if task.Content == "" && tasklistInfo.Name != "" {
-					task.Content = tasklistInfo.Name
-				}
-				task.TasklistName = tasklistInfo.Name
-			}
-		}
-
-		if task.Content == "" && task.Name != "" {
-			task.Content = task.Name
-		}
-
-		if task.Content == "" {
-			projectInfo := ""
-			if len(response.Included.Projects) > 0 && task.ProjectID > 0 {
-				projectIDStr := strconv.Itoa(task.ProjectID)
-				if projInfo, exists := response.Included.Projects[projectIDStr]; exists {
-					projectInfo = fmt.Sprintf(" (%s)", projInfo.Name)
-				}
-			}
-			task.Content = fmt.Sprintf("Tarefa #%d%s", task.ID, projectInfo)
+	if taskPtr.Name == "" && taskDetail.Name != "" {
+		taskPtr.Name = taskDetail.Name
+	}
+	if isPlaceholderName(taskPtr.Content) || taskPtr.Content == "" {
+		if taskDetail.Name != "" {
+			taskPtr.Content = taskDetail.Name
+		} else if taskDetail.Content != "" {
+			taskPtr.Content = taskDetail.Content
 		}
 	}
+
+	if taskPtr.ProjectID == 0 && taskDetail.ProjectID != 0 {
+		taskPtr.ProjectID = taskDetail.ProjectID
+	}
+	if taskPtr.ProjectName == "" && taskDetail.ProjectName != "" {
+		taskPtr.ProjectName = taskDetail.ProjectName
+	}
+	if taskPtr.Description == "" && taskDetail.Description != "" {
+		taskPtr.Description = taskDetail.Description
+	}
+	if taskPtr.TasklistName == "" && taskDetail.TasklistName != "" {
+		taskPtr.TasklistName = taskDetail.TasklistName
+	}
+	if taskDetail.LoggedMinutes > 0 {
+		taskPtr.LoggedMinutes = taskDetail.LoggedMinutes
+	}
+
+	taskPtr.Content = taskDisplayName(*taskPtr)
 }
 
 func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error) {
-	t.logDebug("Tentando método alternativo: obter tarefas através das listas de tarefas")
+	slog.Debug("Tentando método alternativo: obter tarefas através das listas de tarefas", "projeto", projectID)
 
 	tasklists, err := t.GetTasklistsByProject(projectID)
 	if err != nil {
-		t.logDebug("Erro ao obter listas de tarefas: %v\nTentando fallback para API v2...", err)
+		slog.Debug("Erro ao obter listas de tarefas; tentando fallback para API v2", "projeto", projectID, "err", err)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
 	if len(tasklists) == 0 {
-		t.logDebug("Nenhuma lista de tarefas encontrada. Tentando fallback para API v2...")
+		slog.Debug("Nenhuma lista de tarefas encontrada; tentando fallback para API v2", "projeto", projectID)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
-	projectName := ""
-	projects, _ := t.GetProjects()
-	for _, p := range projects {
-		if p.ID == projectID {
-			projectName = p.Name
-			break
-		}
+	// Uma requisição por lista, até 3 em paralelo. Sequencial, um projeto com
+	// dezenas de listas levava dezenas de idas e voltas. Cada lista grava na
+	// sua posição para o resultado sair na ordem das listas.
+	porLista := make([][]TeamworkTask, len(tasklists))
+
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, 3)
+
+	for i, tasklist := range tasklists {
+		wg.Add(1)
+		go func(pos int, tl TaskListItem) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			tasks, err := t.GetTasksByTasklist(tl.ID)
+			if err != nil {
+				slog.Debug("Erro ao obter tarefas da lista", "lista", tl.ID, "err", err)
+				return
+			}
+
+			for j := range tasks {
+				if tasks[j].ProjectID == 0 {
+					tasks[j].ProjectID = projectID
+				}
+				if tasks[j].TasklistName == "" {
+					tasks[j].TasklistName = tl.Name
+				}
+			}
+			porLista[pos] = tasks
+		}(i, tasklist)
 	}
 
+	wg.Wait()
+
 	var allTasks []TeamworkTask
-
-	for _, tasklist := range tasklists {
-		t.logDebug("Buscando tarefas da lista %d: %s", tasklist.ID, tasklist.Name)
-
-		tasks, err := t.GetTasksByTasklist(tasklist.ID)
-		if err != nil {
-			t.logDebug("Erro ao obter tarefas da lista %d: %v", tasklist.ID, err)
-			continue
-		}
-
-		for i := range tasks {
-			if tasks[i].ProjectID == 0 {
-				tasks[i].ProjectID = projectID
-			}
-			if tasks[i].ProjectName == "" {
-				tasks[i].ProjectName = projectName
-			}
-			if tasks[i].TasklistName == "" {
-				tasks[i].TasklistName = tasklist.Name
-			}
-		}
-
+	for _, tasks := range porLista {
 		allTasks = append(allTasks, tasks...)
 	}
 
 	if len(allTasks) == 0 {
-		t.logDebug("Nenhuma tarefa encontrada via listas. Tentando fallback para API v2...")
+		slog.Debug("Nenhuma tarefa encontrada via listas; tentando fallback para API v2", "projeto", projectID)
 		return t.fallbackGetTasksByProject(projectID)
 	}
 
@@ -561,77 +502,47 @@ func (t *TeamworkAPI) getTasksByTasklists(projectID int) ([]TeamworkTask, error)
 }
 
 func (t *TeamworkAPI) GetTasklistsByProject(projectID int) ([]TaskListItem, error) {
-	projectIDStr := strconv.Itoa(projectID)
-	path := fmt.Sprintf("/projects/api/v3/projects/%s/tasklists.json", projectIDStr)
-	url := t.buildURL(path)
+	path := fmt.Sprintf("/projects/api/v3/projects/%d/tasklists.json", projectID)
 
-	t.logDebug("Buscando listas de tarefas para o projeto %s: %s", projectIDStr, url)
+	slog.Debug("Buscando listas de tarefas", "projeto", projectID)
 
-	req, err := t.createRequest("GET", url, nil)
+	tasklists := make([]TaskListItem, 0)
+	err := t.fetchPages(t.buildURL(path), listPageSize, maxListPages, "listas de tarefas",
+		func(body []byte) (pageInfo, error) {
+			var page struct {
+				Tasklists []TaskListItem `json:"tasklists"`
+				pageMeta
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				return pageInfo{}, err
+			}
+			tasklists = append(tasklists, page.Tasklists...)
+			return pageInfo{items: len(page.Tasklists), hasMore: page.Meta.Page.HasMore}, nil
+		})
 	if err != nil {
 		return nil, err
 	}
 
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter listas de tarefas: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-	}
-
-	var response struct {
-		Tasklists []TaskListItem `json:"tasklists"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	return response.Tasklists, nil
+	return tasklists, nil
 }
 
 func (t *TeamworkAPI) GetTasksByTasklist(tasklistID int) ([]TeamworkTask, error) {
-	tasklistIDStr := strconv.Itoa(tasklistID)
-	path := fmt.Sprintf("/projects/api/v3/tasklists/%s/tasks.json?includeTaskDetails=true", tasklistIDStr)
-	url := t.buildURL(path)
+	path := fmt.Sprintf("/projects/api/v3/tasklists/%d/tasks.json?include=%s&includeTaskDetails=true",
+		tasklistID, taskIncludes)
 
-	t.logDebug("Buscando tarefas da lista %s: %s", tasklistIDStr, url)
+	slog.Debug("Buscando tarefas da lista", "lista", tasklistID)
 
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter tarefas da lista: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-	}
-
-	var response TasksResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	enrichTasksWithIncludedData(&response)
-	return response.Tasks, nil
+	return t.fetchTaskPages(t.buildURL(path), "tarefas da lista")
 }
 
 func (t *TeamworkAPI) fallbackGetTasksByProject(projectID int) ([]TeamworkTask, error) {
-	t.logDebug("Tentando método alternativo (API v2) para obter tarefas...")
+	slog.Debug("Tentando método alternativo (API v2) para obter tarefas", "projeto", projectID)
 
 	projectIDStr := strconv.Itoa(projectID)
 	path := fmt.Sprintf("/tasks.json?project_id=%s", projectIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Fazendo requisição alternativa para URL: %s", url)
+	slog.Debug("Fazendo requisição alternativa", "url", url)
 
 	req, err := t.createRequest("GET", url, nil)
 	if err != nil {
@@ -699,8 +610,17 @@ const upcomingDeadlinesLimit = 5
 // Ambos os campos já vinham da API e simplesmente não eram usados. Tarefas sem
 // prazo definido são omitidas em vez de receberem um prazo inventado.
 func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
+	tarefas, err := t.ListUpcomingDeadlines()
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(tarefas), nil
+}
+
+// ListUpcomingDeadlines é a versão tipada de GetTasksWithUpcomingDeadlines.
+func (t *TeamworkAPI) ListUpcomingDeadlines() ([]UpcomingDeadline, error) {
 	cacheKey := "upcoming_tasks"
-	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+	if cached, found := getCached[[]UpcomingDeadline](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
@@ -718,7 +638,7 @@ func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{},
 // filtrarEOrdenarPrazos mantém apenas as tarefas com prazo real a partir de
 // hoje, ordena da mais próxima para a mais distante e corta no limite.
 // Tarefas sem prazo, ou com prazo irreconhecível, são descartadas.
-func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []map[string]interface{} {
+func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []UpcomingDeadline {
 	type tarefaComPrazo struct {
 		task TeamworkTask
 		due  time.Time
@@ -744,86 +664,22 @@ func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []m
 		comPrazo = comPrazo[:limite]
 	}
 
-	tarefas := make([]map[string]interface{}, 0, len(comPrazo))
+	tarefas := make([]UpcomingDeadline, 0, len(comPrazo))
 	for _, item := range comPrazo {
 		nome := item.task.Content
 		if nome == "" {
 			nome = item.task.Name
 		}
 
-		tarefas = append(tarefas, map[string]interface{}{
-			"id":          item.task.ID,
-			"name":        nome,
-			"dueDate":     item.due.Format("2006-01-02"),
-			"priority":    item.task.Priority,
-			"projectId":   item.task.ProjectID,
-			"projectName": item.task.ProjectName,
+		tarefas = append(tarefas, UpcomingDeadline{
+			ID:          item.task.ID,
+			Name:        nome,
+			DueDate:     item.due.Format("2006-01-02"),
+			Priority:    item.task.Priority,
+			ProjectID:   item.task.ProjectID,
+			ProjectName: item.task.ProjectName,
 		})
 	}
 
 	return tarefas
-}
-
-func (t *TeamworkAPI) GetCompletedTasksByProject(projectID int) (int, error) {
-	projectIDStr := strconv.Itoa(projectID)
-	path := fmt.Sprintf("/projects/api/v3/tasks.json?projectIds=%s&completedStatus=completed", projectIDStr)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter tarefas concluídas: %d", resp.StatusCode)
-	}
-
-	var responseData struct {
-		Tasks []struct {
-			ID int `json:"id"`
-		} `json:"tasks"`
-	}
-
-	if err := json.Unmarshal(body, &responseData); err != nil {
-		return 0, err
-	}
-
-	return len(responseData.Tasks), nil
-}
-
-func (t *TeamworkAPI) GetCompletedTasks(startDate, endDate string) (int, error) {
-	path := fmt.Sprintf("/projects/api/v3/tasks.json?completedStatus=completed&updatedAfterDate=%s&updatedBeforeDate=%s",
-		startDate, endDate)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter tarefas concluídas: %d", resp.StatusCode)
-	}
-
-	var responseData struct {
-		Tasks []struct {
-			ID int `json:"id"`
-		} `json:"tasks"`
-	}
-
-	if err := json.Unmarshal(body, &responseData); err != nil {
-		return 0, err
-	}
-
-	return len(responseData.Tasks), nil
 }

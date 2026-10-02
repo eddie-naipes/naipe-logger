@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -12,93 +13,6 @@ import (
 	"sync"
 	"time"
 )
-
-func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]interface{}, error) {
-	response, err := t.GetLoggedTimeFromCalendarAPI(month, year)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao obter dados de tempo do calendário: %v", err)
-	}
-
-	if response.STATUS != "OK" || (len(response.User.Billable) == 0 && len(response.User.Nonbillable) == 0) {
-		return nil, fmt.Errorf("nenhuma entrada de tempo válida encontrada")
-	}
-
-	entries := make([]map[string]interface{}, 0)
-
-	if response.User.Billable != nil {
-		for _, entry := range response.User.Billable {
-			if len(entry) < 3 {
-				continue
-			}
-
-			timestamp, err := strconv.ParseInt(entry[0], 10, 64)
-			if err != nil {
-				continue
-			}
-
-			date := time.Unix(timestamp/1000, 0)
-			dateStr := date.Format("2006-01-02")
-
-			hours, _ := strconv.ParseFloat(entry[1], 64)
-			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
-
-			entryData := map[string]interface{}{
-				"date":        dateStr,
-				"minutes":     minutes,
-				"hours":       hours,
-				"description": "Tempo registrado (cobrável)",
-				"projectName": "Teamwork",
-				"isBillable":  true,
-				"timestamp":   timestamp,
-				"type":        "billable",
-			}
-
-			entries = append(entries, entryData)
-		}
-	}
-
-	if response.User.Nonbillable != nil {
-		for _, entry := range response.User.Nonbillable {
-			if len(entry) < 3 {
-				continue
-			}
-
-			timestamp, err := strconv.ParseInt(entry[0], 10, 64)
-			if err != nil {
-				continue
-			}
-
-			date := time.Unix(timestamp/1000, 0)
-			dateStr := date.Format("2006-01-02")
-
-			hours, _ := strconv.ParseFloat(entry[1], 64)
-			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
-
-			if minutes > 0 {
-				entryData := map[string]interface{}{
-					"date":        dateStr,
-					"minutes":     minutes,
-					"hours":       hours,
-					"description": "Tempo registrado (não cobrável)",
-					"projectName": "Teamwork",
-					"isBillable":  false,
-					"timestamp":   timestamp,
-					"type":        "nonbillable",
-				}
-
-				entries = append(entries, entryData)
-			}
-		}
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		date1, _ := time.Parse("2006-01-02", entries[i]["date"].(string))
-		date2, _ := time.Parse("2006-01-02", entries[j]["date"].(string))
-		return date1.After(date2)
-	})
-
-	return entries, nil
-}
 
 func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, error) {
 	if !t.IsConfigured() {
@@ -127,8 +41,8 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 
 	entry.UserID = t.Config.UserID
 
-	t.logDebug("Lançando tempo para tarefa #%d: %s %s - %d minutos - %s",
-		taskID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+	slog.Debug("Lançando tempo", "tarefa", taskID, "data", entry.Date, "hora", entry.Time,
+		"minutos", entry.Minutes, "descricao", entry.Description)
 
 	reqBody := TimelogRequest{
 		Timelog: entry,
@@ -138,8 +52,6 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 	if err != nil {
 		return nil, fmt.Errorf("erro ao converter para JSON: %v", err)
 	}
-
-	t.logDebug("JSON do lançamento: %s", string(jsonData))
 
 	req, err := t.createRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -151,7 +63,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		return nil, err
 	}
 
-	t.logDebug("Resposta do servidor (%d): %s", resp.StatusCode, string(body))
+	slog.Debug("Resposta do servidor ao lançamento", "status", resp.StatusCode, "corpo", sanitizeForLog(truncateForError(body, 300)))
 
 	result := &TimeLogResult{
 		TaskID: taskID,
@@ -159,6 +71,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 	}
 
 	if resp.StatusCode == 201 {
+		t.invalidateTimeEntryCaches()
 		result.Success = true
 		result.Message = fmt.Sprintf("Entrada de tempo enviada com sucesso: %s %s",
 			entry.Date, entry.Time)
@@ -169,7 +82,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		} else {
 			// Sem o ID a entrada existe no Teamwork mas não pode ser desfeita
 			// pela ferramenta. Registrar o corpo ajuda a mapear o formato.
-			t.logDebug("Lançamento criado sem ID reconhecível na resposta: %s", string(body))
+			slog.Warn("Lançamento criado sem ID reconhecível na resposta", "corpo", sanitizeForLog(truncateForError(body, 300)))
 		}
 
 		return result, nil
@@ -229,85 +142,22 @@ func extractTimelogID(body []byte) (int, bool) {
 	return 0, false
 }
 
-func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, tasks []Task) ([]WorkDay, error) {
-	entries, err := t.GetEntriesFromLoggedTime(month, year)
-	if err != nil {
-		return nil, err
+// extractTimelogTaskID lê a tarefa do lançamento na resposta do PUT, quando a
+// API a informa. Devolve 0 se não houver.
+func extractTimelogTaskID(body []byte) int {
+	var shapes struct {
+		Timelog struct {
+			TaskID int `json:"taskId"`
+		} `json:"timelog"`
+		TaskID int `json:"taskId"`
 	}
-
-	entriesByDay := make(map[string][]map[string]interface{})
-	for _, entry := range entries {
-		date, ok := entry["date"].(string)
-		if !ok {
-			continue
-		}
-		entriesByDay[date] = append(entriesByDay[date], entry)
+	if err := json.Unmarshal(body, &shapes); err != nil {
+		return 0
 	}
-
-	workDays := make([]WorkDay, 0, len(entriesByDay))
-
-	for date, dayEntries := range entriesByDay {
-		workDay := WorkDay{
-			Date:     date,
-			Entries:  []EntryTask{},
-			TotalMin: 0,
-		}
-
-		totalMin := 0
-		for _, entry := range dayEntries {
-			if mins, ok := entry["minutes"].(int64); ok {
-				totalMin += int(mins)
-			}
-		}
-
-		if len(tasks) > 0 {
-			minsPerTask := totalMin / len(tasks)
-			remainingMins := totalMin % len(tasks)
-
-			for _, task := range tasks {
-				taskMins := minsPerTask
-				if remainingMins > 0 {
-					taskMins++
-					remainingMins--
-				}
-
-				if taskMins <= 0 {
-					continue
-				}
-
-				workDay.Entries = append(workDay.Entries, EntryTask{
-					TaskID: task.TaskID,
-					Entry: TimeEntry{
-						Minutes:     taskMins,
-						Description: task.TaskName,
-						IsBillable:  true,
-						Time:        "09:00",
-						Date:        date,
-					},
-				})
-			}
-		} else {
-			workDay.Entries = append(workDay.Entries, EntryTask{
-				TaskID: 0,
-				Entry: TimeEntry{
-					Minutes:     totalMin,
-					Description: "Tempo importado do calendário",
-					IsBillable:  true,
-					Time:        "09:00",
-					Date:        date,
-				},
-			})
-		}
-
-		workDay.TotalMin = totalMin
-		workDays = append(workDays, workDay)
+	if shapes.Timelog.TaskID > 0 {
+		return shapes.Timelog.TaskID
 	}
-
-	sort.Slice(workDays, func(i, j int) bool {
-		return workDays[i].Date < workDays[j].Date
-	})
-
-	return workDays, nil
+	return shapes.TaskID
 }
 
 func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, error) {
@@ -315,83 +165,74 @@ func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, er
 		return nil, fmt.Errorf("nenhum dia de trabalho fornecido para lançamento")
 	}
 
-	t.logDebug("Iniciando lançamento de horas para %d dias", len(workDays))
-
-	totalEntries := 0
-	for _, day := range workDays {
-		totalEntries += len(day.Entries)
+	type pendente struct {
+		date  string
+		entry EntryTask
 	}
 
-	results := make([]*TimeLogResult, 0, totalEntries)
-	resultChan := make(chan *TimeLogResult, totalEntries)
-	errorChan := make(chan error, totalEntries)
+	fila := make([]pendente, 0)
+	for _, dia := range workDays {
+		for _, alocacao := range dia.Entries {
+			fila = append(fila, pendente{date: dia.Date, entry: alocacao})
+		}
+	}
+
+	if len(fila) == 0 {
+		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
+	}
+
+	slog.Debug("Iniciando lançamento em lote", "entradas", len(fila), "dias", len(workDays))
+
+	// Cada goroutine escreve na sua posição: o painel de resultados e o
+	// "reenviar só as falhas" leem na ordem do plano, não na ordem em que as
+	// requisições terminaram (mesmo critério do delete em lote).
+	results := make([]*TimeLogResult, len(fila))
+	ctx := t.requestContext()
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 3)
 
-	for _, dia := range workDays {
-		if len(dia.Entries) == 0 {
-			continue
-		}
+	for i, item := range fila {
+		wg.Add(1)
+		go func(pos int, d string, a EntryTask) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-		for _, alocacao := range dia.Entries {
-			wg.Add(1)
-			go func(d string, a EntryTask) {
-				defer wg.Done()
-				semaphore <- struct{}{}
-				defer func() { <-semaphore }()
-
-				entrada := a.Entry
-				entrada.Date = d
-
-				if a.TaskID <= 0 {
-					resultChan <- &TimeLogResult{
-						Success: false,
-						Message: fmt.Sprintf("ID de tarefa inválido: %d", a.TaskID),
-						Date:    d,
-						TaskID:  a.TaskID,
-					}
-					return
+			if a.TaskID <= 0 {
+				results[pos] = &TimeLogResult{
+					Success: false,
+					Message: fmt.Sprintf("ID de tarefa inválido: %d", a.TaskID),
+					Date:    d,
+					TaskID:  a.TaskID,
 				}
+				return
+			}
 
-				result, err := t.LogTime(a.TaskID, entrada)
+			entrada := a.Entry
+			entrada.Date = d
+
+			result, err := t.LogTime(a.TaskID, entrada)
+			if result == nil {
+				msg := "falha desconhecida ao lançar"
 				if err != nil {
-					if result == nil {
-						resultChan <- &TimeLogResult{
-							Success: false,
-							Message: err.Error(),
-							Date:    d,
-							TaskID:  a.TaskID,
-						}
-					} else {
-						resultChan <- result
-					}
-					errorChan <- err
-				} else {
-					resultChan <- result
+					msg = err.Error()
 				}
+				result = &TimeLogResult{Success: false, Message: msg, Date: d, TaskID: a.TaskID}
+			}
+			results[pos] = result
 
-				time.Sleep(500 * time.Millisecond)
-			}(dia.Date, alocacao)
-		}
+			// Respiro entre chamadas para não esbarrar no rate limit. Sai antes
+			// se o aplicativo estiver fechando.
+			_ = sleepContext(ctx, 500*time.Millisecond)
+		}(i, item.date, item.entry)
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultChan)
-		close(errorChan)
-	}()
+	wg.Wait()
 
-	for result := range resultChan {
-		results = append(results, result)
-	}
-
-	if len(results) == 0 {
-		if len(errorChan) > 0 {
-			return nil, <-errorChan
-		}
-		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
-	}
+	// Invalida de novo ao fim: um dashboard carregado no meio do lote teria
+	// recolocado no cache números já desatualizados.
+	t.invalidateTimeEntryCaches()
 
 	return results, nil
 }
@@ -437,7 +278,7 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 
 	isHoliday, _, err := t.IsHoliday(data)
 	if err != nil {
-		t.logDebug("Erro ao verificar feriado para %s: %v", data.Format("2006-01-02"), err)
+		slog.Warn("Erro ao verificar feriado", "data", data.Format("2006-01-02"), "err", err)
 		return true
 	}
 	return !isHoliday
@@ -450,6 +291,8 @@ func formatDate(data time.Time) string {
 func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task) []WorkDay {
 	planoDistribuicao := make([]WorkDay, 0, len(diasUteis))
 
+	// Sem log por tarefa×dia: um mês com dez tarefas gerava centenas de
+	// linhas a cada pré-visualização. Fica só o resumo no fim.
 	for _, dia := range diasUteis {
 		workDay := WorkDay{
 			Date:     dia,
@@ -459,34 +302,14 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 
 		diaData, err := time.Parse("2006-01-02", dia)
 		if err != nil {
-			t.logDebug("Erro ao fazer parse da data %s: %v", dia, err)
+			slog.Warn("Data inválida ignorada no plano de distribuição", "data", dia, "err", err)
 			continue
 		}
 		diaSemana := int(diaData.Weekday())
 
-		t.logDebug("Processando dia %s (dia da semana: %d)", dia, diaSemana)
-
 		for _, tarefa := range tarefas {
-			shouldIncludeTask := true
-
-			if len(tarefa.WorkingDays) > 0 {
-				t.logDebug("Tarefa %s tem workingDays definidos: %v", tarefa.TaskName, tarefa.WorkingDays)
-				shouldIncludeTask = false
-
-				for _, workingDay := range tarefa.WorkingDays {
-					if workingDay == diaSemana {
-						shouldIncludeTask = true
-						t.logDebug("Dia %d está incluído nos workingDays da tarefa %s", diaSemana, tarefa.TaskName)
-						break
-					}
-				}
-
-				if !shouldIncludeTask {
-					t.logDebug("Dia %d NÃO está incluído nos workingDays da tarefa %s, pulando", diaSemana, tarefa.TaskName)
-					continue
-				}
-			} else {
-				t.logDebug("Tarefa %s não tem workingDays definidos, incluindo em todos os dias", tarefa.TaskName)
+			if !taskWorksOn(tarefa, diaSemana) {
+				continue
 			}
 
 			for _, entrada := range tarefa.Entries {
@@ -495,176 +318,43 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 					Entry:  entrada,
 				})
 				workDay.TotalMin += entrada.Minutes
-				t.logDebug("Adicionada entrada da tarefa %s no dia %s", tarefa.TaskName, dia)
 			}
 		}
 
 		if len(workDay.Entries) > 0 {
 			planoDistribuicao = append(planoDistribuicao, workDay)
-			t.logDebug("Dia %s adicionado ao plano com %d entradas", dia, len(workDay.Entries))
-		} else {
-			t.logDebug("Dia %s não adicionado ao plano (sem entradas)", dia)
 		}
 	}
 
-	t.logDebug("Plano final gerado com %d dias", len(planoDistribuicao))
+	slog.Debug("Plano de distribuição gerado", "diasComLancamentos", len(planoDistribuicao),
+		"diasUteis", len(diasUteis), "tarefas", len(tarefas))
 	return planoDistribuicao
 }
 
-func (t *TeamworkAPI) CalculateTotalMinutes(tarefas []Task) int {
-	total := 0
-	for _, tarefa := range tarefas {
-		for _, entrada := range tarefa.Entries {
-			total += entrada.Minutes
+// taskWorksOn diz se a tarefa entra no dia da semana informado. Sem
+// workingDays definidos, a tarefa vale para todos os dias úteis.
+func taskWorksOn(tarefa Task, diaSemana int) bool {
+	if len(tarefa.WorkingDays) == 0 {
+		return true
+	}
+	for _, workingDay := range tarefa.WorkingDays {
+		if workingDay == diaSemana {
+			return true
 		}
 	}
-	return total
+	return false
 }
 
+// GetHoursLoggedInPeriod devolve as horas lançadas pelo usuário no período,
+// somadas pelo próprio Teamwork em time/total.json. Listar time.json e somar
+// aqui exigiria paginar tudo — e a versão anterior ainda usava fromDate/toDate,
+// que a v3 ignora (o correto é startDate/endDate).
 func (t *TeamworkAPI) GetHoursLoggedInPeriod(startDate, endDate string) (float64, error) {
-	userID := strconv.Itoa(t.Config.UserID)
-	path := fmt.Sprintf("/projects/api/v3/time.json?userId=%s&fromDate=%s&toDate=%s",
-		userID, startDate, endDate)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
+	total, err := t.GetTimeTotalsForPeriod(startDate, endDate)
 	if err != nil {
 		return 0, err
 	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter registros de tempo: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	var response struct {
-		TimeEntries []struct {
-			Minutes float64 `json:"minutes"`
-		} `json:"timeEntries"`
-	}
-
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return t.GetHoursLoggedInPeriodLegacy(startDate, endDate)
-	}
-
-	totalMinutos := 0.0
-	for _, entry := range response.TimeEntries {
-		totalMinutos += entry.Minutes
-	}
-
-	return totalMinutos / 60.0, nil
-}
-
-func (t *TeamworkAPI) GetHoursLoggedInPeriodLegacy(startDate, endDate string) (float64, error) {
-	userID := strconv.Itoa(t.Config.UserID)
-	path := fmt.Sprintf("/time/total.json?userId=%s&fromDate=%s&toDate=%s",
-		userID, startDate, endDate)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter registros de tempo legado: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	var rawResponse map[string]interface{}
-	if err := json.Unmarshal(body, &rawResponse); err != nil {
-		return 0, err
-	}
-
-	totalMinutos := 0.0
-
-	if timeEntriesRaw, ok := rawResponse["time-entries"]; ok {
-		if timeEntriesArr, ok := timeEntriesRaw.([]interface{}); ok {
-			for _, entryRaw := range timeEntriesArr {
-				if entry, ok := entryRaw.(map[string]interface{}); ok {
-					if mins, ok := entry["minutes"].(float64); ok {
-						totalMinutos += mins
-					}
-				}
-			}
-		}
-	}
-
-	return totalMinutos / 60.0, nil
-}
-
-func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[string]interface{}, float64, map[string]interface{}, error) {
-	userID := strconv.Itoa(t.Config.UserID)
-	path := fmt.Sprintf("/time/total.json?userId=%s&fromDate=%s&toDate=%s&includeTaskInfo=true",
-		userID, startDate, endDate)
-	url := t.buildURL(path)
-
-	t.logDebug("Obtendo registros de tempo: %s", url)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, 0, nil, fmt.Errorf("erro ao obter registros de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-	}
-
-	var rawResponse map[string]interface{}
-	if err := json.Unmarshal(body, &rawResponse); err != nil {
-		return nil, 0, nil, err
-	}
-
-	var entries []map[string]interface{}
-	totalMinutos := 0.0
-
-	if timeEntriesRaw, ok := rawResponse["time-entries"]; ok {
-		if timeEntriesArr, ok := timeEntriesRaw.([]interface{}); ok {
-			for _, entryRaw := range timeEntriesArr {
-				if entry, ok := entryRaw.(map[string]interface{}); ok {
-					entries = append(entries, entry)
-
-					if mins, ok := entry["minutes"].(float64); ok {
-						totalMinutos += mins
-					}
-				}
-			}
-		}
-	}
-
-	totalHoras := totalMinutos / 60.0
-
-	var ultimoLancamento map[string]interface{}
-	if len(entries) > 0 {
-		ultimoLancamento = entries[0]
-
-		for _, entry := range entries {
-			if dataAtual, ok := entry["date"].(string); ok {
-				if dataUltimo, ok := ultimoLancamento["date"].(string); ok {
-					if dataAtual > dataUltimo {
-						ultimoLancamento = entry
-					}
-				}
-			}
-		}
-	}
-
-	return entries, totalHoras, ultimoLancamento, nil
+	return float64(total.TimeTotals.Minutes) / 60.0, nil
 }
 
 const (
@@ -680,8 +370,17 @@ const (
 // dashboard exibia como se fossem reais. Agora todos os campos vêm da API; se
 // não houver lançamentos, o card fica vazio em vez de mostrar dado inventado.
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
-	cacheKey := "recent_activities"
-	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+	atividades, err := t.ListRecentActivities()
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(atividades), nil
+}
+
+// ListRecentActivities é a versão tipada de GetRecentActivities.
+func (t *TeamworkAPI) ListRecentActivities() ([]RecentActivity, error) {
+	cacheKey := cacheKeyRecentActivities
+	if cached, found := getCached[[]RecentActivity](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
@@ -707,23 +406,23 @@ func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 		entries = entries[:recentActivitiesLimit]
 	}
 
-	atividades := make([]map[string]interface{}, 0, len(entries))
+	atividades := make([]RecentActivity, 0, len(entries))
 	for _, entry := range entries {
 		descricao := entry.Description
 		if descricao == "" {
 			descricao = entry.TaskName
 		}
 
-		atividades = append(atividades, map[string]interface{}{
-			"id":          entry.ID,
-			"type":        "timelog",
-			"description": descricao,
-			"minutes":     entry.Minutes,
-			"date":        entry.Date,
-			"projectId":   entry.ProjectID,
-			"projectName": entry.ProjectName,
-			"taskId":      entry.TaskID,
-			"taskName":    entry.TaskName,
+		atividades = append(atividades, RecentActivity{
+			ID:          entry.ID,
+			Type:        "timelog",
+			Description: descricao,
+			Minutes:     entry.Minutes,
+			Date:        entry.Date,
+			ProjectID:   entry.ProjectID,
+			ProjectName: entry.ProjectName,
+			TaskID:      entry.TaskID,
+			TaskName:    entry.TaskName,
 		})
 	}
 
@@ -731,7 +430,18 @@ func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 	return atividades, nil
 }
 
+// GetAllNonWorkingDays devolve fins de semana e feriados do mês no formato de
+// mapa que o binding atual expõe; ListNonWorkingDays é a versão tipada.
 func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
+	days, err := t.ListNonWorkingDays(year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(days), nil
+}
+
+// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês.
+func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 
 	var endDate time.Time
@@ -743,19 +453,19 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 
 	holidays, err := t.GetHolidaysForMonth(year, month)
 	if err != nil {
-		t.logDebug("Erro ao obter feriados para %d/%d: %v", month, year, err)
+		slog.Warn("Erro ao obter feriados do mês", "mes", month, "ano", year, "err", err)
 		holidays = []Holiday{}
 	}
 
-	nonWorkingDays := make([]map[string]interface{}, 0)
+	nonWorkingDays := make([]NonWorkingDay, 0)
 
 	current := startDate
 	for !current.After(endDate) {
 		if current.Weekday() == time.Saturday || current.Weekday() == time.Sunday {
-			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
-				"date": formatDate(current),
-				"type": "weekend",
-				"name": current.Weekday().String(),
+			nonWorkingDays = append(nonWorkingDays, NonWorkingDay{
+				Date: formatDate(current),
+				Type: nonWorkingDayWeekend,
+				Name: current.Weekday().String(),
 			})
 		}
 		current = current.AddDate(0, 0, 1)
@@ -764,17 +474,17 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 	for _, holiday := range holidays {
 		holidayDate, err := time.Parse("2006-01-02", holiday.Date)
 		if err != nil {
-			t.logDebug("Erro ao fazer parse da data do feriado %s: %v", holiday.Date, err)
+			slog.Debug("Data de feriado inválida", "data", holiday.Date, "err", err)
 			continue
 		}
 
 		if holidayDate.Weekday() != time.Saturday && holidayDate.Weekday() != time.Sunday {
-			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
-				"date":        holiday.Date,
-				"type":        "holiday",
-				"name":        holiday.Name,
-				"description": holiday.Description,
-				"isOptional":  holiday.IsOptional,
+			nonWorkingDays = append(nonWorkingDays, NonWorkingDay{
+				Date:        holiday.Date,
+				Type:        nonWorkingDayHoliday,
+				Name:        holiday.Name,
+				Description: holiday.Description,
+				IsOptional:  holiday.IsOptional,
 			})
 		}
 	}
@@ -825,7 +535,7 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
+	slog.Debug("Apagando entrada de tempo", "entrada", entryID, "url", url)
 
 	req, err := t.createRequest("DELETE", url, nil)
 	if err != nil {
@@ -837,13 +547,14 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 		return err
 	}
 
-	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
+	slog.Debug("Resposta da exclusão", "status", resp.StatusCode, "corpo", sanitizeForLog(truncateForError(body, 300)))
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
 			resp.StatusCode, resp.Status, string(body))
 	}
 
+	t.invalidateTimeEntryCaches()
 	return nil
 }
 
@@ -894,25 +605,9 @@ func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEnt
 
 	wg.Wait()
 
+	t.invalidateTimeEntryCaches()
+
 	return results, nil
-}
-
-func (t *TeamworkAPI) GetTimeEntriesWithDetails(startDate, endDate string) ([]TimeEntryReport, error) {
-	entries, err := t.GetTimeEntriesForPeriod(startDate, endDate)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range entries {
-		if entries[i].ID > 0 {
-			details, err := t.GetTimeEntryDetails(entries[i].ID)
-			if err == nil {
-				entries[i] = *details
-			}
-		}
-	}
-
-	return entries, nil
 }
 
 func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]TimeEntryReport, error) {
@@ -938,111 +633,104 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, inclu
 		showDeleted = "1"
 	}
 
-	path := fmt.Sprintf("/projects/api/v2/time.json?page=1&pageSize=500&getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
+	path := fmt.Sprintf("/projects/api/v2/time.json?getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
 		t.Config.UserID, startDateFormatted, endDateFormatted, showDeleted)
 
-	url := t.buildURL(path)
+	slog.Debug("Obtendo entradas de tempo (API v2)", "inicio", startDate, "fim", endDate)
 
-	t.logDebug("Obtendo entradas de tempo V2 de %s a %s...", startDate, endDate)
+	// Antes só a primeira página (500 itens) era lida: um mês cheio de quem
+	// lança por tarefa passava disso e a detecção de conflitos ficava cega
+	// para o resto.
+	entries := make([]TimeEntryReport, 0)
+	err = t.fetchPages(t.buildURL(path), timeEntryPageSize, maxTimeEntryPages, "entradas de tempo",
+		func(body []byte) (pageInfo, error) {
+			var page struct {
+				TimeEntries []v2TimeEntry `json:"timeEntries"`
+				pageMeta
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				return pageInfo{}, err
+			}
 
-	req, err := t.createRequest("GET", url, nil)
+			for _, entry := range page.TimeEntries {
+				entries = append(entries, t.v2EntryToReport(entry))
+			}
+
+			return pageInfo{items: len(page.TimeEntries), hasMore: page.Meta.Page.HasMore}, nil
+		})
 	if err != nil {
 		return nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
-	}
-
-	var response struct {
-		TimeEntries []struct {
-			ID                int     `json:"id"`
-			ProjectID         int     `json:"projectId"`
-			ProjectName       string  `json:"projectName"`
-			TaskID            int     `json:"taskId"`
-			TaskName          string  `json:"taskName"`
-			TasklistID        int     `json:"tasklistId"`
-			TasklistName      string  `json:"tasklistName"`
-			UserID            int     `json:"userId"`
-			UserFirstName     string  `json:"userFirstName"`
-			UserLastName      string  `json:"userLastName"`
-			Date              string  `json:"date"`
-			Hours             float64 `json:"hours"`
-			HoursDecimal      float64 `json:"hoursDecimal"`
-			Minutes           int     `json:"minutes"`
-			Description       string  `json:"description"`
-			IsBillable        bool    `json:"isBillable"`
-			IsBilled          bool    `json:"isBilled"`
-			HasStartTime      bool    `json:"hasStartTime"`
-			Status            string  `json:"status"`
-			CreatedAt         string  `json:"createdAt"`
-			UpdatedDate       string  `json:"updatedDate"`
-			DateDeleted       string  `json:"dateDeleted,omitempty"`
-			DeletedByUserId   int     `json:"deletedByUserId,omitempty"`
-			DeletedByUserName string  `json:"deletedByUserName,omitempty"`
-		} `json:"timeEntries"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	var entries []TimeEntryReport
-	for _, entry := range response.TimeEntries {
-		parsedDate, _ := time.Parse("2006-01-02T15:04:05Z", entry.Date)
-		formattedDate := parsedDate.Format("2006-01-02")
-
-		// hoursDecimal é a duração total em horas decimais; hours/minutes são as
-		// partes inteira e fracionária da MESMA duração. Somar hours*60+minutes
-		// só é válido como fallback — usar o total evita truncar 1.75h em 1h.
-		totalMinutes := int(math.Round(entry.HoursDecimal * 60))
-		if totalMinutes == 0 {
-			totalMinutes = int(entry.Hours)*60 + entry.Minutes
-		}
-
-		timeEntry := TimeEntryReport{
-			ID:            entry.ID,
-			ProjectID:     entry.ProjectID,
-			ProjectName:   entry.ProjectName,
-			TaskID:        entry.TaskID,
-			TaskName:      entry.TaskName,
-			TasklistID:    entry.TasklistID,
-			TasklistName:  entry.TasklistName,
-			UserID:        entry.UserID,
-			UserFirstName: entry.UserFirstName,
-			UserLastName:  entry.UserLastName,
-			Date:          formattedDate,
-			Hours:         entry.HoursDecimal,
-			Minutes:       totalMinutes,
-			Description:   entry.Description,
-			IsBillable:    entry.IsBillable,
-			IsBilled:      entry.IsBilled,
-			StartTime:     "",
-			EndTime:       "",
-		}
-
-		entries = append(entries, timeEntry)
 	}
 
 	return entries, nil
 }
 
-func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, error) {
-	if !t.IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return t.GetTimeEntriesForPeriodV2(date, date, false)
+// v2TimeEntry é o formato de um lançamento em /projects/api/v2/time.json.
+type v2TimeEntry struct {
+	ID                int     `json:"id"`
+	ProjectID         int     `json:"projectId"`
+	ProjectName       string  `json:"projectName"`
+	TaskID            int     `json:"taskId"`
+	TaskName          string  `json:"taskName"`
+	TasklistID        int     `json:"tasklistId"`
+	TasklistName      string  `json:"tasklistName"`
+	UserID            int     `json:"userId"`
+	UserFirstName     string  `json:"userFirstName"`
+	UserLastName      string  `json:"userLastName"`
+	Date              string  `json:"date"`
+	Hours             float64 `json:"hours"`
+	HoursDecimal      float64 `json:"hoursDecimal"`
+	Minutes           int     `json:"minutes"`
+	Description       string  `json:"description"`
+	IsBillable        bool    `json:"isBillable"`
+	IsBilled          bool    `json:"isBilled"`
+	HasStartTime      bool    `json:"hasStartTime"`
+	Status            string  `json:"status"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedDate       string  `json:"updatedDate"`
+	DateDeleted       string  `json:"dateDeleted,omitempty"`
+	DeletedByUserId   int     `json:"deletedByUserId,omitempty"`
+	DeletedByUserName string  `json:"deletedByUserName,omitempty"`
 }
 
-func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEntryReport, error) {
-	return t.GetTimeEntriesForPeriodV2(startDate, endDate, true)
+func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
+	// Data irreconhecível é mantida como veio: antes o erro de parse era
+	// ignorado e o lançamento aparecia em "0001-01-01".
+	formattedDate := entry.Date
+	if parsed, ok := parseTeamworkDate(entry.Date); ok {
+		formattedDate = parsed.Format("2006-01-02")
+	} else {
+		slog.Warn("Lançamento com data irreconhecível", "entrada", entry.ID, "data", entry.Date)
+	}
+
+	// hoursDecimal é a duração total em horas decimais; hours/minutes são as
+	// partes inteira e fracionária da MESMA duração. Somar hours*60+minutes
+	// só é válido como fallback — usar o total evita truncar 1.75h em 1h.
+	totalMinutes := int(math.Round(entry.HoursDecimal * 60))
+	if totalMinutes == 0 {
+		totalMinutes = int(entry.Hours)*60 + entry.Minutes
+	}
+
+	return TimeEntryReport{
+		ID:            entry.ID,
+		ProjectID:     entry.ProjectID,
+		ProjectName:   entry.ProjectName,
+		TaskID:        entry.TaskID,
+		TaskName:      entry.TaskName,
+		TasklistID:    entry.TasklistID,
+		TasklistName:  entry.TasklistName,
+		UserID:        entry.UserID,
+		UserFirstName: entry.UserFirstName,
+		UserLastName:  entry.UserLastName,
+		Date:          formattedDate,
+		Hours:         entry.HoursDecimal,
+		Minutes:       totalMinutes,
+		Description:   entry.Description,
+		IsBillable:    entry.IsBillable,
+		IsBilled:      entry.IsBilled,
+		StartTime:     "",
+		EndTime:       "",
+	}
 }
 
 func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogResult, error) {
@@ -1068,8 +756,8 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 
 	entry.UserID = t.Config.UserID
 
-	t.logDebug("Atualizando entrada de tempo #%d: %s %s - %d minutos - %s",
-		entryID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+	slog.Debug("Atualizando entrada de tempo", "entrada", entryID, "data", entry.Date,
+		"hora", entry.Time, "minutos", entry.Minutes, "descricao", entry.Description)
 
 	reqBody := TimelogRequest{
 		Timelog: entry,
@@ -1090,12 +778,17 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 		return nil, err
 	}
 
+	// O payload (TimelogRequest) não leva tarefa: o PUT altera só o lançamento
+	// identificado na URL. O ID editado vai em EntryID — antes ia em TaskID,
+	// e quem lesse o resultado via um "ID de tarefa" que era de lançamento.
 	result := &TimeLogResult{
-		TaskID: entryID,
-		Date:   entry.Date,
+		EntryID: entryID,
+		TaskID:  extractTimelogTaskID(body),
+		Date:    entry.Date,
 	}
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		t.invalidateTimeEntryCaches()
 		result.Success = true
 		result.Message = fmt.Sprintf("Entrada de tempo atualizada com sucesso")
 		return result, nil

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -43,14 +44,21 @@ func getCached[T any](c *Cache, key string) (T, bool) {
 
 func (c *Cache) Get(key string) (interface{}, bool) {
 	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
 	entry, exists := c.data[key]
+	c.mutex.RUnlock()
+
 	if !exists {
 		return nil, false
 	}
 
 	if time.Now().After(entry.ExpiresAt) {
+		// Remove a entrada vencida na leitura: sem isso o mapa só crescia,
+		// já que nada mais apagava chaves expiradas.
+		c.mutex.Lock()
+		if current, ok := c.data[key]; ok && time.Now().After(current.ExpiresAt) {
+			delete(c.data, key)
+		}
+		c.mutex.Unlock()
 		return nil, false
 	}
 
@@ -74,9 +82,39 @@ func (c *Cache) Delete(key string) {
 	delete(c.data, key)
 }
 
+// DeletePrefix remove todas as chaves que começam com o prefixo. Serve para
+// invalidar famílias de chaves que embutem IDs (ex.: dashboard_stats_<user>).
+func (c *Cache) DeletePrefix(prefix string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for key := range c.data {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.data, key)
+		}
+	}
+}
+
 func (c *Cache) Clear() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.data = make(map[string]CacheEntry)
+}
+
+// Chaves de cache derivadas dos lançamentos de tempo.
+const (
+	cacheKeyDashboardStatsPrefix = "dashboard_stats_"
+	cacheKeyRecentActivities     = "recent_activities"
+)
+
+// invalidateTimeEntryCaches descarta o que foi calculado a partir dos
+// lançamentos. Chamado depois de criar, editar ou apagar lançamentos: sem
+// isso o dashboard mostrava as horas e atividades antigas por até uma hora.
+func (t *TeamworkAPI) invalidateTimeEntryCaches() {
+	if t.cache == nil {
+		return
+	}
+	t.cache.DeletePrefix(cacheKeyDashboardStatsPrefix)
+	t.cache.Delete(cacheKeyRecentActivities)
 }

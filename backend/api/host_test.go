@@ -6,6 +6,31 @@ import (
 	"testing"
 )
 
+func TestBaseURLNormalizadaNoConstrutor(t *testing.T) {
+	api := NewTeamworkAPI(Config{ApiHost: "  empresa.teamwork.com/ "})
+	if got := api.BaseURL(); got != "https://empresa.teamwork.com" {
+		t.Fatalf("BaseURL() = %q, esperava https://empresa.teamwork.com", got)
+	}
+	if !api.hostNormalized || api.baseURL != "https://empresa.teamwork.com" {
+		t.Errorf("host deveria ficar normalizado e guardado no construtor")
+	}
+
+	// Trocar o host depois do construtor não pode servir o valor antigo.
+	api.Config.ApiHost = "outra.teamwork.com"
+	if got := api.BaseURL(); got != "https://outra.teamwork.com" {
+		t.Errorf("BaseURL() após trocar o host = %q, esperava https://outra.teamwork.com", got)
+	}
+
+	// A barreira continua: host http vira "" e createRequest recusa.
+	inseguro := NewTeamworkAPI(Config{ApiHost: "http://empresa.teamwork.com"})
+	if got := inseguro.BaseURL(); got != "" {
+		t.Errorf("BaseURL() de host http = %q, esperava vazio", got)
+	}
+	if _, err := inseguro.createRequest("GET", inseguro.buildURL("/me.json"), nil); err == nil {
+		t.Error("createRequest aceitou URL sem https")
+	}
+}
+
 func TestNormalizeHostRejectsInsecureAndInvalid(t *testing.T) {
 	cases := []struct {
 		name string
