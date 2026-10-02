@@ -58,6 +58,10 @@ export function DownloadTimeReport(arg1, arg2) {
   return window['go']['backend']['App']['DownloadTimeReport'](arg1, arg2);
 }
 
+export function ExportTimeReportCSV(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['ExportTimeReportCSV'](arg1, arg2, arg3);
+}
+
 export function GetAllNonWorkingDays(arg1, arg2) {
   return window['go']['backend']['App']['GetAllNonWorkingDays'](arg1, arg2);
 }
@@ -74,8 +78,16 @@ export function GetBrazilianHolidays(arg1) {
   return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
 
+export function GetBrazilianStates() {
+  return window['go']['backend']['App']['GetBrazilianStates']();
+}
+
 export function GetDashboardStats() {
   return window['go']['backend']['App']['GetDashboardStats']();
+}
+
+export function GetExtraNonWorkingDays(arg1) {
+  return window['go']['backend']['App']['GetExtraNonWorkingDays'](arg1);
 }
 
 export function GetHolidayCacheStats() {
@@ -134,12 +146,20 @@ export function GetTimeEntriesForPeriodV2(arg1, arg2, arg3) {
   return window['go']['backend']['App']['GetTimeEntriesForPeriodV2'](arg1, arg2, arg3);
 }
 
+export function GetTimeReportSummary(arg1, arg2) {
+  return window['go']['backend']['App']['GetTimeReportSummary'](arg1, arg2);
+}
+
 export function GetTimeTotalsForPeriod(arg1, arg2) {
   return window['go']['backend']['App']['GetTimeTotalsForPeriod'](arg1, arg2);
 }
 
 export function GetUserProfile() {
   return window['go']['backend']['App']['GetUserProfile']();
+}
+
+export function GetWorkCalendarSettings() {
+  return window['go']['backend']['App']['GetWorkCalendarSettings']();
 }
 
 export function GetWorkingDays(arg1, arg2) {
@@ -204,6 +224,10 @@ export function SaveTask(arg1) {
 
 export function SaveTemplate(arg1) {
   return window['go']['backend']['App']['SaveTemplate'](arg1);
+}
+
+export function SaveWorkCalendarSettings(arg1) {
+  return window['go']['backend']['App']['SaveWorkCalendarSettings'](arg1);
 }
 
 export function SetMinutosPorDia(arg1) {
