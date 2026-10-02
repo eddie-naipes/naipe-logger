@@ -6,10 +6,6 @@ export function ApplyTemplate(arg1) {
   return window['go']['backend']['App']['ApplyTemplate'](arg1);
 }
 
-export function CalculateTotalMinutes(arg1) {
-  return window['go']['backend']['App']['CalculateTotalMinutes'](arg1);
-}
-
 export function CheckPlanConflicts(arg1) {
   return window['go']['backend']['App']['CheckPlanConflicts'](arg1);
 }
@@ -26,12 +22,12 @@ export function ConnectWithToken(arg1, arg2) {
   return window['go']['backend']['App']['ConnectWithToken'](arg1, arg2);
 }
 
-export function CreateDistributionPlan(arg1, arg2) {
-  return window['go']['backend']['App']['CreateDistributionPlan'](arg1, arg2);
+export function CorruptedConfigBackups() {
+  return window['go']['backend']['App']['CorruptedConfigBackups']();
 }
 
-export function CreateDistributionPlanFromLoggedTime(arg1, arg2, arg3) {
-  return window['go']['backend']['App']['CreateDistributionPlanFromLoggedTime'](arg1, arg2, arg3);
+export function CreateDistributionPlan(arg1, arg2) {
+  return window['go']['backend']['App']['CreateDistributionPlan'](arg1, arg2);
 }
 
 export function DeleteMultipleTimeEntries(arg1) {
@@ -40,10 +36,6 @@ export function DeleteMultipleTimeEntries(arg1) {
 
 export function DeleteTemplate(arg1) {
   return window['go']['backend']['App']['DeleteTemplate'](arg1);
-}
-
-export function DeleteTimeEntry(arg1) {
-  return window['go']['backend']['App']['DeleteTimeEntry'](arg1);
 }
 
 export function DownloadCurrentMonthReport() {
@@ -58,10 +50,6 @@ export function GetAllNonWorkingDays(arg1, arg2) {
   return window['go']['backend']['App']['GetAllNonWorkingDays'](arg1, arg2);
 }
 
-export function GetAllTimeEntriesForDay(arg1) {
-  return window['go']['backend']['App']['GetAllTimeEntriesForDay'](arg1);
-}
-
 export function GetAppSettings() {
   return window['go']['backend']['App']['GetAppSettings']();
 }
@@ -70,28 +58,12 @@ export function GetBrazilianHolidays(arg1) {
   return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
 
-export function GetCurrentUserId() {
-  return window['go']['backend']['App']['GetCurrentUserId']();
-}
-
 export function GetDashboardStats() {
   return window['go']['backend']['App']['GetDashboardStats']();
 }
 
-export function GetDeletedTimeEntries(arg1, arg2) {
-  return window['go']['backend']['App']['GetDeletedTimeEntries'](arg1, arg2);
-}
-
-export function GetEntriesFromLoggedTime(arg1, arg2) {
-  return window['go']['backend']['App']['GetEntriesFromLoggedTime'](arg1, arg2);
-}
-
 export function GetHolidayCacheStats() {
   return window['go']['backend']['App']['GetHolidayCacheStats']();
-}
-
-export function GetHolidaysForMonth(arg1, arg2) {
-  return window['go']['backend']['App']['GetHolidaysForMonth'](arg1, arg2);
 }
 
 export function GetLoggedTimeFromCalendarAPI(arg1, arg2) {
@@ -114,10 +86,6 @@ export function GetSavedTasks() {
   return window['go']['backend']['App']['GetSavedTasks']();
 }
 
-export function GetTaskDetails(arg1) {
-  return window['go']['backend']['App']['GetTaskDetails'](arg1);
-}
-
 export function GetTasks() {
   return window['go']['backend']['App']['GetTasks']();
 }
@@ -130,10 +98,6 @@ export function GetTasksWithUpcomingDeadlines() {
   return window['go']['backend']['App']['GetTasksWithUpcomingDeadlines']();
 }
 
-export function GetTemplate(arg1) {
-  return window['go']['backend']['App']['GetTemplate'](arg1);
-}
-
 export function GetTemplates() {
   return window['go']['backend']['App']['GetTemplates']();
 }
@@ -144,10 +108,6 @@ export function GetTimeEntriesForPeriod(arg1, arg2) {
 
 export function GetTimeEntriesForPeriodV2(arg1, arg2, arg3) {
   return window['go']['backend']['App']['GetTimeEntriesForPeriodV2'](arg1, arg2, arg3);
-}
-
-export function GetTimeEntriesWithDetails(arg1, arg2) {
-  return window['go']['backend']['App']['GetTimeEntriesWithDetails'](arg1, arg2);
 }
 
 export function GetTimeTotalsForPeriod(arg1, arg2) {
@@ -176,10 +136,6 @@ export function LegacyCredentialPurged() {
 
 export function LogMultipleTimes(arg1) {
   return window['go']['backend']['App']['LogMultipleTimes'](arg1);
-}
-
-export function LogTime(arg1, arg2) {
-  return window['go']['backend']['App']['LogTime'](arg1, arg2);
 }
 
 export function Logout() {
@@ -216,10 +172,6 @@ export function SaveTemplate(arg1) {
 
 export function SetMinutosPorDia(arg1) {
   return window['go']['backend']['App']['SetMinutosPorDia'](arg1);
-}
-
-export function TestConnection() {
-  return window['go']['backend']['App']['TestConnection']();
 }
 
 export function UpdateTimeEntry(arg1, arg2) {

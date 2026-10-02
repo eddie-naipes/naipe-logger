@@ -126,28 +126,6 @@ export namespace api {
 		    return a;
 		}
 	}
-	export class Holiday {
-	    date: string;
-	    name: string;
-	    description?: string;
-	    type: string;
-	    isOptional: boolean;
-	    source?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Holiday(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.date = source["date"];
-	        this.name = source["name"];
-	        this.description = source["description"];
-	        this.type = source["type"];
-	        this.isOptional = source["isOptional"];
-	        this.source = source["source"];
-	    }
-	}
 	export class LoggedTimeResponse {
 	    STATUS: string;
 	    // Go type: struct { Billable [][3]string "json:\"billable\""; Firstname string "json:\"firstname\""; Lastname string "json:\"lastname\""; Nonbillable [][3]string "json:\"nonbillable\""; ID string "json:\"id\""; Endepoch string "json:\"endepoch\""; Startepoch string "json:\"startepoch\"" }
@@ -566,6 +544,33 @@ export namespace api {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace backend {
+	
+	export class UserProfile {
+	    id: number;
+	    firstName: string;
+	    lastName: string;
+	    email: string;
+	    avatarURL: string;
+	    fullName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserProfile(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.firstName = source["firstName"];
+	        this.lastName = source["lastName"];
+	        this.email = source["email"];
+	        this.avatarURL = source["avatarURL"];
+	        this.fullName = source["fullName"];
+	    }
 	}
 
 }
