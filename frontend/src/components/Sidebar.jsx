@@ -19,6 +19,7 @@ import UserProfile from './UserProfile';
 import TimeEntryManager from './TimeEntryManager';
 import clsx from 'clsx';
 import {DownloadCurrentMonthReport, OpenDirectoryPath} from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
 
 const Sidebar = ({ isOpen, onClose, isConfigured }) => {
     const { darkMode, toggleDarkMode } = useContext(ThemeContext);
@@ -76,7 +77,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
             await OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
-            toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
+            toast.error("Não foi possível exportar o relatório: " + errMsg(error));
         } finally {
             setIsExporting(false);
         }

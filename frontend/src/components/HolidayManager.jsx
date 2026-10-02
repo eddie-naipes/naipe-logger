@@ -18,6 +18,13 @@ import {
     PreloadHolidays,
     RefreshHolidaysForYear
 } from '../../wailsjs/go/backend/App';
+import {ptBR} from 'date-fns/locale';
+import {formatDateBR} from '../utils/dates';
+import {errMsg} from '../utils/errors';
+
+// Datas 'YYYY-MM-DD' ordenam corretamente como texto.
+const sortHolidays = (holidaysData) =>
+    Object.values(holidaysData || {}).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
 const HolidayManager = ({ isOpen, onClose }) => {
     const [loading, setLoading] = useState(false);
@@ -39,7 +46,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
             setCacheStats(stats);
         } catch (error) {
             console.error('Erro ao carregar estatísticas do cache:', error);
-            toast.error('Erro ao carregar estatísticas do cache');
+            toast.error('Erro ao carregar estatísticas do cache: ' + errMsg(error));
         } finally {
             setLoading(false);
         }
@@ -51,15 +58,13 @@ const HolidayManager = ({ isOpen, onClose }) => {
             const holidaysData = await GetBrazilianHolidays(year);
 
             // Converter map para array e ordenar por data
-            const holidaysArray = Object.values(holidaysData).sort((a, b) =>
-                new Date(a.date) - new Date(b.date)
-            );
+            const holidaysArray = sortHolidays(holidaysData);
 
             setHolidays(holidaysArray);
             toast.success(`${holidaysArray.length} feriados carregados para ${year}`);
         } catch (error) {
             console.error('Erro ao carregar feriados:', error);
-            toast.error('Erro ao carregar feriados: ' + error.message);
+            toast.error('Erro ao carregar feriados: ' + errMsg(error));
         } finally {
             setLoading(false);
         }
@@ -70,16 +75,14 @@ const HolidayManager = ({ isOpen, onClose }) => {
             setLoading(true);
             const holidaysData = await RefreshHolidaysForYear(year);
 
-            const holidaysArray = Object.values(holidaysData).sort((a, b) =>
-                new Date(a.date) - new Date(b.date)
-            );
+            const holidaysArray = sortHolidays(holidaysData);
 
             setHolidays(holidaysArray);
             await loadCacheStats();
             toast.success(`Feriados atualizados para ${year}`);
         } catch (error) {
             console.error('Erro ao atualizar feriados:', error);
-            toast.error('Erro ao atualizar feriados: ' + error.message);
+            toast.error('Erro ao atualizar feriados: ' + errMsg(error));
         } finally {
             setLoading(false);
         }
@@ -97,7 +100,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
             toast.success('Cache de feriados limpo com sucesso');
         } catch (error) {
             console.error('Erro ao limpar cache:', error);
-            toast.error('Erro ao limpar cache');
+            toast.error('Erro ao limpar cache: ' + errMsg(error));
         }
     };
 
@@ -109,23 +112,15 @@ const HolidayManager = ({ isOpen, onClose }) => {
             toast.success('Feriados pré-carregados com sucesso');
         } catch (error) {
             console.error('Erro ao pré-carregar feriados:', error);
-            toast.error('Erro ao pré-carregar feriados');
+            toast.error('Erro ao pré-carregar feriados: ' + errMsg(error));
         } finally {
             setPreloading(false);
         }
     };
 
-    const formatDate = (dateStr) => {
-        try {
-            return new Date(dateStr).toLocaleDateString('pt-BR', {
-                day: '2-digit',
-                month: 'long',
-                weekday: 'long'
-            });
-        } catch {
-            return dateStr;
-        }
-    };
+    // parseLocalDate: new Date('YYYY-MM-DD') seria meia-noite UTC e mostraria o
+    // feriado um dia antes no Brasil.
+    const formatDate = (dateStr) => formatDateBR(dateStr, "EEEE, dd 'de' MMMM", dateStr, {locale: ptBR});
 
     const getStatusColor = (isExpired) => {
         return isExpired

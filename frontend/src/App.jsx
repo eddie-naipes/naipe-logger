@@ -17,6 +17,7 @@ import Templates from './pages/Templates';
 import NotFound from './pages/NotFound';
 
 import {ThemeContext} from './contexts/ThemeContext';
+import {errMsg} from './utils/errors';
 
 function App() {
     const navigate = useNavigate();
@@ -71,7 +72,7 @@ function App() {
             await SaveAppSettings(settings);
         } catch (error) {
             console.error('Erro ao alternar tema:', error);
-            toast.error('Erro ao salvar preferência de tema');
+            toast.error('Erro ao salvar preferência de tema: ' + errMsg(error));
         }
     }, [darkMode]);
 

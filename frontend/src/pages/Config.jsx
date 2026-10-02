@@ -8,6 +8,7 @@ import {
     LegacyCredentialPurged,
     Logout
 } from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
 
 const DEFAULT_HOST = 'teamwork.onebrain.com.br';
 
@@ -81,7 +82,7 @@ const Config = ({ onConfigSaved }) => {
             }
         } catch (error) {
             console.error('Erro ao conectar:', error);
-            toast.error('Erro ao conectar: ' + (error.message || error));
+            toast.error('Erro ao conectar: ' + errMsg(error));
         } finally {
             setIsConnecting(false);
         }
@@ -107,7 +108,7 @@ const Config = ({ onConfigSaved }) => {
             }
         } catch (error) {
             console.error('Erro ao fazer logout:', error);
-            toast.error('Erro ao remover configuração: ' + (error.message || error));
+            toast.error('Erro ao remover configuração: ' + errMsg(error));
         } finally {
             setIsLoggingOut(false);
         }
