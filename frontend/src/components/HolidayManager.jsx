@@ -8,7 +8,8 @@ import {
     FiTrash2,
     FiDownload,
     FiCheck,
-    FiAlertCircle
+    FiAlertCircle,
+    FiX
 } from 'react-icons/fi';
 
 const HolidayManager = ({ isOpen, onClose }) => {

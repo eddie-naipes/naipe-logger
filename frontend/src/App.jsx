@@ -7,6 +7,7 @@ import {GetAppSettings, SaveAppSettings} from '../wailsjs/go/backend/App';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 
 import Dashboard from './pages/Dashboard.jsx';
 import Config from './pages/Config';
@@ -116,14 +117,16 @@ function App() {
                     />
 
                     <main className="flex-1 overflow-y-auto p-4">
-                        <Routes>
-                            <Route path="/" element={<Dashboard/>}/>
-                            <Route path="/config" element={<Config onConfigSaved={checkIfConfigured}/>}/>
-                            <Route path="/tasks" element={<Tasks/>}/>
-                            <Route path="/timelog" element={<TimeLog/>}/>
-                            <Route path="/templates" element={<Templates/>}/>
-                            <Route path="*" element={<NotFound/>}/>
-                        </Routes>
+                        <ErrorBoundary resetKey={location.pathname}>
+                            <Routes>
+                                <Route path="/" element={<Dashboard/>}/>
+                                <Route path="/config" element={<Config onConfigSaved={checkIfConfigured}/>}/>
+                                <Route path="/tasks" element={<Tasks/>}/>
+                                <Route path="/timelog" element={<TimeLog/>}/>
+                                <Route path="/templates" element={<Templates/>}/>
+                                <Route path="*" element={<NotFound/>}/>
+                            </Routes>
+                        </ErrorBoundary>
                     </main>
                 </div>
             </div>
