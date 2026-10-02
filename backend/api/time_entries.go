@@ -13,100 +13,6 @@ import (
 	"time"
 )
 
-func (t *TeamworkAPI) GetEntriesFromLoggedTime(month, year int) ([]map[string]interface{}, error) {
-	response, err := t.GetLoggedTimeFromCalendarAPI(month, year)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao obter dados de tempo do calendário: %v", err)
-	}
-
-	if response.STATUS != "OK" || (len(response.User.Billable) == 0 && len(response.User.Nonbillable) == 0) {
-		return nil, fmt.Errorf("nenhuma entrada de tempo válida encontrada")
-	}
-
-	entries := make([]map[string]interface{}, 0)
-
-	if response.User.Billable != nil {
-		for _, entry := range response.User.Billable {
-			if len(entry) < 3 {
-				continue
-			}
-
-			timestamp, err := strconv.ParseInt(entry[0], 10, 64)
-			if err != nil {
-				continue
-			}
-
-			dateStr := loggedTimeDate(timestamp)
-
-			hours, _ := strconv.ParseFloat(entry[1], 64)
-			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
-
-			entryData := map[string]interface{}{
-				"date":        dateStr,
-				"minutes":     minutes,
-				"hours":       hours,
-				"description": "Tempo registrado (cobrável)",
-				"projectName": "Teamwork",
-				"isBillable":  true,
-				"timestamp":   timestamp,
-				"type":        "billable",
-			}
-
-			entries = append(entries, entryData)
-		}
-	}
-
-	if response.User.Nonbillable != nil {
-		for _, entry := range response.User.Nonbillable {
-			if len(entry) < 3 {
-				continue
-			}
-
-			timestamp, err := strconv.ParseInt(entry[0], 10, 64)
-			if err != nil {
-				continue
-			}
-
-			dateStr := loggedTimeDate(timestamp)
-
-			hours, _ := strconv.ParseFloat(entry[1], 64)
-			minutes, _ := strconv.ParseInt(entry[2], 10, 64)
-
-			if minutes > 0 {
-				entryData := map[string]interface{}{
-					"date":        dateStr,
-					"minutes":     minutes,
-					"hours":       hours,
-					"description": "Tempo registrado (não cobrável)",
-					"projectName": "Teamwork",
-					"isBillable":  false,
-					"timestamp":   timestamp,
-					"type":        "nonbillable",
-				}
-
-				entries = append(entries, entryData)
-			}
-		}
-	}
-
-	// YYYY-MM-DD ordena corretamente como texto; não há por que fazer parse
-	// de data a cada comparação.
-	sort.SliceStable(entries, func(i, j int) bool {
-		return entries[i]["date"].(string) > entries[j]["date"].(string)
-	})
-
-	return entries, nil
-}
-
-// loggedTimeDate converte o timestamp do endpoint de calendário
-// (loggedtime.json) em YYYY-MM-DD. O valor representa um dia, em milissegundos
-// desde a época, na meia-noite UTC. Formatar no fuso local deslocava as
-// entradas para o dia anterior em fusos a oeste de Greenwich — em
-// America/Sao_Paulo, 00:00 UTC é 21:00 da véspera.
-func loggedTimeDate(epochMillis int64) string {
-	return time.UnixMilli(epochMillis).UTC().Format("2006-01-02")
-}
-
 func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, error) {
 	if !t.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -251,87 +157,6 @@ func extractTimelogTaskID(body []byte) int {
 		return shapes.Timelog.TaskID
 	}
 	return shapes.TaskID
-}
-
-func (t *TeamworkAPI) CreateDistributionPlanFromLoggedTime(month, year int, tasks []Task) ([]WorkDay, error) {
-	entries, err := t.GetEntriesFromLoggedTime(month, year)
-	if err != nil {
-		return nil, err
-	}
-
-	entriesByDay := make(map[string][]map[string]interface{})
-	for _, entry := range entries {
-		date, ok := entry["date"].(string)
-		if !ok {
-			continue
-		}
-		entriesByDay[date] = append(entriesByDay[date], entry)
-	}
-
-	workDays := make([]WorkDay, 0, len(entriesByDay))
-
-	for date, dayEntries := range entriesByDay {
-		workDay := WorkDay{
-			Date:     date,
-			Entries:  []EntryTask{},
-			TotalMin: 0,
-		}
-
-		totalMin := 0
-		for _, entry := range dayEntries {
-			if mins, ok := entry["minutes"].(int64); ok {
-				totalMin += int(mins)
-			}
-		}
-
-		if len(tasks) > 0 {
-			minsPerTask := totalMin / len(tasks)
-			remainingMins := totalMin % len(tasks)
-
-			for _, task := range tasks {
-				taskMins := minsPerTask
-				if remainingMins > 0 {
-					taskMins++
-					remainingMins--
-				}
-
-				if taskMins <= 0 {
-					continue
-				}
-
-				workDay.Entries = append(workDay.Entries, EntryTask{
-					TaskID: task.TaskID,
-					Entry: TimeEntry{
-						Minutes:     taskMins,
-						Description: task.TaskName,
-						IsBillable:  true,
-						Time:        "09:00",
-						Date:        date,
-					},
-				})
-			}
-		} else {
-			workDay.Entries = append(workDay.Entries, EntryTask{
-				TaskID: 0,
-				Entry: TimeEntry{
-					Minutes:     totalMin,
-					Description: "Tempo importado do calendário",
-					IsBillable:  true,
-					Time:        "09:00",
-					Date:        date,
-				},
-			})
-		}
-
-		workDay.TotalMin = totalMin
-		workDays = append(workDays, workDay)
-	}
-
-	sort.Slice(workDays, func(i, j int) bool {
-		return workDays[i].Date < workDays[j].Date
-	})
-
-	return workDays, nil
 }
 
 func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, error) {
@@ -517,16 +342,6 @@ func taskWorksOn(tarefa Task, diaSemana int) bool {
 		}
 	}
 	return false
-}
-
-func (t *TeamworkAPI) CalculateTotalMinutes(tarefas []Task) int {
-	total := 0
-	for _, tarefa := range tarefas {
-		for _, entrada := range tarefa.Entries {
-			total += entrada.Minutes
-		}
-	}
-	return total
 }
 
 // GetHoursLoggedInPeriod devolve as horas lançadas pelo usuário no período,
@@ -794,24 +609,6 @@ func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEnt
 	return results, nil
 }
 
-func (t *TeamworkAPI) GetTimeEntriesWithDetails(startDate, endDate string) ([]TimeEntryReport, error) {
-	entries, err := t.GetTimeEntriesForPeriod(startDate, endDate)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range entries {
-		if entries[i].ID > 0 {
-			details, err := t.GetTimeEntryDetails(entries[i].ID)
-			if err == nil {
-				entries[i] = *details
-			}
-		}
-	}
-
-	return entries, nil
-}
-
 func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, includeDeleted bool) ([]TimeEntryReport, error) {
 	if !t.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -933,18 +730,6 @@ func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
 		StartTime:     "",
 		EndTime:       "",
 	}
-}
-
-func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, error) {
-	if !t.IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return t.GetTimeEntriesForPeriodV2(date, date, false)
-}
-
-func (t *TeamworkAPI) GetDeletedTimeEntries(startDate, endDate string) ([]TimeEntryReport, error) {
-	return t.GetTimeEntriesForPeriodV2(startDate, endDate, true)
 }
 
 func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogResult, error) {

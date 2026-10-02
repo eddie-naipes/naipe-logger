@@ -201,30 +201,6 @@ func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, erro
 	return nil, nil, lastErr
 }
 
-// TestConnection valida a configuração já armazenada. Não recebe credenciais do
-// frontend: o token vem do cofre do sistema, carregado na inicialização.
-func (t *TeamworkAPI) TestConnection() (bool, string) {
-	if !t.IsConfigured() {
-		return false, "API não configurada"
-	}
-
-	req, err := t.createRequest("GET", t.buildURL("/projects/api/v3/me.json"), nil)
-	if err != nil {
-		return false, fmt.Sprintf("Erro ao criar requisição: %v", err)
-	}
-
-	resp, _, err := t.doRequest(req)
-	if err != nil {
-		return false, fmt.Sprintf("Erro na requisição: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return false, fmt.Sprintf("Autenticação falhou: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	return true, "Conexão estabelecida com sucesso!"
-}
-
 // debugLogging liga os logs de diagnóstico. Desligado por padrão: um lote de
 // lançamentos gerava uma linha por tarefa×dia e despejava corpos de resposta
 // inteiros no console. Defina TEAMWORK_LOGGER_DEBUG=1 para investigar.

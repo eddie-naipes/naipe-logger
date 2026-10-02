@@ -131,22 +131,6 @@ func TestCreateDistributionPlanOmiteDiasVazios(t *testing.T) {
 	}
 }
 
-func TestCalculateTotalMinutes(t *testing.T) {
-	api := &TeamworkAPI{cache: NewCache()}
-
-	tasks := []Task{
-		{Entries: []TimeEntry{{Minutes: 120}, {Minutes: 90}, {Minutes: 240}}},
-		{Entries: []TimeEntry{{Minutes: 30}}},
-	}
-
-	if got := api.CalculateTotalMinutes(tasks); got != 480 {
-		t.Errorf("CalculateTotalMinutes = %d, esperava 480", got)
-	}
-	if got := api.CalculateTotalMinutes(nil); got != 0 {
-		t.Errorf("CalculateTotalMinutes(nil) = %d, esperava 0", got)
-	}
-}
-
 func TestIsWorkDay(t *testing.T) {
 	seedHolidayCache(t, 2025, "2025-09-08")
 
