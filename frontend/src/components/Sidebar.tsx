@@ -11,7 +11,8 @@ import {
     FiMoon,
     FiLoader,
     FiDownload,
-    FiTrash2
+    FiTrash2,
+    FiTarget
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
@@ -49,6 +50,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             to: '/timelog',
             icon: <FiClock className="w-5 h-5" />,
             label: 'Lançar Horas',
+            requiresConfig: true
+        },
+        {
+            to: '/completar',
+            icon: <FiTarget className="w-5 h-5" />,
+            label: 'Completar Período',
             requiresConfig: true
         },
         {
