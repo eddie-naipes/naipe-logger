@@ -1,21 +1,25 @@
 # Dependências
 node_modules/
 
-# Artefatos de build
-build/
-dist/
+# Artefatos de build. build/appicon.png e build/windows/ são versionados: o
+# Wails os usa como ícone, manifest e instalador NSIS (project.nsi). O
+# wails_tools.nsh é regenerado a cada `wails build -nsis`.
+/build/*
+!/build/appicon.png
+!/build/windows/
+/build/windows/installer/tmp/
 *.exe
 *.msi
 *.dmg
 *.AppImage
 frontend/package.json.md5
 
-# Instalador
-installer-build.nsi
-nsis-output.txt
-nsis-error.txt
-LICENSE.txt
-README.txt
+# Saída do Vite. O placeholder frontend/dist/index.html precisa existir no
+# repositório: main.go faz //go:embed all:frontend/dist, e sem ele go vet/go
+# test (no CI e num clone novo) falham antes de o frontend ser compilado.
+# Um `npm run build` o sobrescreve; não comite essa versão.
+**/dist/*
+!/frontend/dist/index.html
 
 # IDEs
 .idea/
