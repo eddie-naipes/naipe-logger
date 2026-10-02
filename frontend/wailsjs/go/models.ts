@@ -224,7 +224,7 @@ export namespace api {
 	}
 	export class LoggedTimeResponse {
 	    STATUS: string;
-	    // Go type: struct { Billable [][3]string "json:\"billable\""; Firstname string "json:\"firstname\""; Lastname string "json:\"lastname\""; Nonbillable [][3]string "json:\"nonbillable\""; ID string "json:\"id\""; Endepoch string "json:\"endepoch\""; Startepoch string "json:\"startepoch\"" }
+	    // Go type: struct { Billable [][3]api
 	    user: any;
 	
 	    static createFrom(source: any = {}) {
