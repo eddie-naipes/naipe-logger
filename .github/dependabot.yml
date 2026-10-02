@@ -11,6 +11,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # A versão do Wails no go.mod precisa bater com WAILS_VERSION do CI e
+      # com a CLI local; atualizar só o go.mod quebra o build. É mudança
+      # coordenada, feita à mão.
+      - dependency-name: "github.com/wailsapp/wails/v2"
     groups:
       go-minor-patch:
         update-types:
@@ -25,6 +30,24 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    ignore:
+      # Majors que exigem migração de configuração ou esperam o ecossistema
+      # (plugins do ESLint, typescript-eslint) acompanhar. Saem daqui quando
+      # a migração for planejada.
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tailwindcss"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "flowbite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-patch:
         update-types:
