@@ -938,99 +938,104 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, inclu
 		showDeleted = "1"
 	}
 
-	path := fmt.Sprintf("/projects/api/v2/time.json?page=1&pageSize=500&getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
+	path := fmt.Sprintf("/projects/api/v2/time.json?getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
 		t.Config.UserID, startDateFormatted, endDateFormatted, showDeleted)
-
-	url := t.buildURL(path)
 
 	t.logDebug("Obtendo entradas de tempo V2 de %s a %s...", startDate, endDate)
 
-	req, err := t.createRequest("GET", url, nil)
+	// Antes só a primeira página (500 itens) era lida: um mês cheio de quem
+	// lança por tarefa passava disso e a detecção de conflitos ficava cega
+	// para o resto.
+	entries := make([]TimeEntryReport, 0)
+	err = t.fetchPages(t.buildURL(path), timeEntryPageSize, maxTimeEntryPages, "entradas de tempo",
+		func(body []byte) (pageInfo, error) {
+			var page struct {
+				TimeEntries []v2TimeEntry `json:"timeEntries"`
+				pageMeta
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				return pageInfo{}, err
+			}
+
+			for _, entry := range page.TimeEntries {
+				entries = append(entries, t.v2EntryToReport(entry))
+			}
+
+			return pageInfo{items: len(page.TimeEntries), hasMore: page.Meta.Page.HasMore}, nil
+		})
 	if err != nil {
 		return nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
-	}
-
-	var response struct {
-		TimeEntries []struct {
-			ID                int     `json:"id"`
-			ProjectID         int     `json:"projectId"`
-			ProjectName       string  `json:"projectName"`
-			TaskID            int     `json:"taskId"`
-			TaskName          string  `json:"taskName"`
-			TasklistID        int     `json:"tasklistId"`
-			TasklistName      string  `json:"tasklistName"`
-			UserID            int     `json:"userId"`
-			UserFirstName     string  `json:"userFirstName"`
-			UserLastName      string  `json:"userLastName"`
-			Date              string  `json:"date"`
-			Hours             float64 `json:"hours"`
-			HoursDecimal      float64 `json:"hoursDecimal"`
-			Minutes           int     `json:"minutes"`
-			Description       string  `json:"description"`
-			IsBillable        bool    `json:"isBillable"`
-			IsBilled          bool    `json:"isBilled"`
-			HasStartTime      bool    `json:"hasStartTime"`
-			Status            string  `json:"status"`
-			CreatedAt         string  `json:"createdAt"`
-			UpdatedDate       string  `json:"updatedDate"`
-			DateDeleted       string  `json:"dateDeleted,omitempty"`
-			DeletedByUserId   int     `json:"deletedByUserId,omitempty"`
-			DeletedByUserName string  `json:"deletedByUserName,omitempty"`
-		} `json:"timeEntries"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	var entries []TimeEntryReport
-	for _, entry := range response.TimeEntries {
-		parsedDate, _ := time.Parse("2006-01-02T15:04:05Z", entry.Date)
-		formattedDate := parsedDate.Format("2006-01-02")
-
-		// hoursDecimal é a duração total em horas decimais; hours/minutes são as
-		// partes inteira e fracionária da MESMA duração. Somar hours*60+minutes
-		// só é válido como fallback — usar o total evita truncar 1.75h em 1h.
-		totalMinutes := int(math.Round(entry.HoursDecimal * 60))
-		if totalMinutes == 0 {
-			totalMinutes = int(entry.Hours)*60 + entry.Minutes
-		}
-
-		timeEntry := TimeEntryReport{
-			ID:            entry.ID,
-			ProjectID:     entry.ProjectID,
-			ProjectName:   entry.ProjectName,
-			TaskID:        entry.TaskID,
-			TaskName:      entry.TaskName,
-			TasklistID:    entry.TasklistID,
-			TasklistName:  entry.TasklistName,
-			UserID:        entry.UserID,
-			UserFirstName: entry.UserFirstName,
-			UserLastName:  entry.UserLastName,
-			Date:          formattedDate,
-			Hours:         entry.HoursDecimal,
-			Minutes:       totalMinutes,
-			Description:   entry.Description,
-			IsBillable:    entry.IsBillable,
-			IsBilled:      entry.IsBilled,
-			StartTime:     "",
-			EndTime:       "",
-		}
-
-		entries = append(entries, timeEntry)
 	}
 
 	return entries, nil
+}
+
+// v2TimeEntry é o formato de um lançamento em /projects/api/v2/time.json.
+type v2TimeEntry struct {
+	ID                int     `json:"id"`
+	ProjectID         int     `json:"projectId"`
+	ProjectName       string  `json:"projectName"`
+	TaskID            int     `json:"taskId"`
+	TaskName          string  `json:"taskName"`
+	TasklistID        int     `json:"tasklistId"`
+	TasklistName      string  `json:"tasklistName"`
+	UserID            int     `json:"userId"`
+	UserFirstName     string  `json:"userFirstName"`
+	UserLastName      string  `json:"userLastName"`
+	Date              string  `json:"date"`
+	Hours             float64 `json:"hours"`
+	HoursDecimal      float64 `json:"hoursDecimal"`
+	Minutes           int     `json:"minutes"`
+	Description       string  `json:"description"`
+	IsBillable        bool    `json:"isBillable"`
+	IsBilled          bool    `json:"isBilled"`
+	HasStartTime      bool    `json:"hasStartTime"`
+	Status            string  `json:"status"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedDate       string  `json:"updatedDate"`
+	DateDeleted       string  `json:"dateDeleted,omitempty"`
+	DeletedByUserId   int     `json:"deletedByUserId,omitempty"`
+	DeletedByUserName string  `json:"deletedByUserName,omitempty"`
+}
+
+func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
+	// Data irreconhecível é mantida como veio: antes o erro de parse era
+	// ignorado e o lançamento aparecia em "0001-01-01".
+	formattedDate := entry.Date
+	if parsed, ok := parseTeamworkDate(entry.Date); ok {
+		formattedDate = parsed.Format("2006-01-02")
+	} else {
+		t.logWarn("Lançamento %d com data irreconhecível: %q", entry.ID, entry.Date)
+	}
+
+	// hoursDecimal é a duração total em horas decimais; hours/minutes são as
+	// partes inteira e fracionária da MESMA duração. Somar hours*60+minutes
+	// só é válido como fallback — usar o total evita truncar 1.75h em 1h.
+	totalMinutes := int(math.Round(entry.HoursDecimal * 60))
+	if totalMinutes == 0 {
+		totalMinutes = int(entry.Hours)*60 + entry.Minutes
+	}
+
+	return TimeEntryReport{
+		ID:            entry.ID,
+		ProjectID:     entry.ProjectID,
+		ProjectName:   entry.ProjectName,
+		TaskID:        entry.TaskID,
+		TaskName:      entry.TaskName,
+		TasklistID:    entry.TasklistID,
+		TasklistName:  entry.TasklistName,
+		UserID:        entry.UserID,
+		UserFirstName: entry.UserFirstName,
+		UserLastName:  entry.UserLastName,
+		Date:          formattedDate,
+		Hours:         entry.HoursDecimal,
+		Minutes:       totalMinutes,
+		Description:   entry.Description,
+		IsBillable:    entry.IsBillable,
+		IsBilled:      entry.IsBilled,
+		StartTime:     "",
+		EndTime:       "",
+	}
 }
 
 func (t *TeamworkAPI) GetAllTimeEntriesForDay(date string) ([]TimeEntryReport, error) {
