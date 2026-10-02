@@ -18,30 +18,28 @@ func (t *TeamworkAPI) GetProjects() ([]Project, error) {
 	}
 
 	path := "/projects/api/v3/projects.json?includeProjectUserInfo=true&include=tags,projectTaskStats,projectCategories,companies&projectStatuses=active"
-	url := t.buildURL(path)
 
-	req, err := t.createRequest("GET", url, nil)
+	// Sem paginar, só a primeira página (50 projetos, o padrão da v3) chegava
+	// ao seletor de projetos.
+	projects := make([]Project, 0)
+	err := t.fetchPages(t.buildURL(path), listPageSize, maxListPages, "projetos",
+		func(body []byte) (pageInfo, error) {
+			var page struct {
+				Projects []Project `json:"projects"`
+				pageMeta
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				return pageInfo{}, err
+			}
+			projects = append(projects, page.Projects...)
+			return pageInfo{items: len(page.Projects), hasMore: page.Meta.Page.HasMore}, nil
+		})
 	if err != nil {
 		return nil, err
 	}
 
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter projetos: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body))
-	}
-
-	var response ProjectsResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v\nBody: %s", err, string(body))
-	}
-
-	t.cache.Set(cacheKey, response.Projects, 30*time.Minute)
-	return response.Projects, nil
+	t.cache.Set(cacheKey, projects, 30*time.Minute)
+	return projects, nil
 }
 
 func (t *TeamworkAPI) GetProjectCount() (int, error) {
