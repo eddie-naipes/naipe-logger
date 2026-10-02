@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiLoader, FiEye, FiEyeOff, FiUser, FiLogOut, FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
+import { FiSave, FiLoader, FiEye, FiEyeOff, FiUser, FiLogOut, FiAlertTriangle, FiExternalLink, FiClock } from 'react-icons/fi';
 import whaleTeamLogo from '../assets/whaleTeam.png';
 import {
     ConnectWithToken,
     GetPublicConfig,
     LegacyCredentialPurged,
-    Logout
+    Logout,
+    SetMinutosPorDia
 } from '../../wailsjs/go/backend/App';
 import {errMsg} from '../utils/errors';
+import TimeInputComponent from '../components/TimeInputComponent';
+import {setMinutosPorDiaCache} from '../hooks/useMinutosPorDia';
+import {
+    formatHoursMinutes,
+    hoursAndMinutesToMinutes,
+    MINUTOS_POR_DIA_PADRAO,
+    minutesToHoursAndMinutes
+} from '../utils/time';
 
 const DEFAULT_HOST = 'teamwork.onebrain.com.br';
 
@@ -21,6 +30,9 @@ const Config = ({ onConfigSaved }) => {
     const [form, setForm] = useState({ host: DEFAULT_HOST, token: '' });
     const [showToken, setShowToken] = useState(false);
     const [configuredHost, setConfiguredHost] = useState('');
+    const [minutosPorDia, setMinutosPorDia] = useState(MINUTOS_POR_DIA_PADRAO);
+    const [jornada, setJornada] = useState(minutesToHoursAndMinutes(MINUTOS_POR_DIA_PADRAO));
+    const [isSavingJornada, setIsSavingJornada] = useState(false);
 
     useEffect(() => {
         const checkExistingConfig = async () => {
@@ -32,6 +44,10 @@ const Config = ({ onConfigSaved }) => {
                 setConfiguredHost(publicConfig.apiHost || '');
                 if (publicConfig.apiHost) {
                     setForm(prev => ({ ...prev, host: publicConfig.apiHost }));
+                }
+                if (publicConfig.minutosPorDia > 0) {
+                    setMinutosPorDia(publicConfig.minutosPorDia);
+                    setJornada(minutesToHoursAndMinutes(publicConfig.minutosPorDia));
                 }
 
                 setLegacyPurged(await LegacyCredentialPurged());
@@ -85,6 +101,30 @@ const Config = ({ onConfigSaved }) => {
             toast.error('Erro ao conectar: ' + errMsg(error));
         } finally {
             setIsConnecting(false);
+        }
+    };
+
+    const jornadaMinutos = hoursAndMinutesToMinutes(jornada.hours, jornada.minutes);
+
+    const handleSaveJornada = async (e) => {
+        e.preventDefault();
+
+        if (jornadaMinutos <= 0) {
+            toast.warning('Informe uma jornada diária maior que zero.');
+            return;
+        }
+
+        setIsSavingJornada(true);
+        try {
+            await SetMinutosPorDia(jornadaMinutos);
+            setMinutosPorDia(jornadaMinutos);
+            setMinutosPorDiaCache(jornadaMinutos);
+            toast.success(`Jornada diária definida em ${formatHoursMinutes(jornadaMinutos)}.`);
+        } catch (error) {
+            console.error('Erro ao salvar jornada diária:', error);
+            toast.error('Erro ao salvar jornada diária: ' + errMsg(error));
+        } finally {
+            setIsSavingJornada(false);
         }
     };
 
@@ -189,7 +229,7 @@ const Config = ({ onConfigSaved }) => {
                                 type="button"
                                 onClick={handleLogout}
                                 disabled={isLoggingOut}
-                                className="btn flex items-center justify-center px-5 py-2.5 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg"
+                                className="flex items-center justify-center px-5 py-2.5 font-medium text-sm disabled:opacity-50 bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg"
                             >
                                 {isLoggingOut ? (
                                     <>
@@ -289,6 +329,46 @@ const Config = ({ onConfigSaved }) => {
                     </form>
                 )}
             </div>
+
+            {isConfigured && (
+                <div className="card max-w-md mx-auto mt-6">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center">
+                        <FiClock className="w-5 h-5 mr-2" aria-hidden="true" />
+                        Jornada Diária
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                        Usada como meta do dia no calendário e como base da meta mensal do dashboard.
+                        Atual: <strong>{formatHoursMinutes(minutosPorDia)}</strong>.
+                    </p>
+                    <form onSubmit={handleSaveJornada} className="space-y-4">
+                        <TimeInputComponent
+                            hours={jornada.hours}
+                            minutes={jornada.minutes}
+                            onTimeChange={(hours, minutes) => setJornada({ hours, minutes })}
+                            label="Horas por dia (horas:minutos)"
+                            disabled={isSavingJornada}
+                            showTotalMinutes={true}
+                        />
+                        <button
+                            type="submit"
+                            disabled={isSavingJornada || jornadaMinutos <= 0 || jornadaMinutos === minutosPorDia}
+                            className="w-full btn-primary flex items-center justify-center disabled:opacity-50"
+                        >
+                            {isSavingJornada ? (
+                                <>
+                                    <FiLoader className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
+                                    Salvando...
+                                </>
+                            ) : (
+                                <>
+                                    <FiSave className="w-5 h-5 mr-2" aria-hidden="true" />
+                                    Salvar Jornada
+                                </>
+                            )}
+                        </button>
+                    </form>
+                </div>
+            )}
         </div>
     );
 };

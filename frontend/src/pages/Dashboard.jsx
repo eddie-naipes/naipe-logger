@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     FiClock,
     FiList,
@@ -12,12 +12,9 @@ import {
     FiLoader,
     FiRefreshCw,
     FiFlag,
-    FiTrash2,
-    FiX
+    FiTrash2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import { format, parseISO } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
@@ -34,6 +31,10 @@ import {
     GetTimeTotalsForPeriod,
     OpenDirectoryPath
 } from '../../wailsjs/go/backend/App';
+import useMinutosPorDia from '../hooks/useMinutosPorDia';
+import { formatDateBR, toYMD } from '../utils/dates';
+import { errMsg } from '../utils/errors';
+import { formatHoursMinutes } from '../utils/time';
 
 const StatCard = ({ title, icon, value, description, change, className }) => {
     return (
@@ -58,13 +59,9 @@ const StatCard = ({ title, icon, value, description, change, className }) => {
     );
 };
 
-// A API pode omitir a data; format() do date-fns lança em data inválida.
-const formatDateSafe = (value) => {
-    if (!value) return '—';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '—';
-    return format(parsed, 'dd/MM/yyyy');
-};
+// A API pode omitir a data; formatDateBR devolve '—' para data ausente/inválida
+// e lê 'YYYY-MM-DD' como data local (new Date() a deslocaria um dia).
+const formatDateSafe = (value) => formatDateBR(value);
 
 const formatHours = (minutes) => {
     const value = Number(minutes);
@@ -120,6 +117,9 @@ const UpcomingTaskItem = ({ task }) => {
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const minutosPorDia = useMinutosPorDia();
+    // isLoading só cobre o carregamento inicial: recargas mantêm a árvore montada
+    // (calendário, gerenciador de horas e de feriados) e usam isRefreshing.
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [dashboardData, setDashboardData] = useState({
@@ -142,15 +142,29 @@ const Dashboard = () => {
     const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
     const [isHolidayManagerOpen, setIsHolidayManagerOpen] = useState(false);
 
-    const loadProjectsAndTasks = async () => {
+    // Id da carga mais recente: uma resposta antiga que chegue depois de uma
+    // nova não sobrescreve o estado; o flag de montagem evita setState após sair.
+    const requestIdRef = useRef(0);
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+
+    const loadProjectsAndTasks = async (isCurrent) => {
         try {
             const projects = await GetProjects();
+            if (!isCurrent()) return;
             setProjectsData(projects || []);
 
             if (projects && projects.length > 0) {
                 const projectID = projects[0].id;
-                const tasks = await GetTasksByProject(projectID);
-                setTasksData(tasks || []);
+                const tasks = (await GetTasksByProject(projectID)) || [];
+                if (!isCurrent()) return;
+                setTasksData(tasks);
 
                 setDashboardData(prevData => ({
                     ...prevData,
@@ -163,14 +177,18 @@ const Dashboard = () => {
         }
     };
 
+    // loadDashboard devolve true quando as estatísticas principais carregaram,
+    // para que quem chama não anuncie sucesso depois de uma falha.
     const loadDashboard = async () => {
+        const requestId = ++requestIdRef.current;
+        const isCurrent = () => mountedRef.current && requestId === requestIdRef.current;
+
         try {
-            setIsLoading(true);
             setError(null);
 
             const now = new Date();
-            const startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
-            const endDate = format(new Date(now.getFullYear(), now.getMonth() + 1, 0), 'yyyy-MM-dd');
+            const startDate = toYMD(new Date(now.getFullYear(), now.getMonth(), 1));
+            const endDate = toYMD(new Date(now.getFullYear(), now.getMonth() + 1, 0));
 
             // allSettled em vez de all: os cards de atividades e prazos são
             // secundários e não devem derrubar o dashboard inteiro se falharem.
@@ -182,11 +200,13 @@ const Dashboard = () => {
                     GetTimeTotalsForPeriod(startDate, endDate)
                 ]);
 
+            if (!isCurrent()) return false;
+
             if (statsResult.status === 'rejected') {
                 throw statsResult.reason;
             }
 
-            const dashboardStats = statsResult.value;
+            const dashboardStats = statsResult.value || {};
             const timeReport = timeReportResult.status === 'fulfilled' ? timeReportResult.value : null;
 
             let recentActivitiesData = [];
@@ -222,20 +242,25 @@ const Dashboard = () => {
             setLastUpdate(new Date());
 
             if (dashboardStats.projetos === 0 || dashboardStats.tarefasPendentes === 0) {
-                await loadProjectsAndTasks();
+                await loadProjectsAndTasks(isCurrent);
             }
+            return true;
         } catch (error) {
             console.error("Erro ao carregar dashboard:", error);
-            setError("Não foi possível carregar os dados do dashboard. Verifique sua conexão com o Teamwork.");
+            if (!isCurrent()) return false;
+            setError("Não foi possível carregar os dados do dashboard: " + errMsg(error) + ". Verifique sua conexão com o Teamwork.");
 
-            await loadProjectsAndTasks();
+            await loadProjectsAndTasks(isCurrent);
+            return false;
         } finally {
-            setIsLoading(false);
+            if (isCurrent()) setIsLoading(false);
         }
     };
 
     useEffect(() => {
         loadDashboard();
+        // Carga inicial apenas; recargas são disparadas pelas ações do usuário.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const refreshDashboard = async () => {
@@ -243,12 +268,14 @@ const Dashboard = () => {
 
         setIsRefreshing(true);
         try {
-            await loadDashboard();
-            toast.success("Dashboard atualizado com sucesso!");
-        } catch (error) {
-            toast.error("Erro ao atualizar o dashboard");
+            const ok = await loadDashboard();
+            if (ok) {
+                toast.success("Dashboard atualizado com sucesso!");
+            } else {
+                toast.error("Erro ao atualizar o dashboard.");
+            }
         } finally {
-            setIsRefreshing(false);
+            if (mountedRef.current) setIsRefreshing(false);
         }
     };
 
@@ -264,7 +291,7 @@ const Dashboard = () => {
             await OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
-            toast.error("Erro ao exportar relatório: " + (error.message || "Erro desconhecido"));
+            toast.error("Erro ao exportar relatório: " + errMsg(error));
         } finally {
             setIsExporting(false);
         }
@@ -302,9 +329,16 @@ const Dashboard = () => {
         return `${horas.toFixed(1)}h`;
     };
 
+    // Meta mensal = dias úteis do mês × jornada configurada. Sem dias úteis
+    // (falha ao calculá-los) não há meta confiável para exibir.
+    const diasUteisMes = Number(dashboardData.diasUteisMes) || 0;
+    const metaHoras = diasUteisMes > 0 ? (diasUteisMes * minutosPorDia) / 60 : 0;
+    const horasLogadasNum = Number(dashboardData.horasLogadas) || 0;
+    const progressoMeta = metaHoras > 0 ? (horasLogadasNum / metaHoras) * 100 : 0;
+
     if (isLoading) {
         return (
-            <div className="flex justify-center items-center h-full">
+            <div className="flex justify-center items-center h-full" role="status" aria-label="Carregando dashboard">
                 <div className="animate-spin-slow w-12 h-12 border-4 border-primary-600 border-t-transparent rounded-full"></div>
             </div>
         );
@@ -320,16 +354,14 @@ const Dashboard = () => {
                 <button
                     onClick={refreshDashboard}
                     disabled={isRefreshing}
+                    aria-label="Atualizar dashboard"
+                    title="Atualizar dashboard"
                     className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <FiRefreshCw className={`w-5 h-5 text-gray-500 dark:text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <FiRefreshCw className={`w-5 h-5 text-gray-500 dark:text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
                 </button>
             </div>
 
-            <MonthlyTimeCalendar
-                onDayClick={(day, entries) => {
-                    console.log('Dia clicado:', day, 'Entradas:', entries);
-                }}
-            />
+            <MonthlyTimeCalendar />
 
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">
@@ -376,18 +408,34 @@ const Dashboard = () => {
                         <div className="mb-4">
                             <div className="flex justify-between text-sm text-blue-700 dark:text-blue-400 mb-2">
                                 <span className="font-medium">Progresso: {formatarHoras(dashboardData.horasLogadas)}</span>
-                                <span className="font-medium">Meta: 168h</span>
+                                <span className="font-medium">
+                                    Meta: {metaHoras > 0 ? formatarHoras(metaHoras) : '—'}
+                                </span>
                             </div>
-                            <div className="w-full bg-blue-200 rounded-full h-3 dark:bg-blue-700">
+                            <div
+                                className="w-full bg-blue-200 rounded-full h-3 dark:bg-blue-700"
+                                role="progressbar"
+                                aria-label="Progresso da meta mensal"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={Math.min(100, Math.floor(progressoMeta))}
+                            >
                                 <div
                                     className="bg-blue-600 h-3 rounded-full dark:bg-blue-500"
-                                    style={{ width: `${Math.min(100, (dashboardData.horasLogadas / 168) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, progressoMeta)}%` }}
                                 ></div>
                             </div>
                         </div>
                         <p className="text-sm text-blue-700 dark:text-blue-400 text-center font-medium">
-                            {Math.floor((dashboardData.horasLogadas / 168) * 100)}% da meta mensal atingida
+                            {metaHoras > 0
+                                ? `${Math.floor(progressoMeta)}% da meta mensal atingida`
+                                : 'Meta indisponível: dias úteis do mês não carregados'}
                         </p>
+                        {metaHoras > 0 && (
+                            <p className="mt-1 text-xs text-blue-600 dark:text-blue-300 text-center">
+                                {diasUteisMes} dias úteis × {formatHoursMinutes(minutosPorDia)} por dia
+                            </p>
+                        )}
                     </div>
 
                     <div className="mt-4 p-4 bg-gray-50 rounded-lg dark:bg-gray-700">

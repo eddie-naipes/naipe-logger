@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useId} from 'react';
 import { FiClock } from 'react-icons/fi';
 
 const TimeInputComponent = ({
@@ -10,6 +10,8 @@ const TimeInputComponent = ({
                                 className = "",
                                 showTotalMinutes = true
                             }) => {
+    const labelId = useId();
+
     const handleHoursChange = (newHours) => {
         const validHours = Math.max(0, Math.min(23, parseInt(newHours) || 0));
         onTimeChange(validHours, minutes);
@@ -32,11 +34,11 @@ const TimeInputComponent = ({
     };
 
     return (
-        <div className={className}>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                <FiClock className="inline w-4 h-4 mr-1" />
+        <div className={className} role="group" aria-labelledby={labelId}>
+            <span id={labelId} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                <FiClock className="inline w-4 h-4 mr-1" aria-hidden="true" />
                 {label}
-            </label>
+            </span>
 
             <div className="flex items-center space-x-2">
                 <div className="flex-1">
@@ -44,6 +46,7 @@ const TimeInputComponent = ({
                         type="number"
                         min="0"
                         max="23"
+                        aria-label="Horas"
                         value={hours}
                         onChange={(e) => handleHoursChange(e.target.value)}
                         className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -60,6 +63,7 @@ const TimeInputComponent = ({
                         type="number"
                         min="0"
                         max="59"
+                        aria-label="Minutos"
                         value={minutes}
                         onChange={(e) => handleMinutesChange(e.target.value)}
                         className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
