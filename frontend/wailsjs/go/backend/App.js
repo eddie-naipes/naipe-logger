@@ -6,6 +6,10 @@ export function ApplyTemplate(arg1) {
   return window['go']['backend']['App']['ApplyTemplate'](arg1);
 }
 
+export function BuildCopyPreviousWeekPlan(arg1) {
+  return window['go']['backend']['App']['BuildCopyPreviousWeekPlan'](arg1);
+}
+
 export function CheckForUpdate() {
   return window['go']['backend']['App']['CheckForUpdate']();
 }
@@ -142,6 +146,10 @@ export function GetUserProfile() {
   return window['go']['backend']['App']['GetUserProfile']();
 }
 
+export function GetWeekGrid(arg1) {
+  return window['go']['backend']['App']['GetWeekGrid'](arg1);
+}
+
 export function GetWorkingDays(arg1, arg2) {
   return window['go']['backend']['App']['GetWorkingDays'](arg1, arg2);
 }
@@ -176,6 +184,10 @@ export function OpenLogsFolder() {
 
 export function OpenReleasePage() {
   return window['go']['backend']['App']['OpenReleasePage']();
+}
+
+export function PlanFillGaps(arg1) {
+  return window['go']['backend']['App']['PlanFillGaps'](arg1);
 }
 
 export function PreloadHolidays() {

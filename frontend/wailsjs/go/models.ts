@@ -646,6 +646,62 @@ export namespace api {
 
 export namespace backend {
 	
+	export class FillGapsRequest {
+	    start: string;
+	    end: string;
+	    templateName: string;
+	    taskIds: number[];
+	    includeFuture: boolean;
+	    granularity: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FillGapsRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.templateName = source["templateName"];
+	        this.taskIds = source["taskIds"];
+	        this.includeFuture = source["includeFuture"];
+	        this.granularity = source["granularity"];
+	    }
+	}
+	export class FillGapsResult {
+	    plan: api.WorkDay[];
+	    days: planning.DaySummary[];
+	    minutesPerDay: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FillGapsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.plan = this.convertValues(source["plan"], api.WorkDay);
+	        this.days = this.convertValues(source["days"], planning.DaySummary);
+	        this.minutesPerDay = source["minutesPerDay"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class UserProfile {
 	    id: number;
 	    firstName: string;
@@ -715,6 +771,181 @@ export namespace legacy {
 	        this.installLocation = source["installLocation"];
 	        this.uninstallString = source["uninstallString"];
 	    }
+	}
+
+}
+
+export namespace planning {
+	
+	export class CopyPlan {
+	    plan: api.WorkDay[];
+	    skippedDays: string[];
+	    skippedEntries: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new CopyPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.plan = this.convertValues(source["plan"], api.WorkDay);
+	        this.skippedDays = source["skippedDays"];
+	        this.skippedEntries = source["skippedEntries"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class DaySummary {
+	    date: string;
+	    logged: number;
+	    missing: number;
+	    toLog: number;
+	    future: boolean;
+	    skipped: boolean;
+	    skipCause?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DaySummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.logged = source["logged"];
+	        this.missing = source["missing"];
+	        this.toLog = source["toLog"];
+	        this.future = source["future"];
+	        this.skipped = source["skipped"];
+	        this.skipCause = source["skipCause"];
+	    }
+	}
+	export class WeekCell {
+	    date: string;
+	    minutes: number;
+	    entries: api.TimeEntryReport[];
+	
+	    static createFrom(source: any = {}) {
+	        return new WeekCell(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.minutes = source["minutes"];
+	        this.entries = this.convertValues(source["entries"], api.TimeEntryReport);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WeekRow {
+	    taskId: number;
+	    taskName: string;
+	    projectName: string;
+	    saved: boolean;
+	    cells: WeekCell[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WeekRow(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectName = source["projectName"];
+	        this.saved = source["saved"];
+	        this.cells = this.convertValues(source["cells"], WeekCell);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class WeekGrid {
+	    weekStart: string;
+	    days: string[];
+	    rows: WeekRow[];
+	    dayTotals: number[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WeekGrid(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.weekStart = source["weekStart"];
+	        this.days = source["days"];
+	        this.rows = this.convertValues(source["rows"], WeekRow);
+	        this.dayTotals = source["dayTotals"];
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
