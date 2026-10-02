@@ -11,7 +11,7 @@ on:
 # estivesse publicado no dia. WAILS_VERSION deve acompanhar go.mod.
 env:
   GO_VERSION: '1.24'
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   WAILS_VERSION: 'v2.10.1'
 
 permissions:
@@ -93,14 +93,42 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Build Windows with NSIS
-        run: wails build -platform windows/amd64
+      # Em tags vX.Y.Z a versão do binário e do instalador vem da tag.
+      - name: Injetar versão da tag em wails.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $GITHUB_REF_NAME inválida: use vX.Y.Z (o Windows e o NSIS exigem versão numérica)."
+            exit 1
+          fi
+          VERSION="$VERSION" node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("wails.json","utf8"));j.info.productVersion=process.env.VERSION;fs.writeFileSync("wails.json",JSON.stringify(j,null,2)+"\n");console.log("productVersion =",j.info.productVersion)'
 
+      # `wails build -nsis` chama o makensis, que precisa estar no PATH.
+      - name: Garantir NSIS no PATH
+        shell: pwsh
+        run: |
+          if (Get-Command makensis -ErrorAction SilentlyContinue) { exit 0 }
+          $nsisDir = Join-Path ${env:ProgramFiles(x86)} 'NSIS'
+          if (-not (Test-Path (Join-Path $nsisDir 'makensis.exe'))) {
+            choco install nsis -y --no-progress
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
+
+      - name: Build Windows with NSIS
+        run: wails build -platform windows/amd64 -nsis
+
+      # teamwork-logger.exe (portátil) e TeamworkLogger-amd64-installer.exe
+      # (instalador por usuário, gerado a partir de build/windows/installer).
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: naipe-logger-windows
-          path: build/bin/*.exe
+          if-no-files-found: error
+          path: |
+            build/bin/teamwork-logger.exe
+            build/bin/*-installer.exe
 
   build-linux:
     needs: verify
@@ -122,29 +150,12 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # O Ubuntu 24.04 só traz o WebKitGTK 4.1; o Wails o usa com a build tag
+      # webkit2_41 (sem symlink fingindo ser o 4.0).
       - name: Install system dependencies
         run: |
           sudo apt-get update
-
-          # Try to install webkit2gtk-4.0 first, fallback to 4.1
-          if ! sudo apt-get install -y libwebkit2gtk-4.0-dev; then
-            echo "Installing webkit2gtk-4.1 and creating compatibility symlink..."
-            sudo apt-get install -y libwebkit2gtk-4.1-dev
-
-            # Create symlink for pkg-config compatibility
-            sudo mkdir -p /usr/lib/x86_64-linux-gnu/pkgconfig/
-            sudo ln -sf webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
-
-            # Also check common locations
-            if [ -f /usr/lib/pkgconfig/webkit2gtk-4.1.pc ]; then
-              sudo ln -sf /usr/lib/pkgconfig/webkit2gtk-4.1.pc /usr/lib/pkgconfig/webkit2gtk-4.0.pc
-            fi
-          fi
-
-          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libfuse2
-
-          # Verify webkit2gtk is available
-          pkg-config --exists webkit2gtk-4.0 || pkg-config --exists webkit2gtk-4.1 || echo "WARNING: No webkit2gtk found"
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
@@ -153,8 +164,19 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Injetar versão da tag em wails.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $GITHUB_REF_NAME inválida: use vX.Y.Z."
+            exit 1
+          fi
+          VERSION="$VERSION" node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("wails.json","utf8"));j.info.productVersion=process.env.VERSION;fs.writeFileSync("wails.json",JSON.stringify(j,null,2)+"\n");console.log("productVersion =",j.info.productVersion)'
+
       - name: Build Linux
-        run: wails build -platform linux/amd64
+        run: wails build -platform linux/amd64 -tags webkit2_41
 
       - name: Create AppImage
         run: |
@@ -243,6 +265,17 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Injetar versão da tag em wails.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag $GITHUB_REF_NAME inválida: use vX.Y.Z."
+            exit 1
+          fi
+          VERSION="$VERSION" node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync("wails.json","utf8"));j.info.productVersion=process.env.VERSION;fs.writeFileSync("wails.json",JSON.stringify(j,null,2)+"\n");console.log("productVersion =",j.info.productVersion)'
+
       - name: Build macOS Universal Binary
         run: wails build -platform darwin/universal
 
@@ -313,7 +346,7 @@ jobs:
         run: |
           echo "=== Arquivos baixados ==="
           ls -laR ./windows/ ./linux/ ./macos/
-          sha256sum windows/*.exe linux/naipe-logger-linux.AppImage macos/*.dmg macos/*.zip > SHA256SUMS.txt
+          sha256sum windows/teamwork-logger.exe windows/*-installer.exe linux/naipe-logger-linux.AppImage macos/*.dmg macos/*.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create Release
@@ -323,8 +356,10 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
-            windows/*.exe
+            windows/teamwork-logger.exe
+            windows/*-installer.exe
             linux/naipe-logger-linux.AppImage
             macos/*.dmg
             macos/*.zip
