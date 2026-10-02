@@ -223,7 +223,7 @@ func (t *TeamworkAPI) GetTimeTotalsForPeriod(startDate, endDate string) (*TimeTo
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("erro ao obter totais de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
+			resp.StatusCode, resp.Status, string(body[:min(len(body), 100)]))
 	}
 
 	var timeTotal TimeTotal
@@ -328,7 +328,7 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 	if resp.StatusCode != 200 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("erro ao baixar relatório PDF: %d %s - %s",
-			resp.StatusCode, resp.Status, string(bodyBytes[:minValue(len(bodyBytes), 200)]))
+			resp.StatusCode, resp.Status, string(bodyBytes[:min(len(bodyBytes), 200)]))
 	}
 
 	dir := filepath.Dir(filePath)

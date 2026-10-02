@@ -26,7 +26,7 @@ func (t *TeamworkAPI) GetCurrentUserId() (int, error) {
 		return 0, err
 	}
 
-	t.logDebug("Resposta da API (primeiros 500 caracteres): %s", string(body[:minValue(len(body), 500)]))
+	t.logDebug("Resposta da API (primeiros 500 caracteres): %s", string(body[:min(len(body), 500)]))
 
 	if resp.StatusCode != 200 {
 		return 0, fmt.Errorf("erro ao obter informações do usuário: %d %s - %s",
@@ -163,11 +163,4 @@ func ValidateToken(token, host string) (*LoginResponse, error) {
 		InstanceID: baseURL,
 		Message:    "Token validado com sucesso",
 	}, nil
-}
-
-func minValue(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

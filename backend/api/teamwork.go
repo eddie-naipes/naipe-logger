@@ -60,22 +60,6 @@ func (t *TeamworkAPI) requestContext() context.Context {
 	return t.ctx
 }
 
-func m(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func (t *TeamworkAPI) getProjectInfo(projectID int) []Project {
-	projects, err := t.GetProjects()
-	if err != nil {
-		fmt.Printf("Erro ao obter informações do projeto: %v\n", err)
-		return []Project{}
-	}
-	return projects
-}
-
 func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	cacheKey := fmt.Sprintf("%s%d", cacheKeyDashboardStatsPrefix, t.Config.UserID)
 	if cached, found := getCached[map[string]interface{}](t.cache, cacheKey); found {
