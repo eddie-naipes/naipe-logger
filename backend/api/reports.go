@@ -257,7 +257,7 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 	}
 
 	if resp.StatusCode != 200 {
-		t.logDebug("Resposta completa: %s", string(body))
+		t.logDebug("Resposta do calendário: %s", truncateForError(body, 300))
 		return nil, fmt.Errorf("erro ao obter dados de tempo (status %d): %s",
 			resp.StatusCode, resp.Status)
 	}

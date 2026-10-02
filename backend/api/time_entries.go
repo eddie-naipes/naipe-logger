@@ -146,8 +146,6 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		return nil, fmt.Errorf("erro ao converter para JSON: %v", err)
 	}
 
-	t.logDebug("JSON do lançamento: %s", string(jsonData))
-
 	req, err := t.createRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
@@ -158,7 +156,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		return nil, err
 	}
 
-	t.logDebug("Resposta do servidor (%d): %s", resp.StatusCode, string(body))
+	t.logDebug("Resposta do servidor ao lançamento (%d): %s", resp.StatusCode, truncateForError(body, 300))
 
 	result := &TimeLogResult{
 		TaskID: taskID,
@@ -177,7 +175,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		} else {
 			// Sem o ID a entrada existe no Teamwork mas não pode ser desfeita
 			// pela ferramenta. Registrar o corpo ajuda a mapear o formato.
-			t.logDebug("Lançamento criado sem ID reconhecível na resposta: %s", string(body))
+			t.logWarn("Lançamento criado sem ID reconhecível na resposta: %s", truncateForError(body, 300))
 		}
 
 		return result, nil
@@ -454,7 +452,7 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 
 	isHoliday, _, err := t.IsHoliday(data)
 	if err != nil {
-		t.logDebug("Erro ao verificar feriado para %s: %v", data.Format("2006-01-02"), err)
+		t.logWarn("Erro ao verificar feriado para %s: %v", data.Format("2006-01-02"), err)
 		return true
 	}
 	return !isHoliday
@@ -467,6 +465,8 @@ func formatDate(data time.Time) string {
 func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task) []WorkDay {
 	planoDistribuicao := make([]WorkDay, 0, len(diasUteis))
 
+	// Sem log por tarefa×dia: um mês com dez tarefas gerava centenas de
+	// linhas a cada pré-visualização. Fica só o resumo no fim.
 	for _, dia := range diasUteis {
 		workDay := WorkDay{
 			Date:     dia,
@@ -476,34 +476,14 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 
 		diaData, err := time.Parse("2006-01-02", dia)
 		if err != nil {
-			t.logDebug("Erro ao fazer parse da data %s: %v", dia, err)
+			t.logWarn("Data inválida ignorada no plano de distribuição %q: %v", dia, err)
 			continue
 		}
 		diaSemana := int(diaData.Weekday())
 
-		t.logDebug("Processando dia %s (dia da semana: %d)", dia, diaSemana)
-
 		for _, tarefa := range tarefas {
-			shouldIncludeTask := true
-
-			if len(tarefa.WorkingDays) > 0 {
-				t.logDebug("Tarefa %s tem workingDays definidos: %v", tarefa.TaskName, tarefa.WorkingDays)
-				shouldIncludeTask = false
-
-				for _, workingDay := range tarefa.WorkingDays {
-					if workingDay == diaSemana {
-						shouldIncludeTask = true
-						t.logDebug("Dia %d está incluído nos workingDays da tarefa %s", diaSemana, tarefa.TaskName)
-						break
-					}
-				}
-
-				if !shouldIncludeTask {
-					t.logDebug("Dia %d NÃO está incluído nos workingDays da tarefa %s, pulando", diaSemana, tarefa.TaskName)
-					continue
-				}
-			} else {
-				t.logDebug("Tarefa %s não tem workingDays definidos, incluindo em todos os dias", tarefa.TaskName)
+			if !taskWorksOn(tarefa, diaSemana) {
+				continue
 			}
 
 			for _, entrada := range tarefa.Entries {
@@ -512,20 +492,31 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 					Entry:  entrada,
 				})
 				workDay.TotalMin += entrada.Minutes
-				t.logDebug("Adicionada entrada da tarefa %s no dia %s", tarefa.TaskName, dia)
 			}
 		}
 
 		if len(workDay.Entries) > 0 {
 			planoDistribuicao = append(planoDistribuicao, workDay)
-			t.logDebug("Dia %s adicionado ao plano com %d entradas", dia, len(workDay.Entries))
-		} else {
-			t.logDebug("Dia %s não adicionado ao plano (sem entradas)", dia)
 		}
 	}
 
-	t.logDebug("Plano final gerado com %d dias", len(planoDistribuicao))
+	t.logDebug("Plano de distribuição gerado: %d de %d dias com lançamentos, %d tarefas",
+		len(planoDistribuicao), len(diasUteis), len(tarefas))
 	return planoDistribuicao
+}
+
+// taskWorksOn diz se a tarefa entra no dia da semana informado. Sem
+// workingDays definidos, a tarefa vale para todos os dias úteis.
+func taskWorksOn(tarefa Task, diaSemana int) bool {
+	if len(tarefa.WorkingDays) == 0 {
+		return true
+	}
+	for _, workingDay := range tarefa.WorkingDays {
+		if workingDay == diaSemana {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *TeamworkAPI) CalculateTotalMinutes(tarefas []Task) int {
@@ -626,7 +617,7 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 
 	holidays, err := t.GetHolidaysForMonth(year, month)
 	if err != nil {
-		t.logDebug("Erro ao obter feriados para %d/%d: %v", month, year, err)
+		t.logWarn("Erro ao obter feriados para %d/%d: %v", month, year, err)
 		holidays = []Holiday{}
 	}
 
@@ -720,7 +711,7 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 		return err
 	}
 
-	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, string(body))
+	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, truncateForError(body, 300))
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
