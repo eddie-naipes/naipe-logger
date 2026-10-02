@@ -83,6 +83,44 @@ func (t *TeamworkAPI) GetDefaultReportPath() (string, error) {
 	return filepath.Join(reportsDir, fileName), nil
 }
 
+// v3Timelog é o formato de um lançamento em /projects/api/v3/time.json, que
+// responde na chave "timelogs" (e não "timeEntries", como o código assumia).
+type v3Timelog struct {
+	ID          int    `json:"id"`
+	Minutes     int    `json:"minutes"`
+	Date        string `json:"date"`
+	TimeLogged  string `json:"timeLogged"`
+	Description string `json:"description"`
+	IsBillable  bool   `json:"isBillable"`
+	IsBilled    bool   `json:"isBilled"`
+	TaskID      int    `json:"taskId"`
+	ProjectID   int    `json:"projectId"`
+	UserID      int    `json:"userId"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func (l v3Timelog) toReport() TimeEntryReport {
+	date := l.Date
+	if date == "" {
+		date = l.TimeLogged
+	}
+	return TimeEntryReport{
+		ID:          l.ID,
+		ProjectID:   l.ProjectID,
+		TaskID:      l.TaskID,
+		UserID:      l.UserID,
+		Date:        date,
+		Hours:       float64(l.Minutes) / 60.0,
+		Minutes:     l.Minutes,
+		Description: l.Description,
+		IsBillable:  l.IsBillable,
+		IsBilled:    l.IsBilled,
+		CreatedAt:   l.CreatedAt,
+		UpdatedAt:   l.UpdatedAt,
+	}
+}
+
 func (t *TeamworkAPI) GetTimeEntriesForPeriod(startDate, endDate string) ([]TimeEntryReport, error) {
 	if !t.IsConfigured() {
 		return nil, fmt.Errorf("API não configurada")
@@ -98,69 +136,58 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriod(startDate, endDate string) ([]Time
 		return nil, fmt.Errorf("data final inválida: %v", err)
 	}
 
-	path := fmt.Sprintf("/projects/api/v3/time.json?startDate=%s&endDate=%s&userId=%d&pageSize=500",
-		startDate, endDate, t.Config.UserID)
-	url := t.buildURL(path)
+	// A v3 filtra quem lançou por assignedToUserIds (o mesmo filtro do PDF);
+	// userId não é parâmetro documentado de time.json e fica só por
+	// compatibilidade.
+	path := fmt.Sprintf("/projects/api/v3/time.json?startDate=%s&endDate=%s&userId=%d&assignedToUserIds=%d",
+		startDate, endDate, t.Config.UserID, t.Config.UserID)
 
 	t.logDebug("Obtendo entradas de tempo de %s a %s...", startDate, endDate)
 
-	req, err := t.createRequest("GET", url, nil)
+	allEntries := make([]TimeEntryReport, 0)
+	err = t.fetchPages(t.buildURL(path), timeEntryPageSize, maxTimeEntryPages, "entradas de tempo",
+		func(body []byte) (pageInfo, error) {
+			// Variável nova a cada página: reaproveitar a mesma fazia o
+			// Unmarshal sobrescrever o array da página anterior.
+			var page struct {
+				TimeEntries []TimeEntryReport `json:"timeEntries"`
+				Timelogs    []v3Timelog       `json:"timelogs"`
+				pageMeta
+			}
+			if err := json.Unmarshal(body, &page); err != nil {
+				return pageInfo{}, err
+			}
+
+			for _, entry := range page.TimeEntries {
+				entry.Date = normalizeEntryDate(entry.Date)
+				allEntries = append(allEntries, entry)
+			}
+			for _, log := range page.Timelogs {
+				entry := log.toReport()
+				entry.Date = normalizeEntryDate(entry.Date)
+				allEntries = append(allEntries, entry)
+			}
+
+			return pageInfo{
+				items:   len(page.TimeEntries) + len(page.Timelogs),
+				hasMore: page.Meta.Page.HasMore,
+			}, nil
+		})
 	if err != nil {
 		return nil, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("erro ao obter entradas de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
-	}
-
-	var response TimeEntriesResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	allEntries := response.TimeEntries
-
-	// Teto de páginas: sem ele, uma API que devolvesse hasMore=true de forma
-	// permanente (ou que ignorasse o parâmetro page) prenderia a aplicação num
-	// laço infinito consumindo memória.
-	for page := 2; page <= maxTimeEntryPages && response.Meta.Page.HasMore; page++ {
-		pageUrl := fmt.Sprintf("%s&page=%d", url, page)
-		req, err := t.createRequest("GET", pageUrl, nil)
-		if err != nil {
-			break
-		}
-
-		resp, body, err := t.doRequest(req)
-		if err != nil || resp.StatusCode != 200 {
-			break
-		}
-
-		if err := json.Unmarshal(body, &response); err != nil {
-			break
-		}
-
-		// Página vazia com hasMore=true significa que a paginação não está
-		// avançando; continuar só repetiria a mesma requisição.
-		if len(response.TimeEntries) == 0 {
-			t.logDebug("Paginação interrompida na página %d: resposta sem entradas", page)
-			break
-		}
-
-		allEntries = append(allEntries, response.TimeEntries...)
-
-		if page == maxTimeEntryPages && response.Meta.Page.HasMore {
-			t.logDebug("Limite de %d páginas atingido; podem existir mais entradas no período %s a %s",
-				maxTimeEntryPages, startDate, endDate)
-		}
 	}
 
 	return allEntries, nil
+}
+
+// normalizeEntryDate reduz a data do lançamento a YYYY-MM-DD, formato que o
+// calendário e a detecção de conflitos comparam como texto. Valor
+// irreconhecível é mantido como veio em vez de virar "0001-01-01".
+func normalizeEntryDate(value string) string {
+	if parsed, ok := parseTeamworkDate(value); ok {
+		return parsed.Format("2006-01-02")
+	}
+	return value
 }
 
 func (t *TeamworkAPI) GetTimeTotalsForPeriod(startDate, endDate string) (*TimeTotal, error) {
@@ -196,7 +223,7 @@ func (t *TeamworkAPI) GetTimeTotalsForPeriod(startDate, endDate string) (*TimeTo
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("erro ao obter totais de tempo: %d %s - %s",
-			resp.StatusCode, resp.Status, string(body[:minValue(len(body), 100)]))
+			resp.StatusCode, resp.Status, string(body[:min(len(body), 100)]))
 	}
 
 	var timeTotal TimeTotal
@@ -230,7 +257,7 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 	}
 
 	if resp.StatusCode != 200 {
-		t.logDebug("Resposta completa: %s", string(body))
+		t.logDebug("Resposta do calendário: %s", truncateForError(body, 300))
 		return nil, fmt.Errorf("erro ao obter dados de tempo (status %d): %s",
 			resp.StatusCode, resp.Status)
 	}
@@ -301,7 +328,7 @@ func (t *TeamworkAPI) DownloadTimeReportPDF(startDate, endDate, filePath string)
 	if resp.StatusCode != 200 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("erro ao baixar relatório PDF: %d %s - %s",
-			resp.StatusCode, resp.Status, string(bodyBytes[:minValue(len(bodyBytes), 200)]))
+			resp.StatusCode, resp.Status, string(bodyBytes[:min(len(bodyBytes), 200)]))
 	}
 
 	dir := filepath.Dir(filePath)

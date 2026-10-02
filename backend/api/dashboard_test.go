@@ -59,22 +59,22 @@ func TestPrazosUsamDataRealEOmitemTarefasSemPrazo(t *testing.T) {
 		t.Fatalf("devolveu %d tarefas (%v), esperava %d", len(got), got, len(wantIDs))
 	}
 	for i, wantID := range wantIDs {
-		if got[i]["id"] != wantID {
-			t.Errorf("posição %d: id = %v, esperava %d", i, got[i]["id"], wantID)
+		if got[i].ID != wantID {
+			t.Errorf("posição %d: id = %v, esperava %d", i, got[i].ID, wantID)
 		}
 	}
 
 	// A data precisa ser a da tarefa, não uma gerada a partir de hoje.
-	if got[0]["dueDate"] != "2025-09-15" {
-		t.Errorf("dueDate = %v, esperava 2025-09-15 (o prazo real da tarefa)", got[0]["dueDate"])
+	if got[0].DueDate != "2025-09-15" {
+		t.Errorf("dueDate = %v, esperava 2025-09-15 (o prazo real da tarefa)", got[0].DueDate)
 	}
-	if got[2]["dueDate"] != "2025-09-30" {
-		t.Errorf("dueDate = %v, esperava 2025-09-30", got[2]["dueDate"])
+	if got[2].DueDate != "2025-09-30" {
+		t.Errorf("dueDate = %v, esperava 2025-09-30", got[2].DueDate)
 	}
 
 	// A prioridade precisa vir da API, não ser fixada em "Normal".
-	if got[1]["priority"] != "low" {
-		t.Errorf("priority = %v, esperava \"low\" vindo da API", got[1]["priority"])
+	if got[1].Priority != "low" {
+		t.Errorf("priority = %v, esperava \"low\" vindo da API", got[1].Priority)
 	}
 }
 
@@ -95,8 +95,8 @@ func TestPrazosNaoSaoSequenciaAPartirDeHoje(t *testing.T) {
 
 	for i, item := range got {
 		gerada := hoje.AddDate(0, 0, i+1).Format("2006-01-02")
-		if item["dueDate"] == gerada {
-			t.Errorf("posição %d: dueDate = %v, que coincide com a data gerada pelo bug antigo", i, item["dueDate"])
+		if item.DueDate == gerada {
+			t.Errorf("posição %d: dueDate = %v, que coincide com a data gerada pelo bug antigo", i, item.DueDate)
 		}
 	}
 }

@@ -27,13 +27,14 @@ func TestCalculateEaster(t *testing.T) {
 }
 
 func TestCalculateMobileHolidays(t *testing.T) {
-	// 2025: Páscoa em 20/04. Carnaval 04/03, Sexta-feira Santa 18/04,
+	// 2025: Páscoa em 20/04. Carnaval 03/03 e 04/03, Sexta-feira Santa 18/04,
 	// Corpus Christi 19/06.
 	want := map[string]string{
-		"Carnaval":          "2025-03-04",
-		"Sexta-feira Santa": "2025-04-18",
-		"Páscoa":            "2025-04-20",
-		"Corpus Christi":    "2025-06-19",
+		"Carnaval (segunda-feira)": "2025-03-03",
+		"Carnaval":                 "2025-03-04",
+		"Sexta-feira Santa":        "2025-04-18",
+		"Páscoa":                   "2025-04-20",
+		"Corpus Christi":           "2025-06-19",
 	}
 
 	holidays := calculateMobileHolidays(2025)
@@ -62,6 +63,11 @@ func TestConvertBrasilAPIDate(t *testing.T) {
 		{"25/12", 2025, "2025-12-25"},
 		{"01/01", 2025, "2025-01-01"},
 		{"07/09/2026", 2025, "2026-09-07"}, // ano explícito prevalece
+		{"2026-02-16", 2025, "2026-02-16"}, // formato ISO atual da BrasilAPI
+		{" 2026-11-20 ", 2026, "2026-11-20"},
+		{"31/02", 2025, ""}, // data impossível não vira feriado
+		{"aa/bb", 2025, ""},
+		{"2026-13-01", 2026, ""},
 		{"", 2025, ""},
 		{"lixo", 2025, ""},
 	}

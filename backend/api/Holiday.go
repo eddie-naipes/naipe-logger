@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,20 +31,36 @@ type HolidayCache struct {
 }
 
 type HolidayAPI interface {
-	GetHolidays(year int) ([]Holiday, error)
+	GetHolidays(ctx context.Context, year int) ([]Holiday, error)
 	GetName() string
 	GetPriority() int
 }
 
-// BrasilAPI - API oficial do governo
+var (
+	// brasilAPIBaseURL é variável para que os testes apontem para um
+	// httptest.Server em vez da BrasilAPI real.
+	brasilAPIBaseURL = "https://brasilapi.com.br/api/feriados/v1"
+
+	// brasilAPIClient tem timeout próprio: http.Get usa o cliente padrão, sem
+	// timeout, e uma BrasilAPI lenta travava a verificação de dias úteis (e,
+	// antes, todas as goroutines que esperavam o lock do cache de feriados).
+	brasilAPIClient = &http.Client{Timeout: 10 * time.Second}
+)
+
+// BrasilAPI - API pública de feriados nacionais
 type BrasilAPIProvider struct{}
 
 func (b *BrasilAPIProvider) GetName() string  { return "BrasilAPI" }
 func (b *BrasilAPIProvider) GetPriority() int { return 1 }
-func (b *BrasilAPIProvider) GetHolidays(year int) ([]Holiday, error) {
-	url := fmt.Sprintf("https://brasilapi.com.br/api/feriados/v1/%d", year)
+func (b *BrasilAPIProvider) GetHolidays(ctx context.Context, year int) ([]Holiday, error) {
+	url := fmt.Sprintf("%s/%d", brasilAPIBaseURL, year)
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao montar requisição BrasilAPI: %v", err)
+	}
+
+	resp, err := brasilAPIClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("erro na requisição BrasilAPI: %v", err)
 	}
@@ -85,6 +102,14 @@ func (b *BrasilAPIProvider) GetHolidays(year int) ([]Holiday, error) {
 		holidays = append(holidays, holiday)
 	}
 
+	// Payload não vazio sem nenhuma data reconhecida indica mudança de formato
+	// na API — foi assim que a troca para datas ISO passou despercebida.
+	// Devolver erro faz o fallback ser tratado como tal (cache curto) em vez
+	// de mascarar o problema.
+	if len(apiHolidays) > 0 && len(holidays) == 0 {
+		return nil, fmt.Errorf("BrasilAPI devolveu datas em formato desconhecido (ex.: %q)", apiHolidays[0].Date)
+	}
+
 	return holidays, nil
 }
 
@@ -93,7 +118,7 @@ type FixedHolidaysProvider struct{}
 
 func (f *FixedHolidaysProvider) GetName() string  { return "FixedHolidays" }
 func (f *FixedHolidaysProvider) GetPriority() int { return 99 }
-func (f *FixedHolidaysProvider) GetHolidays(year int) ([]Holiday, error) {
+func (f *FixedHolidaysProvider) GetHolidays(_ context.Context, year int) ([]Holiday, error) {
 	holidays := []Holiday{
 		{
 			Date:       fmt.Sprintf("%d-01-01", year),
@@ -153,6 +178,19 @@ func (f *FixedHolidaysProvider) GetHolidays(year int) ([]Holiday, error) {
 		},
 	}
 
+	// Dia Nacional de Zumbi e da Consciência Negra: feriado nacional pela Lei
+	// 14.759/2023, a partir de 2024. Antes disso era só estadual/municipal,
+	// então não entra nos anos anteriores.
+	if year >= 2024 {
+		holidays = append(holidays, Holiday{
+			Date:       fmt.Sprintf("%d-11-20", year),
+			Name:       "Dia Nacional de Zumbi e da Consciência Negra",
+			Type:       "nacional",
+			IsOptional: false,
+			Source:     "Fixed",
+		})
+	}
+
 	// Adicionar feriados móveis (Carnaval, Corpus Christi, etc.)
 	mobileHolidays := calculateMobileHolidays(year)
 	holidays = append(holidays, mobileHolidays...)
@@ -164,7 +202,23 @@ var (
 	holidayCache     = make(map[int]*HolidayCache)
 	holidayCacheLock sync.RWMutex
 	holidayProviders []HolidayAPI
+
+	// holidayInflight guarda a busca em andamento por ano (protegido por
+	// holidayCacheLock). Chamadas concorrentes para o mesmo ano esperam a
+	// mesma busca em vez de cada uma ir à rede.
+	holidayInflight = make(map[int]*holidayFetch)
 )
+
+// fallbackOnlyHolidayTTL é a validade do cache quando a BrasilAPI falhou e só
+// o calendário local respondeu. Sem isso, uma queda momentânea da API deixava
+// o fallback valendo até o fim do ano.
+const fallbackOnlyHolidayTTL = 6 * time.Hour
+
+type holidayFetch struct {
+	done     chan struct{}
+	holidays map[string]Holiday
+	err      error
+}
 
 func init() {
 	// Registrar providers em ordem de prioridade
@@ -179,71 +233,108 @@ func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error)
 	cache, exists := holidayCache[year]
 	holidayCacheLock.RUnlock()
 
-	// Verificar se o cache existe e não expirou
+	// Caminho rápido. É chamado uma vez por dia verificado em GetWorkingDays,
+	// por isso não loga nada aqui.
 	if exists && time.Now().Before(cache.ExpiresAt) {
-		t.logDebug("Usando cache de feriados para %d (expira em %v)", year, cache.ExpiresAt)
 		return cache.Holidays, nil
 	}
+
+	ctx := t.requestContext()
 
 	holidayCacheLock.Lock()
-	defer holidayCacheLock.Unlock()
-
-	// Double-check após adquirir o lock
 	if cache, exists = holidayCache[year]; exists && time.Now().Before(cache.ExpiresAt) {
+		holidayCacheLock.Unlock()
 		return cache.Holidays, nil
 	}
 
-	t.logDebug("Cache de feriados expirado ou inexistente para %d, buscando APIs...", year)
+	// Já existe busca em andamento para o ano: espera por ela. A chamada de
+	// rede acontece fora do lock, então leituras de outros anos não ficam
+	// bloqueadas por uma BrasilAPI lenta.
+	if fetch, inFlight := holidayInflight[year]; inFlight {
+		holidayCacheLock.Unlock()
+		select {
+		case <-fetch.done:
+			return fetch.holidays, fetch.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
 
+	fetch := &holidayFetch{done: make(chan struct{})}
+	holidayInflight[year] = fetch
+	holidayCacheLock.Unlock()
+
+	holidays, sources, err := t.fetchHolidays(ctx, year)
+
+	// Só trava de novo para gravar o resultado.
+	holidayCacheLock.Lock()
+	if err == nil {
+		expiresAt := calculateCacheExpiration(year)
+		if !containsString(sources, "BrasilAPI") {
+			if curto := time.Now().Add(fallbackOnlyHolidayTTL); curto.Before(expiresAt) {
+				expiresAt = curto
+			}
+		}
+		holidayCache[year] = &HolidayCache{
+			Year:      year,
+			Holidays:  holidays,
+			CachedAt:  time.Now(),
+			Sources:   sources,
+			ExpiresAt: expiresAt,
+		}
+		t.logDebug("Cache de feriados atualizado para %d com %d feriados de %v (expira em %v)",
+			year, len(holidays), sources, expiresAt)
+	}
+	delete(holidayInflight, year)
+	holidayCacheLock.Unlock()
+
+	fetch.holidays, fetch.err = holidays, err
+	close(fetch.done)
+
+	return holidays, err
+}
+
+// fetchHolidays consulta os providers em ordem de prioridade e mescla os
+// resultados. Não toca no cache nem em locks: roda fora da seção crítica.
+func (t *TeamworkAPI) fetchHolidays(ctx context.Context, year int) (map[string]Holiday, []string, error) {
 	holidays := make(map[string]Holiday)
 	sources := make([]string, 0)
 	var lastError error
 
-	// Tentar cada provider em ordem de prioridade
 	for _, provider := range holidayProviders {
-		t.logDebug("Tentando provider %s para ano %d", provider.GetName(), year)
-
-		providerHolidays, err := provider.GetHolidays(year)
+		providerHolidays, err := provider.GetHolidays(ctx, year)
 		if err != nil {
-			t.logDebug("Erro no provider %s: %v", provider.GetName(), err)
+			t.logWarn("Erro no provider de feriados %s para %d: %v", provider.GetName(), year, err)
 			lastError = err
 			continue
 		}
 
 		if len(providerHolidays) > 0 {
-			// Mesclar feriados do provider
 			for _, holiday := range providerHolidays {
-				// Priorizar sources com menor priority number
+				// Em datas repetidas vence o provider de menor prioridade.
 				existing, exists := holidays[holiday.Date]
 				if !exists || provider.GetPriority() < getPriorityBySource(existing.Source) {
 					holidays[holiday.Date] = holiday
 				}
 			}
 			sources = append(sources, provider.GetName())
-			t.logDebug("Provider %s retornou %d feriados", provider.GetName(), len(providerHolidays))
 		}
 	}
 
 	if len(holidays) == 0 {
-		return nil, fmt.Errorf("nenhum provider retornou feriados: %v", lastError)
+		return nil, nil, fmt.Errorf("nenhum provider retornou feriados: %v", lastError)
 	}
 
-	// Calcular data de expiração
-	expiresAt := calculateCacheExpiration(year)
+	return holidays, sources, nil
+}
 
-	// Salvar no cache
-	holidayCache[year] = &HolidayCache{
-		Year:      year,
-		Holidays:  holidays,
-		CachedAt:  time.Now(),
-		Sources:   sources,
-		ExpiresAt: expiresAt,
+func containsString(values []string, target string) bool {
+	for _, v := range values {
+		if v == target {
+			return true
+		}
 	}
-
-	t.logDebug("Cache de feriados atualizado para %d com %d feriados de %v (expira em %v)",
-		year, len(holidays), sources, expiresAt)
-
-	return holidays, nil
+	return false
 }
 
 func (t *TeamworkAPI) IsHoliday(date time.Time) (bool, Holiday, error) {
@@ -302,20 +393,44 @@ func getPriorityBySource(source string) int {
 	return 999
 }
 
+// convertBrasilAPIDate converte a data devolvida pela BrasilAPI para
+// YYYY-MM-DD. Hoje a API responde em ISO ("2026-02-16"); os formatos DD/MM e
+// DD/MM/YYYY continuam aceitos. Valor irreconhecível vira "".
 func convertBrasilAPIDate(dateStr string, year int) string {
-	// BrasilAPI pode retornar formato DD/MM ou DD/MM/YYYY
-	parts := strings.Split(dateStr, "/")
-	if len(parts) == 2 {
-		day, _ := strconv.Atoi(parts[0])
-		month, _ := strconv.Atoi(parts[1])
-		return fmt.Sprintf("%d-%02d-%02d", year, month, day)
-	} else if len(parts) == 3 {
-		day, _ := strconv.Atoi(parts[0])
-		month, _ := strconv.Atoi(parts[1])
-		yearPart, _ := strconv.Atoi(parts[2])
-		return fmt.Sprintf("%d-%02d-%02d", yearPart, month, day)
+	dateStr = strings.TrimSpace(dateStr)
+	if dateStr == "" {
+		return ""
 	}
-	return ""
+
+	if parsed, err := time.Parse("2006-01-02", dateStr); err == nil {
+		return parsed.Format("2006-01-02")
+	}
+
+	parts := strings.Split(dateStr, "/")
+	if len(parts) != 2 && len(parts) != 3 {
+		return ""
+	}
+
+	day, errDay := strconv.Atoi(parts[0])
+	month, errMonth := strconv.Atoi(parts[1])
+	if errDay != nil || errMonth != nil {
+		return ""
+	}
+	if len(parts) == 3 {
+		explicitYear, err := strconv.Atoi(parts[2])
+		if err != nil {
+			return ""
+		}
+		year = explicitYear
+	}
+
+	// time.Date normaliza datas impossíveis (31/02 vira 03/03); comparar de
+	// volta recusa esses casos em vez de inventar um feriado.
+	parsed := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if parsed.Day() != day || int(parsed.Month()) != month {
+		return ""
+	}
+	return parsed.Format("2006-01-02")
 }
 
 func calculateMobileHolidays(year int) []Holiday {
@@ -324,7 +439,16 @@ func calculateMobileHolidays(year int) []Holiday {
 
 	holidays := []Holiday{
 		{
-			Date:       easter.AddDate(0, 0, -47).Format("2006-01-02"), // Carnaval (47 dias antes)
+			// Carnaval é ponto facultativo nacional, mas na prática emenda
+			// segunda e terça; antes só a terça entrava no fallback.
+			Date:       easter.AddDate(0, 0, -48).Format("2006-01-02"),
+			Name:       "Carnaval (segunda-feira)",
+			Type:       "nacional",
+			IsOptional: false,
+			Source:     "Fixed",
+		},
+		{
+			Date:       easter.AddDate(0, 0, -47).Format("2006-01-02"), // terça de Carnaval
 			Name:       "Carnaval",
 			Type:       "nacional",
 			IsOptional: false,
@@ -406,33 +530,56 @@ func (t *TeamworkAPI) PreloadUpcomingHolidays() error {
 	return nil
 }
 
-// Método para obter estatísticas do cache
+// HolidayCacheStats descreve o cache de feriados, para a tela de manutenção.
+type HolidayCacheStats struct {
+	CachedYears  int                        `json:"cached_years"`
+	Years        []int                      `json:"years"`
+	CacheDetails map[int]HolidayCacheDetail `json:"cache_details"`
+}
+
+// HolidayCacheDetail é o estado do cache de um ano.
+type HolidayCacheDetail struct {
+	HolidaysCount int       `json:"holidays_count"`
+	CachedAt      time.Time `json:"cached_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Sources       []string  `json:"sources"`
+	IsExpired     bool      `json:"is_expired"`
+}
+
+// GetHolidayCacheStats devolve o estado do cache no formato de mapa que o
+// binding atual expõe. O JSON é o mesmo de HolidayCacheSummary.
 func (t *TeamworkAPI) GetHolidayCacheStats() map[string]interface{} {
+	stats := t.HolidayCacheSummary()
+	return map[string]interface{}{
+		"cached_years":  stats.CachedYears,
+		"years":         stats.Years,
+		"cache_details": stats.CacheDetails,
+	}
+}
+
+// HolidayCacheSummary é a versão tipada de GetHolidayCacheStats.
+func (t *TeamworkAPI) HolidayCacheSummary() HolidayCacheStats {
 	holidayCacheLock.RLock()
 	defer holidayCacheLock.RUnlock()
 
-	stats := map[string]interface{}{
-		"cached_years":  len(holidayCache),
-		"years":         make([]int, 0, len(holidayCache)),
-		"cache_details": make(map[int]map[string]interface{}),
+	stats := HolidayCacheStats{
+		CachedYears:  len(holidayCache),
+		Years:        make([]int, 0, len(holidayCache)),
+		CacheDetails: make(map[int]HolidayCacheDetail, len(holidayCache)),
 	}
 
-	years := make([]int, 0, len(holidayCache))
-	for year := range holidayCache {
-		years = append(years, year)
-	}
-	sort.Ints(years)
-	stats["years"] = years
-
+	now := time.Now()
 	for year, cache := range holidayCache {
-		stats["cache_details"].(map[int]map[string]interface{})[year] = map[string]interface{}{
-			"holidays_count": len(cache.Holidays),
-			"cached_at":      cache.CachedAt,
-			"expires_at":     cache.ExpiresAt,
-			"sources":        cache.Sources,
-			"is_expired":     time.Now().After(cache.ExpiresAt),
+		stats.Years = append(stats.Years, year)
+		stats.CacheDetails[year] = HolidayCacheDetail{
+			HolidaysCount: len(cache.Holidays),
+			CachedAt:      cache.CachedAt,
+			ExpiresAt:     cache.ExpiresAt,
+			Sources:       cache.Sources,
+			IsExpired:     now.After(cache.ExpiresAt),
 		}
 	}
+	sort.Ints(stats.Years)
 
 	return stats
 }
@@ -443,89 +590,4 @@ func (t *TeamworkAPI) ClearHolidaysCacheForYear(year int) {
 
 	delete(holidayCache, year)
 	t.logDebug("Cache de feriados removido para ano %d", year)
-}
-
-// Método para verificar se um feriado específico existe
-func (t *TeamworkAPI) IsSpecificHoliday(date time.Time, holidayName string) (bool, error) {
-	year := date.Year()
-	dateStr := date.Format("2006-01-02")
-
-	holidays, err := t.GetBrazilianHolidays(year)
-	if err != nil {
-		return false, err
-	}
-
-	holiday, exists := holidays[dateStr]
-	if !exists {
-		return false, nil
-	}
-
-	return strings.Contains(strings.ToLower(holiday.Name), strings.ToLower(holidayName)), nil
-}
-
-// Método para obter feriados de múltiplos anos
-func (t *TeamworkAPI) GetHolidaysForYearRange(startYear, endYear int) (map[int]map[string]Holiday, error) {
-	result := make(map[int]map[string]Holiday)
-
-	for year := startYear; year <= endYear; year++ {
-		holidays, err := t.GetBrazilianHolidays(year)
-		if err != nil {
-			t.logDebug("Erro ao obter feriados para %d: %v", year, err)
-			continue
-		}
-		result[year] = holidays
-	}
-
-	return result, nil
-}
-
-// Método para contar dias úteis em um período considerando feriados
-func (t *TeamworkAPI) CountWorkingDaysWithHolidays(startDate, endDate string) (int, error) {
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		return 0, fmt.Errorf("data inicial inválida: %v", err)
-	}
-
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		return 0, fmt.Errorf("data final inválida: %v", err)
-	}
-
-	if end.Before(start) {
-		return 0, fmt.Errorf("data final deve ser posterior à inicial")
-	}
-
-	// Obter feriados para todos os anos no intervalo
-	startYear := start.Year()
-	endYear := end.Year()
-
-	allHolidays := make(map[string]Holiday)
-	for year := startYear; year <= endYear; year++ {
-		yearHolidays, err := t.GetBrazilianHolidays(year)
-		if err != nil {
-			t.logDebug("Erro ao obter feriados para %d: %v", year, err)
-			continue
-		}
-
-		for date, holiday := range yearHolidays {
-			allHolidays[date] = holiday
-		}
-	}
-
-	workingDays := 0
-	current := start
-
-	for !current.After(end) {
-		// Verificar se não é fim de semana
-		if current.Weekday() != time.Saturday && current.Weekday() != time.Sunday {
-			// Verificar se não é feriado
-			dateStr := current.Format("2006-01-02")
-			if _, isHoliday := allHolidays[dateStr]; !isHoliday {
-				workingDays++
-			}
-		}
-		current = current.AddDate(0, 0, 1)
-	}
-
-	return workingDays, nil
 }

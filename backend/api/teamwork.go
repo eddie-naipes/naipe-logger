@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -16,6 +17,15 @@ type TeamworkAPI struct {
 	// de backoff em vez de deixá-las rodando até o fim.
 	ctxMutex sync.RWMutex
 	ctx      context.Context
+
+	// baseURL é o host já normalizado no construtor, para não refazer o parse
+	// a cada requisição. normalizedFrom guarda o valor bruto que o originou.
+	baseURL        string
+	normalizedFrom string
+	hostNormalized bool
+
+	// httpClient substitui o cliente compartilhado; usado pelos testes.
+	httpClient *http.Client
 }
 
 func NewTeamworkAPI(config Config) *TeamworkAPI {
@@ -24,8 +34,11 @@ func NewTeamworkAPI(config Config) *TeamworkAPI {
 	}
 
 	return &TeamworkAPI{
-		Config: config,
-		cache:  NewCache(),
+		Config:         config,
+		cache:          NewCache(),
+		baseURL:        normalizeHostOrEmpty(config.ApiHost),
+		normalizedFrom: config.ApiHost,
+		hostNormalized: true,
 	}
 }
 
@@ -47,35 +60,28 @@ func (t *TeamworkAPI) requestContext() context.Context {
 	return t.ctx
 }
 
-func m(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func (t *TeamworkAPI) getProjectInfo(projectID int) []Project {
-	projects, err := t.GetProjects()
-	if err != nil {
-		fmt.Printf("Erro ao obter informações do projeto: %v\n", err)
-		return []Project{}
-	}
-	return projects
-}
-
+// GetDashboardStats devolve os números do dashboard no formato de mapa que o
+// binding atual expõe. Mantido por compatibilidade; GetDashboardSummary é a
+// versão tipada. Cada chamada monta um mapa novo, então o chamador pode
+// alterá-lo sem contaminar o cache.
 func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
-	cacheKey := fmt.Sprintf("dashboard_stats_%d", t.Config.UserID)
-	if cached, found := getCached[map[string]interface{}](t.cache, cacheKey); found {
-		// Cópia: o chamador ajusta "horasLogadas" no mapa devolvido, e mutar o
-		// objeto em cache contaminaria as próximas leituras.
-		return copyStats(cached), nil
+	stats, err := t.GetDashboardSummary()
+	if err != nil {
+		return nil, err
+	}
+	return stats.toMap(), nil
+}
+
+// GetDashboardSummary calcula os números do dashboard do mês atual.
+func (t *TeamworkAPI) GetDashboardSummary() (DashboardStats, error) {
+	cacheKey := fmt.Sprintf("%s%d", cacheKeyDashboardStatsPrefix, t.Config.UserID)
+	if cached, found := getCached[DashboardStats](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	if !t.IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+		return DashboardStats{}, fmt.Errorf("API não configurada")
 	}
-
-	stats := make(map[string]interface{})
 
 	now := time.Now()
 	firstDay := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
@@ -84,13 +90,16 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	startDate := firstDay.Format("2006-01-02")
 	endDate := lastDay.Format("2006-01-02")
 
+	mesAnteriorInicio := firstDay.AddDate(0, -1, 0).Format("2006-01-02")
+	mesAnteriorFim := firstDay.AddDate(0, 0, -1).Format("2006-01-02")
+
 	var wg sync.WaitGroup
-	var taskCountErr, projectCountErr, hoursLoggedErr, workDaysErr error
+	var taskCountErr, projectCountErr, hoursLoggedErr, hoursPrevErr, workDaysErr error
 	var tarefasPendentes, projetosAtivos int
 	var horasLogadas, horasLogadasAnterior float64
 	var diasUteis []string
 
-	wg.Add(4)
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
@@ -102,16 +111,18 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 		projetosAtivos, projectCountErr = t.GetProjectCount()
 	}()
 
+	// As horas vêm de time/total.json, que já soma no servidor. A versão
+	// anterior listava time.json com fromDate/toDate — parâmetros que a v3
+	// ignora — e sem paginar, então o número não batia com o Teamwork e o
+	// binding precisava sobrescrevê-lo.
 	go func() {
 		defer wg.Done()
 		horasLogadas, hoursLoggedErr = t.GetHoursLoggedInPeriod(startDate, endDate)
-		if hoursLoggedErr == nil {
-			mesAnteriorPrimeiroDia := time.Date(firstDay.Year(), firstDay.Month()-1, 1, 0, 0, 0, 0, firstDay.Location())
-			mesAnteriorUltimoDia := time.Date(firstDay.Year(), firstDay.Month(), 0, 0, 0, 0, 0, firstDay.Location())
-			startDateAnterior := mesAnteriorPrimeiroDia.Format("2006-01-02")
-			endDateAnterior := mesAnteriorUltimoDia.Format("2006-01-02")
-			horasLogadasAnterior, _ = t.GetHoursLoggedInPeriod(startDateAnterior, endDateAnterior)
-		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		horasLogadasAnterior, hoursPrevErr = t.GetHoursLoggedInPeriod(mesAnteriorInicio, mesAnteriorFim)
 	}()
 
 	go func() {
@@ -121,63 +132,39 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 
 	wg.Wait()
 
-	if taskCountErr != nil {
-		stats["tarefasPendentes"] = 0
-	} else {
-		stats["tarefasPendentes"] = tarefasPendentes
-	}
+	// Falhas parciais viram zero no card correspondente em vez de derrubar o
+	// dashboard inteiro.
+	var stats DashboardStats
 
-	if projectCountErr != nil {
-		stats["projetos"] = 0
-	} else {
-		stats["projetos"] = projetosAtivos
+	if taskCountErr == nil {
+		stats.TarefasPendentes = tarefasPendentes
+	}
+	if projectCountErr == nil {
+		stats.Projetos = projetosAtivos
 	}
 
 	if hoursLoggedErr != nil {
-		stats["horasLogadas"] = 0.0
-		stats["horasLogadasChange"] = 0
+		t.logWarn("Erro ao obter horas do mês: %v", hoursLoggedErr)
 	} else {
-		stats["horasLogadas"] = horasLogadas
-		if horasLogadasAnterior > 0 {
-			horasChange := ((horasLogadas - horasLogadasAnterior) / horasLogadasAnterior) * 100
-			stats["horasLogadasChange"] = int(horasChange)
-		} else {
-			stats["horasLogadasChange"] = 0
+		stats.HorasLogadas = horasLogadas
+		if hoursPrevErr == nil && horasLogadasAnterior > 0 {
+			stats.HorasLogadasChange = int(((horasLogadas - horasLogadasAnterior) / horasLogadasAnterior) * 100)
 		}
 	}
 
-	if workDaysErr != nil {
-		stats["diasUteisMes"] = 0
-		stats["diasUteisRestantes"] = 0
-		stats["diasUteisPassados"] = 0
-	} else {
-		diasUteisMes := len(diasUteis)
-		stats["diasUteisMes"] = diasUteisMes
+	if workDaysErr == nil {
+		stats.DiasUteisMes = len(diasUteis)
 
 		hoje := time.Now().Format("2006-01-02")
-		diasUteisRestantes := 0
-		diasUteisPassados := 0
-
 		for _, dia := range diasUteis {
 			if dia >= hoje {
-				diasUteisRestantes++
+				stats.DiasUteisRestantes++
 			} else {
-				diasUteisPassados++
+				stats.DiasUteisPassados++
 			}
 		}
-
-		stats["diasUteisRestantes"] = diasUteisRestantes
-		stats["diasUteisPassados"] = diasUteisPassados
 	}
 
-	t.cache.Set(cacheKey, copyStats(stats), 1*time.Hour)
+	t.cache.Set(cacheKey, stats, 1*time.Hour)
 	return stats, nil
-}
-
-func copyStats(stats map[string]interface{}) map[string]interface{} {
-	copied := make(map[string]interface{}, len(stats))
-	for k, v := range stats {
-		copied[k] = v
-	}
-	return copied
 }
