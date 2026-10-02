@@ -16,7 +16,7 @@ import {
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
-import {useLocation} from 'react-router-dom';
+import {useLocation, useNavigate} from 'react-router-dom';
 import {
     CheckPlanConflicts,
     CreateDistributionPlan,
@@ -30,6 +30,7 @@ import {
 
 const TimeLog = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const [isLoading, setIsLoading] = useState(true);
     const [savedTasks, setSavedTasks] = useState([]);
     const [selectedTasks, setSelectedTasks] = useState([]);
@@ -62,7 +63,7 @@ const TimeLog = () => {
             const tasks = await GetSavedTasks();
             setSavedTasks(tasks);
 
-            const wasTemplateApplied = localStorage.getItem('templateApplied') === 'true';
+            const wasTemplateApplied = Boolean(location.state?.templateApplied);
 
             if (tasks.length > 0 && wasTemplateApplied && !templateAlertShown) {
                 setSelectedTasks(tasks.map(task => task.taskId));
@@ -70,7 +71,8 @@ const TimeLog = () => {
                 setTemplateAlertShown(true);
                 toast.info(`${tasks.length} tarefas carregadas do template. Clique em "Gerar Plano" para continuar.`);
 
-                localStorage.removeItem('templateApplied');
+                // Consome o aviso: voltar/recarregar não deve reaplicar a seleção.
+                navigate(location.pathname, {replace: true, state: null});
             }
         } catch (error) {
             console.error('Erro ao carregar tarefas salvas:', error);

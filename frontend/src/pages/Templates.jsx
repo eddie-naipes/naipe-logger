@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
-import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy, FiCheck, FiClock } from 'react-icons/fi';
+import { FiSave, FiEdit, FiTrash2, FiFolder, FiLoader, FiCopy, FiClock } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import {
+    ApplyTemplate,
     ClearSavedTasks,
     DeleteTemplate,
     GetSavedTasks,
     GetTemplates,
-    SaveTask,
     SaveTemplate
 } from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
+import {formatWorkingDays, sumEntryMinutes} from '../utils/time';
 
 const Templates = () => {
     const navigate = useNavigate();
@@ -23,29 +25,20 @@ const Templates = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [applyingTemplate, setApplyingTemplate] = useState(null);
 
-    const diasSemana = [
-        { id: 1, nome: 'Segunda', abrev: 'Seg' },
-        { id: 2, nome: 'Terça', abrev: 'Ter' },
-        { id: 3, nome: 'Quarta', abrev: 'Qua' },
-        { id: 4, nome: 'Quinta', abrev: 'Qui' },
-        { id: 5, nome: 'Sexta', abrev: 'Sex' },
-        { id: 6, nome: 'Sábado', abrev: 'Sáb' },
-        { id: 0, nome: 'Domingo', abrev: 'Dom' }
-    ];
-
     useEffect(() => {
         const loadData = async () => {
             try {
                 setIsLoading(true);
 
-                const templatesData = await GetTemplates();
-                setTemplates(templatesData);
-
-                const tasksData = await GetSavedTasks();
-                setSavedTasks(tasksData);
+                const [templatesData, tasksData] = await Promise.all([
+                    GetTemplates(),
+                    GetSavedTasks()
+                ]);
+                setTemplates(templatesData || {});
+                setSavedTasks(tasksData || []);
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
-                toast.error('Erro ao carregar templates e tarefas.');
+                toast.error('Erro ao carregar templates e tarefas: ' + errMsg(error));
             } finally {
                 setIsLoading(false);
             }
@@ -97,24 +90,31 @@ const Templates = () => {
         try {
             await DeleteTemplate(name);
 
-            const updatedTemplates = { ...templates };
-            delete updatedTemplates[name];
-            setTemplates(updatedTemplates);
+            // Excluir um template não mexe nas tarefas salvas: elas pertencem à
+            // tela de Tarefas e podem estar em outros templates.
+            setTemplates(prev => {
+                const updated = { ...prev };
+                delete updated[name];
+                return updated;
+            });
 
-            await ClearSavedTasks();
-            localStorage.removeItem('templateApplied');
+            if (currentTemplate === name) {
+                resetForm();
+            }
 
             toast.success('Template excluído com sucesso!');
         } catch (error) {
             console.error('Erro ao excluir template:', error);
-            toast.error('Erro ao excluir template.');
+            toast.error('Erro ao excluir template: ' + errMsg(error));
         }
     };
 
     const saveTemplate = async (e) => {
         e.preventDefault();
 
-        if (!templateName.trim()) {
+        const nome = templateName.trim();
+
+        if (!nome) {
             toast.warning('Informe um nome para o template.');
             return;
         }
@@ -124,8 +124,12 @@ const Templates = () => {
             return;
         }
 
-        if (!isEditing && templates[templateName]) {
-            toast.warning('Já existe um template com este nome.');
+        // Renomear = salvar com o novo nome e remover o antigo; sem isso o
+        // template antigo continuava existindo como duplicata.
+        const renomeando = isEditing && currentTemplate !== null && currentTemplate !== nome;
+
+        if (templates[nome] && (!isEditing || renomeando)) {
+            toast.warning(`Já existe um template chamado "${nome}".`);
             return;
         }
 
@@ -136,29 +140,40 @@ const Templates = () => {
                 selectedTasks.includes(task.taskId)
             );
 
-            const totalMin = taskList.reduce((total, task) => {
-                return total + task.entries.reduce((sum, entry) => sum + entry.minutes, 0);
-            }, 0);
+            const totalMin = taskList.reduce((total, task) => total + sumEntryMinutes(task.entries), 0);
 
             const templateData = {
-                name: templateName,
+                name: nome,
                 tasks: taskList,
                 totalMin
             };
 
             await SaveTemplate(templateData);
 
-            const updatedTemplates = {
-                ...templates,
-                [templateName]: templateData
-            };
-            setTemplates(updatedTemplates);
+            let antigoRemovido = true;
+            if (renomeando) {
+                try {
+                    await DeleteTemplate(currentTemplate);
+                } catch (error) {
+                    antigoRemovido = false;
+                    console.error('Erro ao remover template renomeado:', error);
+                    toast.warning(`Template salvo como "${nome}", mas o antigo "${currentTemplate}" não pôde ser removido: ${errMsg(error)}`);
+                }
+            }
+
+            setTemplates(prev => {
+                const updated = { ...prev, [nome]: templateData };
+                if (renomeando && antigoRemovido) {
+                    delete updated[currentTemplate];
+                }
+                return updated;
+            });
 
             toast.success(`Template ${isEditing ? 'atualizado' : 'salvo'} com sucesso!`);
             resetForm();
         } catch (error) {
             console.error('Erro ao salvar template:', error);
-            toast.error('Erro ao salvar template.');
+            toast.error('Erro ao salvar template: ' + errMsg(error));
         } finally {
             setIsSaving(false);
         }
@@ -171,45 +186,27 @@ const Templates = () => {
         try {
             setApplyingTemplate(name);
 
+            // Aplicar substitui a lista de tarefas salvas pelas do template.
+            // ApplyTemplate faz no backend o mesmo que um SaveTask por tarefa,
+            // numa única chamada.
             await ClearSavedTasks();
+            await ApplyTemplate(name);
 
-            for (const task of template.tasks) {
-                await SaveTask(task);
-            }
+            toast.success(`Template "${name}" aplicado com sucesso! Configure o período e gere o plano.`);
 
-            toast.success(`Template "${name}" aplicado com sucesso! Redirecionando para lançamento de horas...`);
-
-            localStorage.setItem('templateApplied', 'true');
-
-            setTimeout(() => {
-                navigate('/timelog');
-            }, 1500);
+            // O aviso de template aplicado viaja no state da navegação, e não em
+            // localStorage, para não vazar para visitas futuras ao TimeLog.
+            navigate('/timelog', {
+                state: {
+                    templateApplied: name,
+                    taskIds: template.tasks.map(task => task.taskId)
+                }
+            });
         } catch (error) {
             console.error('Erro ao aplicar template:', error);
-            toast.error('Erro ao aplicar template: ' + (error.message || 'Erro desconhecido'));
-        } finally {
+            toast.error('Erro ao aplicar template: ' + errMsg(error));
             setApplyingTemplate(null);
         }
-    };
-
-    const formatWorkingDays = (workingDays) => {
-        if (!workingDays || workingDays.length === 0) return 'Todos os dias';
-
-        const diasNomes = {
-            0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua',
-            4: 'Qui', 5: 'Sex', 6: 'Sáb'
-        };
-
-        if (workingDays.length === 7) return 'Todos os dias';
-        if (workingDays.length === 5 &&
-            [1,2,3,4,5].every(day => workingDays.includes(day))) {
-            return 'Dias úteis';
-        }
-
-        return workingDays
-            .sort()
-            .map(day => diasNomes[day])
-            .join(', ');
     };
 
     if (isLoading) {
@@ -252,9 +249,9 @@ const Templates = () => {
 
                         <div className="mb-4">
                             <div className="flex justify-between items-center mb-2">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                <span id="templateTasksLabel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Tarefas Incluídas
-                                </label>
+                                </span>
                                 {savedTasks.length > 0 && (
                                     <button
                                         type="button"
@@ -282,6 +279,7 @@ const Templates = () => {
                                                     type="checkbox"
                                                     checked={selectedTasks.includes(task.taskId)}
                                                     onChange={() => toggleTaskSelection(task.taskId)}
+                                                    aria-label={`Incluir tarefa ${task.taskName} no template`}
                                                     className="mt-1 w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 dark:focus:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                                 />
                                                 <div className="ml-3">
@@ -290,7 +288,7 @@ const Templates = () => {
                                                     </p>
                                                     <p className="text-xs text-gray-500 dark:text-gray-400">
                                                         {task.projectName} • {task.entries.length} entradas •
-                                                        {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min
+                                                        {sumEntryMinutes(task.entries)} min
                                                     </p>
                                                     {task.workingDays && (
                                                         <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
@@ -372,16 +370,22 @@ const Templates = () => {
                                         </div>
                                         <div className="flex space-x-1">
                                             <button
+                                                type="button"
                                                 onClick={() => editTemplate(name)}
+                                                aria-label={`Editar template ${name}`}
+                                                title="Editar template"
                                                 className="p-1.5 text-gray-500 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-500"
                                             >
-                                                <FiEdit className="w-5 h-5" />
+                                                <FiEdit className="w-5 h-5" aria-hidden="true" />
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={() => deleteTemplate(name)}
+                                                aria-label={`Excluir template ${name}`}
+                                                title="Excluir template"
                                                 className="p-1.5 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-500"
                                             >
-                                                <FiTrash2 className="w-5 h-5" />
+                                                <FiTrash2 className="w-5 h-5" aria-hidden="true" />
                                             </button>
                                         </div>
                                     </div>
@@ -394,7 +398,7 @@ const Templates = () => {
                                             {template.tasks.map(task => (
                                                 <li key={task.taskId} className="text-sm text-gray-600 dark:text-gray-400">
                                                     • {task.taskName} ({task.entries.length} entradas,
-                                                    {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min)
+                                                    {sumEntryMinutes(task.entries)} min)
                                                     <span className="text-xs text-gray-500 dark:text-gray-500 ml-2">
                                                        - {formatWorkingDays(task.workingDays)}
                                                    </span>
