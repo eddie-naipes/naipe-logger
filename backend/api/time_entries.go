@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -40,8 +41,8 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 
 	entry.UserID = t.Config.UserID
 
-	t.logDebug("Lançando tempo para tarefa #%d: %s %s - %d minutos - %s",
-		taskID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+	slog.Debug("Lançando tempo", "tarefa", taskID, "data", entry.Date, "hora", entry.Time,
+		"minutos", entry.Minutes, "descricao", entry.Description)
 
 	reqBody := TimelogRequest{
 		Timelog: entry,
@@ -62,7 +63,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		return nil, err
 	}
 
-	t.logDebug("Resposta do servidor ao lançamento (%d): %s", resp.StatusCode, truncateForError(body, 300))
+	slog.Debug("Resposta do servidor ao lançamento", "status", resp.StatusCode, "corpo", sanitizeForLog(truncateForError(body, 300)))
 
 	result := &TimeLogResult{
 		TaskID: taskID,
@@ -81,7 +82,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 		} else {
 			// Sem o ID a entrada existe no Teamwork mas não pode ser desfeita
 			// pela ferramenta. Registrar o corpo ajuda a mapear o formato.
-			t.logWarn("Lançamento criado sem ID reconhecível na resposta: %s", truncateForError(body, 300))
+			slog.Warn("Lançamento criado sem ID reconhecível na resposta", "corpo", sanitizeForLog(truncateForError(body, 300)))
 		}
 
 		return result, nil
@@ -180,7 +181,7 @@ func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, er
 		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
 	}
 
-	t.logDebug("Iniciando lançamento de %d entradas em %d dias", len(fila), len(workDays))
+	slog.Debug("Iniciando lançamento em lote", "entradas", len(fila), "dias", len(workDays))
 
 	// Cada goroutine escreve na sua posição: o painel de resultados e o
 	// "reenviar só as falhas" leem na ordem do plano, não na ordem em que as
@@ -277,7 +278,7 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 
 	isHoliday, _, err := t.IsHoliday(data)
 	if err != nil {
-		t.logWarn("Erro ao verificar feriado para %s: %v", data.Format("2006-01-02"), err)
+		slog.Warn("Erro ao verificar feriado", "data", data.Format("2006-01-02"), "err", err)
 		return true
 	}
 	return !isHoliday
@@ -301,7 +302,7 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 
 		diaData, err := time.Parse("2006-01-02", dia)
 		if err != nil {
-			t.logWarn("Data inválida ignorada no plano de distribuição %q: %v", dia, err)
+			slog.Warn("Data inválida ignorada no plano de distribuição", "data", dia, "err", err)
 			continue
 		}
 		diaSemana := int(diaData.Weekday())
@@ -325,8 +326,8 @@ func (t *TeamworkAPI) CreateDistributionPlan(diasUteis []string, tarefas []Task)
 		}
 	}
 
-	t.logDebug("Plano de distribuição gerado: %d de %d dias com lançamentos, %d tarefas",
-		len(planoDistribuicao), len(diasUteis), len(tarefas))
+	slog.Debug("Plano de distribuição gerado", "diasComLancamentos", len(planoDistribuicao),
+		"diasUteis", len(diasUteis), "tarefas", len(tarefas))
 	return planoDistribuicao
 }
 
@@ -452,7 +453,7 @@ func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, erro
 
 	holidays, err := t.GetHolidaysForMonth(year, month)
 	if err != nil {
-		t.logWarn("Erro ao obter feriados para %d/%d: %v", month, year, err)
+		slog.Warn("Erro ao obter feriados do mês", "mes", month, "ano", year, "err", err)
 		holidays = []Holiday{}
 	}
 
@@ -473,7 +474,7 @@ func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, erro
 	for _, holiday := range holidays {
 		holidayDate, err := time.Parse("2006-01-02", holiday.Date)
 		if err != nil {
-			t.logDebug("Erro ao fazer parse da data do feriado %s: %v", holiday.Date, err)
+			slog.Debug("Data de feriado inválida", "data", holiday.Date, "err", err)
 			continue
 		}
 
@@ -534,7 +535,7 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 	path := fmt.Sprintf("/projects/api/v3/time/%s.json", entryIDStr)
 	url := t.buildURL(path)
 
-	t.logDebug("Deletando entrada de tempo ID %d: %s", entryID, url)
+	slog.Debug("Apagando entrada de tempo", "entrada", entryID, "url", url)
 
 	req, err := t.createRequest("DELETE", url, nil)
 	if err != nil {
@@ -546,7 +547,7 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 		return err
 	}
 
-	t.logDebug("Resposta da deleção (%d): %s", resp.StatusCode, truncateForError(body, 300))
+	slog.Debug("Resposta da exclusão", "status", resp.StatusCode, "corpo", sanitizeForLog(truncateForError(body, 300)))
 
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		return fmt.Errorf("erro ao deletar entrada de tempo: %d %s - %s",
@@ -635,7 +636,7 @@ func (t *TeamworkAPI) GetTimeEntriesForPeriodV2(startDate, endDate string, inclu
 	path := fmt.Sprintf("/projects/api/v2/time.json?getTotals=true&skipCounts=false&projectId=&companyId=0&userId=%d&assignedTeamIds=&invoicedType=all&billableType=all&fromDate=%s&toDate=%s&sortBy=date&sortOrder=desc&onlyStarredProjects=false&includeArchivedProjects=true&matchAllTags=true&projectStatus=all&showDeleted=%s",
 		t.Config.UserID, startDateFormatted, endDateFormatted, showDeleted)
 
-	t.logDebug("Obtendo entradas de tempo V2 de %s a %s...", startDate, endDate)
+	slog.Debug("Obtendo entradas de tempo (API v2)", "inicio", startDate, "fim", endDate)
 
 	// Antes só a primeira página (500 itens) era lida: um mês cheio de quem
 	// lança por tarefa passava disso e a detecção de conflitos ficava cega
@@ -699,7 +700,7 @@ func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
 	if parsed, ok := parseTeamworkDate(entry.Date); ok {
 		formattedDate = parsed.Format("2006-01-02")
 	} else {
-		t.logWarn("Lançamento %d com data irreconhecível: %q", entry.ID, entry.Date)
+		slog.Warn("Lançamento com data irreconhecível", "entrada", entry.ID, "data", entry.Date)
 	}
 
 	// hoursDecimal é a duração total em horas decimais; hours/minutes são as
@@ -755,8 +756,8 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 
 	entry.UserID = t.Config.UserID
 
-	t.logDebug("Atualizando entrada de tempo #%d: %s %s - %d minutos - %s",
-		entryID, entry.Date, entry.Time, entry.Minutes, entry.Description)
+	slog.Debug("Atualizando entrada de tempo", "entrada", entryID, "data", entry.Date,
+		"hora", entry.Time, "minutos", entry.Minutes, "descricao", entry.Description)
 
 	reqBody := TimelogRequest{
 		Timelog: entry,

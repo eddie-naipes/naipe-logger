@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"logTime-go/backend/logging"
 )
 
 // errAPINaoConfigurada é devolvido por todo binding que precisa falar com o
@@ -26,6 +28,16 @@ type App struct {
 	// enquanto outros bindings o leem em paralelo.
 	apiMutex    sync.RWMutex
 	teamworkAPI *api.TeamworkAPI
+
+	// logsDir é a pasta dos logs configurada em main.go ("" se o arquivo
+	// não pôde ser aberto).
+	logsDir string
+}
+
+// Options reúne o que main.go descobre antes de criar a App.
+type Options struct {
+	// LogsDir é a pasta onde backend/logging grava app.log.
+	LogsDir string
 }
 
 // api devolve o cliente atual sob lock de leitura.
@@ -70,13 +82,13 @@ func (a *App) setContext(ctx context.Context) {
 	}
 }
 
-func NewApp(ctx context.Context) (*App, error) {
+func NewApp(ctx context.Context, opts Options) (*App, error) {
 	configManager, err := config.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("erro ao inicializar gerenciador de configurações: %v", err)
 	}
 
-	app := &App{configManager: configManager}
+	app := &App{configManager: configManager, logsDir: opts.LogsDir}
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 
@@ -89,7 +101,7 @@ func NewApp(ctx context.Context) (*App, error) {
 func (a *App) Startup(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Erro crítico durante a inicialização: %v\n", r)
+			slog.Error("Erro crítico durante a inicialização", "panic", r)
 		}
 	}()
 
@@ -103,11 +115,11 @@ func (a *App) Startup(ctx context.Context) {
 		// Startup não a alcança.
 		defer func() {
 			if r := recover(); r != nil {
-				fmt.Printf("Erro ao pré-carregar feriados: %v\n", r)
+				slog.Error("Panic ao pré-carregar feriados", "panic", r)
 			}
 		}()
 		if err := client.PreloadUpcomingHolidays(); err != nil {
-			fmt.Printf("Aviso: erro ao pré-carregar feriados: %v\n", err)
+			slog.Warn("Erro ao pré-carregar feriados", "err", err)
 		}
 	}()
 }
@@ -174,6 +186,8 @@ func (a *App) Logout() error {
 	if err := a.configManager.ClearConnection(); err != nil {
 		return err
 	}
+	// O token antigo não precisa mais ficar na lista de mascaramento.
+	logging.ClearSecrets()
 	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
 	return nil
 }

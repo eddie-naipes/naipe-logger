@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -282,8 +283,8 @@ func (t *TeamworkAPI) GetBrazilianHolidays(year int) (map[string]Holiday, error)
 			Sources:   sources,
 			ExpiresAt: expiresAt,
 		}
-		t.logDebug("Cache de feriados atualizado para %d com %d feriados de %v (expira em %v)",
-			year, len(holidays), sources, expiresAt)
+		slog.Debug("Cache de feriados atualizado", "ano", year, "feriados", len(holidays),
+			"fontes", sources, "expira", expiresAt)
 	}
 	delete(holidayInflight, year)
 	holidayCacheLock.Unlock()
@@ -304,7 +305,7 @@ func (t *TeamworkAPI) fetchHolidays(ctx context.Context, year int) (map[string]H
 	for _, provider := range holidayProviders {
 		providerHolidays, err := provider.GetHolidays(ctx, year)
 		if err != nil {
-			t.logWarn("Erro no provider de feriados %s para %d: %v", provider.GetName(), year, err)
+			slog.Warn("Erro no provider de feriados", "provider", provider.GetName(), "ano", year, "err", err)
 			lastError = err
 			continue
 		}
@@ -509,7 +510,7 @@ func (t *TeamworkAPI) ClearExpiredHolidayCache() {
 	for year, cache := range holidayCache {
 		if now.After(cache.ExpiresAt) {
 			delete(holidayCache, year)
-			t.logDebug("Cache de feriados removido para ano %d (expirado)", year)
+			slog.Debug("Cache de feriados expirado removido", "ano", year)
 		}
 	}
 }
@@ -521,10 +522,10 @@ func (t *TeamworkAPI) PreloadUpcomingHolidays() error {
 	for year := currentYear; year <= currentYear+2; year++ {
 		_, err := t.GetBrazilianHolidays(year)
 		if err != nil {
-			t.logDebug("Erro ao pré-carregar feriados para %d: %v", year, err)
+			slog.Debug("Erro ao pré-carregar feriados", "ano", year, "err", err)
 			continue
 		}
-		t.logDebug("Feriados pré-carregados para %d", year)
+		slog.Debug("Feriados pré-carregados", "ano", year)
 	}
 
 	return nil
@@ -589,5 +590,5 @@ func (t *TeamworkAPI) ClearHolidaysCacheForYear(year int) {
 	defer holidayCacheLock.Unlock()
 
 	delete(holidayCache, year)
-	t.logDebug("Cache de feriados removido para ano %d", year)
+	slog.Debug("Cache de feriados removido", "ano", year)
 }

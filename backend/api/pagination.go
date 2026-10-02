@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,7 +78,7 @@ func (t *TeamworkAPI) fetchPages(baseURL string, pageSize, maxPages int, what st
 		}
 
 		if page == maxPages {
-			t.logWarn("Limite de %d páginas atingido ao obter %s; podem existir mais itens", maxPages, what)
+			slog.Warn("Limite de páginas atingido; podem existir mais itens", "limite", maxPages, "recurso", what)
 		}
 	}
 

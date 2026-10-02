@@ -2,23 +2,43 @@ package main
 
 import (
 	"embed"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"logTime-go/backend"
+	"logTime-go/backend/logging"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	app, err := backend.NewApp(nil)
+	// O log é configurado antes de tudo para que a carga da configuração (e
+	// seus avisos de arquivo corrompido ou credencial antiga) já vá para o
+	// arquivo. Em `wails dev` ou com TEAMWORK_LOGGER_DEBUG ligado, também
+	// sai no terminal.
+	debug := logging.DebugFromEnv()
+	logger, err := logging.Setup(logging.Options{
+		Debug:  debug,
+		Stderr: debug || logging.DevBuild(),
+	})
 	if err != nil {
-		log.Fatalf("Erro ao inicializar a aplicação: %v", err)
+		slog.Warn("Log em arquivo indisponível", "err", err)
 	}
+	defer logger.Close()
+
+	app, err := backend.NewApp(nil, backend.Options{
+		LogsDir: logger.Dir(),
+	})
+	if err != nil {
+		fatal("Erro ao inicializar a aplicação", err, logger)
+	}
+
+	slog.Info("Aplicação iniciada")
 
 	if err := wails.Run(&options.App{
 		Title:  "Teamwork Time Logger",
@@ -38,7 +58,14 @@ func main() {
 			BackdropType:         windows.Mica,
 		},
 	}); err != nil {
-		log.Fatalf("Erro ao executar a aplicação: %v", err)
+		fatal("Erro ao executar a aplicação", err, logger)
 	}
+}
 
+// fatal registra o erro e encerra. os.Exit pula os defers, então o arquivo de
+// log é fechado aqui para não perder a última linha.
+func fatal(msg string, err error, logger *logging.Logger) {
+	slog.Error(msg, "err", err)
+	_ = logger.Close()
+	os.Exit(1)
 }

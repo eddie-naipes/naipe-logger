@@ -1,58 +1,60 @@
 package api
 
 import (
-	"io"
-	"os"
+	"bytes"
+	"encoding/base64"
+	"errors"
+	"log/slog"
 	"strings"
 	"testing"
+
+	"logTime-go/backend/logging"
 )
 
-func TestIsTruthyLigaDebugSoComValorExplicito(t *testing.T) {
-	for _, v := range []string{"1", "true", "TRUE", " yes ", "on", "sim"} {
-		if !isTruthy(v) {
-			t.Errorf("isTruthy(%q) = false, esperava true", v)
-		}
-	}
-	for _, v := range []string{"", "0", "false", "não", "talvez"} {
-		if isTruthy(v) {
-			t.Errorf("isTruthy(%q) = true, esperava false", v)
-		}
-	}
-}
-
-// capturaStdout devolve o que fn escreveu na saída padrão.
-func capturaStdout(t *testing.T, fn func()) string {
+// capturaLog troca o slog padrão por um handler em memória (com o mesmo
+// mascaramento da produção) enquanto fn roda.
+func capturaLog(t *testing.T, level slog.Level, fn func()) string {
 	t.Helper()
-
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe: %v", err)
-	}
-	original := os.Stdout
-	os.Stdout = w
-	defer func() { os.Stdout = original }()
-
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(logging.NewRedactingHandler(
+		slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: level}))))
+	defer slog.SetDefault(original)
 	fn()
-
-	_ = w.Close()
-	saida, _ := io.ReadAll(r)
-	return string(saida)
+	return buf.String()
 }
 
-func TestLogDebugSilenciosoSemFlagESanitizado(t *testing.T) {
-	original := debugLogging
-	t.Cleanup(func() { debugLogging = original })
-
-	api := &TeamworkAPI{}
-
-	debugLogging = false
-	if saida := capturaStdout(t, func() { api.logDebug("detalhe %s", "x") }); saida != "" {
-		t.Errorf("logDebug sem a flag escreveu %q", saida)
+func TestSanitizeForLogMascaraValoresSensiveis(t *testing.T) {
+	if got := sanitizeForLog("meu token secreto"); got != logging.Redacted {
+		t.Errorf("sanitizeForLog = %v, esperava %s", got, logging.Redacted)
 	}
+	if got := sanitizeForLog(42); got != 42 {
+		t.Errorf("valores não string não deveriam mudar: %v", got)
+	}
+}
 
-	debugLogging = true
-	saida := capturaStdout(t, func() { api.logDebug("valor: %s", "meu token secreto") })
-	if strings.Contains(saida, "secreto") || !strings.Contains(saida, "[REDACTED]") {
-		t.Errorf("logDebug deveria passar por sanitizeForLog, escreveu %q", saida)
+// O token de um cliente criado com NewTeamworkAPI nunca pode sair no log,
+// mesmo quando aparece dentro de um erro ou já em Basic auth.
+func TestTokenDoClienteNuncaApareceNoLog(t *testing.T) {
+	t.Cleanup(logging.ClearSecrets)
+	const token = "tkn_cliente_9f8e7d6c5b"
+	basic := base64.StdEncoding.EncodeToString([]byte(token + ":X"))
+
+	_ = NewTeamworkAPI(Config{AuthToken: token, ApiHost: "empresa.teamwork.com"})
+
+	saida := capturaLog(t, slog.LevelDebug, func() {
+		slog.Warn("falha "+token, "err", errors.New("Authorization: Basic "+basic), "valor", token)
+	})
+	if strings.Contains(saida, token) || strings.Contains(saida, basic) {
+		t.Errorf("token vazou no log: %q", saida)
+	}
+}
+
+func TestDebugSilenciosoNoNivelInfo(t *testing.T) {
+	saida := capturaLog(t, slog.LevelInfo, func() {
+		slog.Debug("detalhe", "x", 1)
+	})
+	if saida != "" {
+		t.Errorf("Debug não deveria sair no nível Info: %q", saida)
 	}
 }
