@@ -1,9 +1,9 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Route, Routes, useLocation, useNavigate} from 'react-router-dom';
 import {toast, ToastContainer} from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-import {GetAppSettings, SaveAppSettings} from '../wailsjs/go/backend/App';
+import {GetAppSettings, IsConfigured, SaveAppSettings} from '../wailsjs/go/backend/App';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -46,7 +46,7 @@ function App() {
     const checkIfConfigured = async () => {
         try {
             // O frontend só recebe um booleano; o token vive no cofre do sistema.
-            const configured = await window.go.backend.App.IsConfigured();
+            const configured = await IsConfigured();
 
             setIsConfigured(configured);
 
@@ -59,25 +59,23 @@ function App() {
         }
     };
 
-    const toggleDarkMode = async () => {
+    // useCallback + useMemo: sem isso o value do ThemeContext muda a cada render
+    // do App e força todos os consumidores a renderizar de novo. A classe 'dark'
+    // do <html> é aplicada pelo efeito abaixo.
+    const toggleDarkMode = useCallback(async () => {
+        const newMode = !darkMode;
+        setDarkMode(newMode);
         try {
-            const newMode = !darkMode;
-            setDarkMode(newMode);
-
             const settings = await GetAppSettings();
             settings.darkMode = newMode;
             await SaveAppSettings(settings);
-
-            if (newMode) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
         } catch (error) {
             console.error('Erro ao alternar tema:', error);
             toast.error('Erro ao salvar preferência de tema');
         }
-    };
+    }, [darkMode]);
+
+    const themeValue = useMemo(() => ({darkMode, toggleDarkMode}), [darkMode, toggleDarkMode]);
 
     useEffect(() => {
         if (darkMode) {
@@ -100,7 +98,7 @@ function App() {
     }
 
     return (
-        <ThemeContext.Provider value={{darkMode, toggleDarkMode}}>
+        <ThemeContext.Provider value={themeValue}>
             <div className="flex h-full bg-gray-50 dark:bg-gray-900">
                 {/* Sidebar */}
                 <Sidebar

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiUser, FiMail } from 'react-icons/fi';
 import mascotImage from '../assets/mascot.png';
+import {GetUserProfile} from '../../wailsjs/go/backend/App';
 
 const UserProfile = () => {
     const [profile, setProfile] = useState(null);
@@ -12,7 +13,7 @@ const UserProfile = () => {
         const loadProfile = async () => {
             try {
                 setLoading(true);
-                const userProfile = await window.go.backend.App.GetUserProfile();
+                const userProfile = await GetUserProfile();
                 setProfile(userProfile);
                 setError(null);
             } catch (error) {

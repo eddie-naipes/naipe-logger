@@ -17,6 +17,16 @@ import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 import {useLocation} from 'react-router-dom';
+import {
+    CheckPlanConflicts,
+    CreateDistributionPlan,
+    DeleteMultipleTimeEntries,
+    GetAllNonWorkingDays,
+    GetSavedTasks,
+    GetWorkingDays,
+    IsWorkDay,
+    LogMultipleTimes
+} from '../../wailsjs/go/backend/App';
 
 const TimeLog = () => {
     const location = useLocation();
@@ -49,7 +59,7 @@ const TimeLog = () => {
     const loadSavedTasks = async () => {
         try {
             setIsLoading(true);
-            const tasks = await window.go.backend.App.GetSavedTasks();
+            const tasks = await GetSavedTasks();
             setSavedTasks(tasks);
 
             const wasTemplateApplied = localStorage.getItem('templateApplied') === 'true';
@@ -109,7 +119,7 @@ const TimeLog = () => {
 
                 for (const yearMonth of monthsToCheck) {
                     const [year, month] = yearMonth.split('-').map(Number);
-                    const nonWorkingDaysForMonth = await window.go.backend.App.GetAllNonWorkingDays(year, month);
+                    const nonWorkingDaysForMonth = await GetAllNonWorkingDays(year, month);
 
                     nonWorkingDaysForMonth.forEach(day => {
                         nonWorkingDaysMap[day.date] = day;
@@ -152,7 +162,7 @@ const TimeLog = () => {
         }
 
         try {
-            const isWorkDay = await window.go.backend.App.IsWorkDay(formattedDate);
+            const isWorkDay = await IsWorkDay(formattedDate);
             if (!isWorkDay) {
                 toast.warning(`${formattedDate} não é um dia útil. Não é possível lançar horas.`);
                 return;
@@ -216,7 +226,7 @@ const TimeLog = () => {
         setError(null);
 
         try {
-            const workingDays = await window.go.backend.App.GetWorkingDays(
+            const workingDays = await GetWorkingDays(
                 dateRange.startDate,
                 dateRange.endDate
             );
@@ -237,7 +247,7 @@ const TimeLog = () => {
                 workingDays: t.workingDays
             })));
 
-            const plan = await window.go.backend.App.CreateDistributionPlan(
+            const plan = await CreateDistributionPlan(
                 workingDays,
                 filteredTasks
             );
@@ -267,7 +277,7 @@ const TimeLog = () => {
         setIsCheckingConflicts(true);
         setConflictCheckFailed(false);
         try {
-            const found = await window.go.backend.App.CheckPlanConflicts(plan);
+            const found = await CheckPlanConflicts(plan);
             setConflicts(found || []);
 
             if (found && found.length > 0) {
@@ -335,7 +345,7 @@ const TimeLog = () => {
                 closeButton: false
             });
 
-            const results = await window.go.backend.App.LogMultipleTimes(workDays);
+            const results = await LogMultipleTimes(workDays);
 
             toast.dismiss(toastId);
 
@@ -404,7 +414,7 @@ const TimeLog = () => {
         setIsUndoing(true);
         try {
             const entryIds = undoableEntries.map(r => r.entryId);
-            const undoResults = await window.go.backend.App.DeleteMultipleTimeEntries(entryIds);
+            const undoResults = await DeleteMultipleTimeEntries(entryIds);
 
             const removed = (undoResults || []).filter(r => r.success).length;
             const failed = (undoResults || []).length - removed;
@@ -480,7 +490,7 @@ const TimeLog = () => {
         });
 
         try {
-            const retryResults = await window.go.backend.App.LogMultipleTimes(retryWorkDays);
+            const retryResults = await LogMultipleTimes(retryWorkDays);
             toast.dismiss(toastId);
 
             if (!retryResults || retryResults.length === 0) {

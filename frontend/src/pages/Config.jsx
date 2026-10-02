@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiSave, FiLoader, FiEye, FiEyeOff, FiUser, FiLogOut, FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
 import whaleTeamLogo from '../assets/whaleTeam.png';
+import {
+    ConnectWithToken,
+    GetPublicConfig,
+    LegacyCredentialPurged,
+    Logout
+} from '../../wailsjs/go/backend/App';
 
 const DEFAULT_HOST = 'teamwork.onebrain.com.br';
 
@@ -20,14 +26,14 @@ const Config = ({ onConfigSaved }) => {
             try {
                 // GetPublicConfig nunca devolve o token: o segredo permanece no
                 // cofre de credenciais do sistema, fora do alcance do webview.
-                const publicConfig = await window.go.backend.App.GetPublicConfig();
+                const publicConfig = await GetPublicConfig();
                 setIsConfigured(publicConfig.configured);
                 setConfiguredHost(publicConfig.apiHost || '');
                 if (publicConfig.apiHost) {
                     setForm(prev => ({ ...prev, host: publicConfig.apiHost }));
                 }
 
-                setLegacyPurged(await window.go.backend.App.LegacyCredentialPurged());
+                setLegacyPurged(await LegacyCredentialPurged());
             } catch (error) {
                 console.error('Erro ao verificar configuração existente:', error);
             } finally {
@@ -54,7 +60,7 @@ const Config = ({ onConfigSaved }) => {
         setIsConnecting(true);
 
         try {
-            const result = await window.go.backend.App.ConnectWithToken(
+            const result = await ConnectWithToken(
                 form.token.trim(),
                 form.host.trim()
             );
@@ -88,7 +94,7 @@ const Config = ({ onConfigSaved }) => {
 
         setIsLoggingOut(true);
         try {
-            await window.go.backend.App.Logout();
+            await Logout();
 
             setIsConfigured(false);
             setConfiguredHost('');

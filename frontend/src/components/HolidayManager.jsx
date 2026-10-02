@@ -11,6 +11,13 @@ import {
     FiAlertCircle,
     FiX
 } from 'react-icons/fi';
+import {
+    ClearHolidayCache,
+    GetBrazilianHolidays,
+    GetHolidayCacheStats,
+    PreloadHolidays,
+    RefreshHolidaysForYear
+} from '../../wailsjs/go/backend/App';
 
 const HolidayManager = ({ isOpen, onClose }) => {
     const [loading, setLoading] = useState(false);
@@ -28,7 +35,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
     const loadCacheStats = async () => {
         try {
             setLoading(true);
-            const stats = await window.go.backend.App.GetHolidayCacheStats();
+            const stats = await GetHolidayCacheStats();
             setCacheStats(stats);
         } catch (error) {
             console.error('Erro ao carregar estatísticas do cache:', error);
@@ -41,7 +48,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
     const loadHolidaysForYear = async (year) => {
         try {
             setLoading(true);
-            const holidaysData = await window.go.backend.App.GetBrazilianHolidays(year);
+            const holidaysData = await GetBrazilianHolidays(year);
 
             // Converter map para array e ordenar por data
             const holidaysArray = Object.values(holidaysData).sort((a, b) =>
@@ -61,7 +68,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
     const refreshYear = async (year) => {
         try {
             setLoading(true);
-            const holidaysData = await window.go.backend.App.RefreshHolidaysForYear(year);
+            const holidaysData = await RefreshHolidaysForYear(year);
 
             const holidaysArray = Object.values(holidaysData).sort((a, b) =>
                 new Date(a.date) - new Date(b.date)
@@ -84,7 +91,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
         }
 
         try {
-            await window.go.backend.App.ClearHolidayCache();
+            await ClearHolidayCache();
             await loadCacheStats();
             setHolidays([]);
             toast.success('Cache de feriados limpo com sucesso');
@@ -97,7 +104,7 @@ const HolidayManager = ({ isOpen, onClose }) => {
     const preloadHolidays = async () => {
         try {
             setPreloading(true);
-            await window.go.backend.App.PreloadHolidays();
+            await PreloadHolidays();
             await loadCacheStats();
             toast.success('Feriados pré-carregados com sucesso');
         } catch (error) {

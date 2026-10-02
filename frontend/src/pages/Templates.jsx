@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiSave, FiEdit, FiTrash2, FiPlus, FiFolder, FiLoader, FiCopy, FiCheck, FiClock } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import {
+    ClearSavedTasks,
+    DeleteTemplate,
+    GetSavedTasks,
+    GetTemplates,
+    SaveTask,
+    SaveTemplate
+} from '../../wailsjs/go/backend/App';
 
 const Templates = () => {
     const navigate = useNavigate();
@@ -30,10 +38,10 @@ const Templates = () => {
             try {
                 setIsLoading(true);
 
-                const templatesData = await window.go.backend.App.GetTemplates();
+                const templatesData = await GetTemplates();
                 setTemplates(templatesData);
 
-                const tasksData = await window.go.backend.App.GetSavedTasks();
+                const tasksData = await GetSavedTasks();
                 setSavedTasks(tasksData);
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
@@ -87,13 +95,13 @@ const Templates = () => {
         }
 
         try {
-            await window.go.backend.App.DeleteTemplate(name);
+            await DeleteTemplate(name);
 
             const updatedTemplates = { ...templates };
             delete updatedTemplates[name];
             setTemplates(updatedTemplates);
 
-            await window.go.backend.App.ClearSavedTasks();
+            await ClearSavedTasks();
             localStorage.removeItem('templateApplied');
 
             toast.success('Template excluído com sucesso!');
@@ -138,7 +146,7 @@ const Templates = () => {
                 totalMin
             };
 
-            await window.go.backend.App.SaveTemplate(templateData);
+            await SaveTemplate(templateData);
 
             const updatedTemplates = {
                 ...templates,
@@ -163,10 +171,10 @@ const Templates = () => {
         try {
             setApplyingTemplate(name);
 
-            await window.go.backend.App.ClearSavedTasks();
+            await ClearSavedTasks();
 
             for (const task of template.tasks) {
-                await window.go.backend.App.SaveTask(task);
+                await SaveTask(task);
             }
 
             toast.success(`Template "${name}" aplicado com sucesso! Redirecionando para lançamento de horas...`);

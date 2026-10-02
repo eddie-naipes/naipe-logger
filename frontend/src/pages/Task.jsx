@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiList, FiRefreshCw, FiSearch, FiPlus, FiTrash2, FiSave, FiClock, FiEdit, FiFilter } from 'react-icons/fi';
 import TimeInputComponent from '../components/TimeInputComponent';
+import {
+    GetProjects,
+    GetSavedTasks,
+    GetTasks,
+    GetTasksByProject,
+    RemoveTask,
+    SaveTask
+} from '../../wailsjs/go/backend/App';
 
 const Tasks = () => {
     const [projects, setProjects] = useState([]);
@@ -39,7 +47,7 @@ const Tasks = () => {
         const loadProjects = async () => {
             try {
                 setIsLoadingProjects(true);
-                const projectsList = await window.go.backend.App.GetProjects();
+                const projectsList = await GetProjects();
                 setProjects(projectsList);
 
                 if (projectsList && projectsList.length > 0) {
@@ -63,7 +71,7 @@ const Tasks = () => {
 
     const loadSavedTasks = async () => {
         try {
-            const saved = await window.go.backend.App.GetSavedTasks();
+            const saved = await GetSavedTasks();
             setSavedTasks(saved);
         } catch (error) {
             console.error('Erro ao carregar tarefas salvas:', error);
@@ -76,7 +84,7 @@ const Tasks = () => {
             setIsLoading(true);
             setTasks([]);
 
-            const teamworkTasks = await window.go.backend.App.GetTasks();
+            const teamworkTasks = await GetTasks();
             setTasks(teamworkTasks || []);
 
             if (!teamworkTasks || teamworkTasks.length === 0) {
@@ -98,7 +106,7 @@ const Tasks = () => {
 
             console.log(`Carregando tarefas para projeto ID: ${projectId} (tipo: ${typeof projectId})`);
 
-            const teamworkTasks = await window.go.backend.App.GetTasksByProject(projectId);
+            const teamworkTasks = await GetTasksByProject(projectId);
 
             if (teamworkTasks && teamworkTasks.length > 0) {
                 const validTasks = teamworkTasks.filter(task =>
@@ -298,7 +306,7 @@ const Tasks = () => {
         }
 
         try {
-            await window.go.backend.App.SaveTask(selectedTask);
+            await SaveTask(selectedTask);
             await loadSavedTasks();
             setSelectedTask(null);
             toast.success('Tarefa salva com sucesso!');
@@ -310,7 +318,7 @@ const Tasks = () => {
 
     const removeTask = async (taskId) => {
         try {
-            await window.go.backend.App.RemoveTask(taskId);
+            await RemoveTask(taskId);
             await loadSavedTasks();
             toast.success('Tarefa removida com sucesso!');
         } catch (error) {

@@ -15,6 +15,7 @@ import {
 import {format, parseISO} from 'date-fns';
 import {ptBR} from 'date-fns/locale';
 import TimeInputComponent from './TimeInputComponent';
+import {DeleteMultipleTimeEntries, GetTimeEntriesForPeriodV2, UpdateTimeEntry} from '../../wailsjs/go/backend/App';
 
 const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
     const [entries, setEntries] = useState([]);
@@ -74,7 +75,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
     const loadTimeEntries = async () => {
         setLoading(true);
         try {
-            const timeEntries = await window.go.backend.App.GetTimeEntriesForPeriodV2(
+            const timeEntries = await GetTimeEntriesForPeriodV2(
                 dateRange.startDate,
                 dateRange.endDate,
                 showDeleted
@@ -180,7 +181,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
         setShowResults(false);
 
         try {
-            const results = (await window.go.backend.App.DeleteMultipleTimeEntries(ids)) || [];
+            const results = (await DeleteMultipleTimeEntries(ids)) || [];
 
             const successCount = results.filter(r => r.success).length;
             const failureCount = results.length - successCount;
@@ -288,7 +289,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesDeleted}) => {
                 userId: editingEntry.userID || 0
             };
 
-            const result = await window.go.backend.App.UpdateTimeEntry(editingEntry.id, updatedEntry);
+            const result = await UpdateTimeEntry(editingEntry.id, updatedEntry);
 
             if (result && result.success) {
                 toast.success('Entrada atualizada com sucesso!');

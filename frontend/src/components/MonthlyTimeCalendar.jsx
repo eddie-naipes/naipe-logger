@@ -1,6 +1,13 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle, FiCheckCircle, FiX, FiLoader, FiCalendar } from 'react-icons/fi';
 import { toast } from 'react-toastify';
+import {
+    GetAllNonWorkingDays,
+    GetLoggedTimeFromCalendarAPI,
+    GetTimeEntriesForPeriod,
+    GetTimeTotalsForPeriod,
+    GetWorkingDays
+} from '../../wailsjs/go/backend/App';
 
 const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -70,7 +77,7 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
             const year = currentMonth.getFullYear();
             const month = currentMonth.getMonth() + 1;
 
-            const nonWorkingDays = await window.go.backend.App.GetAllNonWorkingDays(year, month);
+            const nonWorkingDays = await GetAllNonWorkingDays(year, month);
 
             const monthHolidays = nonWorkingDays.filter(day => day.type === 'holiday');
             setHolidays(monthHolidays);
@@ -92,7 +99,7 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
             const yearNum = currentMonth.getFullYear();
 
             try {
-                const loggedTimeData = await window.go.backend.App.GetLoggedTimeFromCalendarAPI(monthNum, yearNum);
+                const loggedTimeData = await GetLoggedTimeFromCalendarAPI(monthNum, yearNum);
                 console.log('Dados do calendário obtidos com sucesso:', loggedTimeData);
 
                 if (loggedTimeData && loggedTimeData.STATUS === "OK" && loggedTimeData.user) {
@@ -106,7 +113,7 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
             }
 
             try {
-                const timeEntries = await window.go.backend.App.GetTimeEntriesForPeriod(startDate, endDate);
+                const timeEntries = await GetTimeEntriesForPeriod(startDate, endDate);
                 if (timeEntries && timeEntries.length > 0) {
                     const processedEntries = timeEntries.map(entry => ({
                         date: entry.date,
@@ -126,9 +133,9 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
                 console.log('Erro ao obter entradas detalhadas:', entriesErr);
             }
 
-            const timeReport = await window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate);
+            const timeReport = await GetTimeTotalsForPeriod(startDate, endDate);
             if (timeReport && timeReport["time-totals"] && timeReport["time-totals"].minutes > 0) {
-                const workingDays = await window.go.backend.App.GetWorkingDays(startDate, endDate);
+                const workingDays = await GetWorkingDays(startDate, endDate);
 
                 if (workingDays && workingDays.length > 0) {
                     const minutesPerDay = Math.floor(timeReport["time-totals"].minutes / workingDays.length);

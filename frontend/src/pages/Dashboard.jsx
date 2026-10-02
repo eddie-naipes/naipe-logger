@@ -23,6 +23,17 @@ import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 import TimeEntryManager from '../components/TimeEntryManager';
 import HolidayManager from '../components/HolidayManager';
+import {
+    DownloadCurrentMonthReport,
+    DownloadTimeReport,
+    GetDashboardStats,
+    GetProjects,
+    GetRecentActivities,
+    GetTasksByProject,
+    GetTasksWithUpcomingDeadlines,
+    GetTimeTotalsForPeriod,
+    OpenDirectoryPath
+} from '../../wailsjs/go/backend/App';
 
 const StatCard = ({ title, icon, value, description, change, className }) => {
     return (
@@ -133,12 +144,12 @@ const Dashboard = () => {
 
     const loadProjectsAndTasks = async () => {
         try {
-            const projects = await window.go.backend.App.GetProjects();
+            const projects = await GetProjects();
             setProjectsData(projects || []);
 
             if (projects && projects.length > 0) {
                 const projectID = projects[0].id;
-                const tasks = await window.go.backend.App.GetTasksByProject(projectID);
+                const tasks = await GetTasksByProject(projectID);
                 setTasksData(tasks || []);
 
                 setDashboardData(prevData => ({
@@ -165,10 +176,10 @@ const Dashboard = () => {
             // secundários e não devem derrubar o dashboard inteiro se falharem.
             const [statsResult, activitiesResult, upcomingResult, timeReportResult] =
                 await Promise.allSettled([
-                    window.go.backend.App.GetDashboardStats(),
-                    window.go.backend.App.GetRecentActivities(),
-                    window.go.backend.App.GetTasksWithUpcomingDeadlines(),
-                    window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate)
+                    GetDashboardStats(),
+                    GetRecentActivities(),
+                    GetTasksWithUpcomingDeadlines(),
+                    GetTimeTotalsForPeriod(startDate, endDate)
                 ]);
 
             if (statsResult.status === 'rejected') {
@@ -248,9 +259,9 @@ const Dashboard = () => {
     const handleExportReport = async () => {
         try {
             setIsExporting(true);
-            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
+            const filePath = await DownloadCurrentMonthReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
-            await window.go.backend.App.OpenDirectoryPath(filePath);
+            await OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
             toast.error("Erro ao exportar relatório: " + (error.message || "Erro desconhecido"));
@@ -262,9 +273,9 @@ const Dashboard = () => {
     const handleExportCustomPeriodReport = async (startDate, endDate) => {
         try {
             setIsExporting(true);
-            const filePath = await window.go.backend.App.DownloadTimeReport(startDate, endDate);
+            const filePath = await DownloadTimeReport(startDate, endDate);
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
-            await window.go.backend.App.OpenDirectoryPath(filePath);
+            await OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório do período:", error);
             toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
