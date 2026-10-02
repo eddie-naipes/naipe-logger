@@ -573,9 +573,12 @@ const Dashboard = () => {
             <TimeEntryManager
                 isOpen={isTimeManagerOpen}
                 onClose={handleTimeManagerClose}
-                onEntriesDeleted={() => {
-                    loadDashboard();
-                    toast.success('Dados atualizados após deleção das entradas.');
+                onEntriesChanged={({ succeeded }) => {
+                    // O gerenciador já informa sucesso/falha da operação; aqui só
+                    // recarregamos os números quando algo realmente mudou.
+                    if (succeeded > 0) {
+                        loadDashboard();
+                    }
                 }}
             />
 

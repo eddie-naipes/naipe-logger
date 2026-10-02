@@ -188,9 +188,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
             <TimeEntryManager
                 isOpen={isTimeManagerOpen}
                 onClose={handleTimeManagerClose}
-                onEntriesDeleted={() => {
-                    toast.success('Entradas deletadas com sucesso!');
-                }}
             />
         </>
     );
