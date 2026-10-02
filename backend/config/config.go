@@ -53,6 +53,8 @@ type AppConfig struct {
 	TeamworkConfig api.Config  `json:"teamworkConfig"`
 	SavedTasks     []api.Task  `json:"savedTasks"`
 	AppSettings    AppSettings `json:"appSettings"`
+	// Calendar: feriados estaduais/municipais, pontes e férias (calendar.go).
+	Calendar CalendarSettings `json:"calendar"`
 }
 
 type AppSettings struct {

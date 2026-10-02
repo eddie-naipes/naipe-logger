@@ -14,6 +14,7 @@ import (
 
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"logTime-go/backend/holidays"
 	"logTime-go/backend/internal/fsutil"
 	"logTime-go/backend/logging"
 	"logTime-go/backend/update"
@@ -41,6 +42,10 @@ type App struct {
 
 	// updater consulta as GitHub Releases; nil nos testes que montam App{}.
 	updater *update.Updater
+
+	// calendar fornece feriados estaduais/municipais, pontes e férias a cada
+	// cliente (app_calendar.go); nil nos testes que montam App{}.
+	calendar *holidays.Provider
 }
 
 // Options reúne o que main.go descobre antes de criar a App.
@@ -78,6 +83,9 @@ func (a *App) setAPI(client *api.TeamworkAPI) {
 	if a.ctx != nil {
 		client.SetContext(a.ctx)
 	}
+	if a.calendar != nil {
+		client.SetExtraNonWorkingDays(a.calendar)
+	}
 	a.teamworkAPI = client
 }
 
@@ -100,6 +108,7 @@ func NewApp(ctx context.Context, opts Options) (*App, error) {
 	}
 
 	app := &App{configManager: configManager, logsDir: opts.LogsDir, version: opts.Version}
+	app.calendar = holidays.NewProvider(configManager.GetCalendarSettings())
 	app.updater = update.New(app.GetAppVersion(), goos())
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))

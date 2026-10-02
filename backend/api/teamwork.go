@@ -27,6 +27,9 @@ type TeamworkAPI struct {
 
 	// httpClient substitui o cliente compartilhado; usado pelos testes.
 	httpClient *http.Client
+
+	// extraDays fornece feriados estaduais/municipais, pontes e férias.
+	extraDays extraDaysHolder
 }
 
 func NewTeamworkAPI(config Config) *TeamworkAPI {
