@@ -93,6 +93,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                 <div
                     className="fixed inset-0 z-10 bg-gray-900 bg-opacity-50 lg:hidden"
                     onClick={onClose}
+                    aria-hidden="true"
                 />
             )}
 
@@ -109,6 +110,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         </h1>
                         <button
                             onClick={onClose}
+                            aria-label="Fechar menu"
                             className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 lg:hidden"
                         >
                             <FiX className="w-5 h-5 text-gray-500 dark:text-gray-400" />

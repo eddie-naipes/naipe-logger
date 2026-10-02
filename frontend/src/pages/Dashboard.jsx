@@ -270,15 +270,18 @@ const Dashboard = () => {
         }
     };
 
+    // Erros sobem para o ReportPeriodModal, que os exibe e permanece aberto.
     const handleExportCustomPeriodReport = async (startDate, endDate) => {
+        setIsExporting(true);
         try {
-            setIsExporting(true);
             const filePath = await DownloadTimeReport(startDate, endDate);
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
-            await OpenDirectoryPath(filePath);
-        } catch (error) {
-            console.error("Erro ao exportar relatório do período:", error);
-            toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
+            try {
+                await OpenDirectoryPath(filePath);
+            } catch (error) {
+                // O relatório já foi salvo; não abrir a pasta não é falha da exportação.
+                console.error('Erro ao abrir a pasta do relatório:', error);
+            }
         } finally {
             setIsExporting(false);
         }
