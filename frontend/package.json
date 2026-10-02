@@ -16,7 +16,7 @@
   "dependencies": {
     "clsx": "^2.0.0",
     "date-fns": "^4.4.0",
-    "flowbite": "^2.2.0",
+    "flowbite": "^4.0.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-icons": "^5.7.0",
