@@ -150,8 +150,7 @@ const TimeLog = () => {
         toast.success('Calendário atualizado com os novos lançamentos!');
     };
 
-    const handleDaySelection = async (day, entries) => {
-        const formattedDate = day.toISOString().split('T')[0];
+    const handleDaySelection = async (formattedDate) => {
 
         const isNonWorkingDay = nonWorkingDays[formattedDate];
         if (isNonWorkingDay) {
@@ -177,17 +176,6 @@ const TimeLog = () => {
             startDate: formattedDate,
             endDate: formattedDate
         });
-
-        if (entries && entries.length > 0) {
-            const taskIdsFromEntries = entries.map(entry => entry.taskId);
-            const existingTasks = savedTasks.filter(task =>
-                taskIdsFromEntries.includes(task.taskId)
-            );
-
-            if (existingTasks.length > 0) {
-                setSelectedTasks(existingTasks.map(task => task.taskId));
-            }
-        }
 
         setTimeout(() => {
             generatePlan();
