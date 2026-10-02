@@ -30,21 +30,36 @@ go test ./backend/api -run TestDoRequestRepeteEm429 -v
 
 ## Architecture
 
-**Bindings layer (`backend/app*.go`).** `backend.App` is the only struct bound to the frontend (`main.go` → `Bind`). `app.go` holds lifecycle, connection handling and the token security boundary; the other methods are split by domain into `app_config.go`, `app_tasks.go`, `app_timelog.go`, `app_entries.go`, `app_dashboard.go`, `app_reports.go`, `app_holidays.go`. The `*api.TeamworkAPI` client is swapped when the connection changes, so always read it through `a.api()` (RWMutex-protected) and replace it via `setAPI`, which also propagates the app context.
+**Bindings layer (`backend/app*.go`).** `backend.App` is the only struct bound to the frontend (`main.go` → `Bind`). `app.go` holds lifecycle, connection handling and the token security boundary; the other methods are split by domain into `app_config.go`, `app_tasks.go`, `app_timelog.go`, `app_entries.go`, `app_dashboard.go`, `app_reports.go`, `app_holidays.go`, `app_logs.go`, `app_update.go`, `app_legacy.go` (plus `version.go`). `NewApp(ctx, backend.Options{LogsDir, Version})` is called from `main.go`. The `*api.TeamworkAPI` client is swapped when the connection changes, so always read it through `a.api()` (RWMutex-protected) and replace it via `setAPI`, which also propagates the app context.
 
 **API client (`backend/api`).** `TeamworkAPI` wraps all Teamwork HTTP calls.
 - `client.go`: request creation, Basic auth header built in Go, and a final HTTPS-only guard in `createRequest`; `host.go` normalizes/validates hosts and rejects `http://`.
 - `retry.go` + `doRequest`: retries `429` (exponential backoff 500ms→8s cap, honours `Retry-After`) up to 3 times; network errors and `5xx` are retried **only for idempotent methods** — a failed `POST` is never resent, to avoid duplicating logged hours. Backoff waits are cancelled via the app context (`SetContext`/`requestContext`) on shutdown.
 - `time_entries.go`: distribution plan (expands saved tasks over working days, respecting each task's `workingDays`, weekends and holidays), concurrent submission/deletion with a semaphore of 3 plus a pause between calls, pagination capped at 50 pages. `conflicts.go` detects existing entries that collide with the plan.
-- `cache.go`: in-memory TTL cache (projects, tasks, holidays, stats); nothing is persisted.
-- `Holiday.go`: Brazilian holidays from BrasilAPI with local fallback (moveable holidays via Gauss's Easter algorithm).
+- `cache.go`: in-memory TTL cache (projects, tasks, stats); not persisted.
+- `Holiday.go`: Brazilian holidays from BrasilAPI with local fallback (moveable holidays via Gauss's Easter algorithm). Global per-year cache with one in-flight fetch per year. Lookup order: memory → disk → BrasilAPI → last BrasilAPI data (retry in 6h) → local calendar (6h TTL). BrasilAPI data is fresh for 30 days; after that it is still served and revalidated in the background (`holidayBackground` WaitGroup — tests must wait on it before restoring `brasilAPIBaseURL`).
+- `holiday_disk.go`: persists BrasilAPI-sourced years to `~/.teamwork-logger/cache/holidays-<year>.json` (atomic write, 0600). Disabled while `SetHolidayCacheDir("")` (the default, so tests never touch HOME); `NewApp` enables it and calls `LoadHolidayCacheFromDisk`. The clear-cache bindings also delete the files. Bindings return `[]api.Holiday` sorted by date (Wails doesn't emit models for map values).
 
-**Config (`backend/config`).** `Manager` persists `~/.teamwork-logger/config.json` and `templates.json` with `0600` permissions; `newManagerAt(dir)` exists for tests. On load it detects and purges legacy `email:senha` credentials (pre-1.0) and flags it via `LegacyCredentialPurged()` so the UI can warn the user.
+**Config (`backend/config`).** `Manager` persists `~/.teamwork-logger/config.json` and `templates.json` with `0600` permissions; `newManagerAt(dir)` exists for tests. On load it detects and purges legacy `email:senha` credentials (pre-1.0) and flags it via `LegacyCredentialPurged()` so the UI can warn the user. JSON is decoded over `defaultAppConfig()`, so new fields with non-zero defaults (e.g. `AppSettings.CheckUpdatesOnStartup = true`) stay on for old config files.
+
+**Logging (`backend/logging`).** `log/slog` set up in `main.go` before `NewApp`: text handler writing to `~/.teamwork-logger/logs/app.log` (dir 0700, file 0600) through a hand-written `RotatingFile` (5 MB, keeps `app.log.1..3`), mirrored to stderr under `wails dev` (build tag `dev`) or when `TEAMWORK_LOGGER_DEBUG` is truthy (which also enables Debug level; default Info). Everything goes through `NewRedactingHandler`: secrets registered with `logging.AddSecret` (the API client registers the token and its Basic-auth base64 in `NewTeamworkAPI`/`ValidateToken`) are replaced by `[REDACTED]` anywhere, and string/error/any attributes containing "token"/"password" are dropped (`api.sanitizeForLog` delegates to `logging.Sanitize`). Use structured calls (`slog.Debug("msg", "chave", valor)`), never `fmt.Printf`/`log.Printf`. Bindings `GetLogsPath()`/`OpenLogsFolder()` are in `app_logs.go`.
+
+**Version.** `main.go` embeds `wails.json` and `backend.ParseProductVersion` reads `info.productVersion` (CI writes the tag version there before building); `wails dev` builds get a `-dev` suffix. Exposed as `GetAppVersion()`.
+
+**Updater (`backend/update`).** Checks `https://api.github.com/repos/eddie-naipes/naipe-logger/releases/latest` (User-Agent, 15s timeout, 1h in-memory cache including failures; drafts/prereleases ignored; 404 = no update) and compares with a small SemVer implementation. Security rules — keep them:
+- every URL (API, assets and each redirect hop via `CheckRedirect`) must be `https` on an allowlisted host (`api.github.com`, `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com`);
+- the installer (`*-installer.exe`) is only accepted if its SHA-256 matches the line for its base name in `SHA256SUMS.txt` from the **same** release; mismatch/missing deletes the download;
+- downloads are size-capped; installation is Windows-only (`ErrInstallNotSupported` elsewhere — the UI uses `OpenReleasePage`) and refused when the running version is a prerelease (`-dev`), which can still check.
+`app_update.go` wraps it: `CheckForUpdate`, `CheckForUpdateNow`, `DownloadAndInstallUpdate` (emits `update:progress`, runs the installer, `runtime.Quit`), `OpenReleasePage`, and emits `update:available` on startup when enabled. Wails runtime calls are behind package vars (`emitEvent`, `quitApp`, `startInstaller`, …) so tests can stub them. Tests use `httptest.NewTLSServer` + `update.WithAPIBaseURL/WithHTTPClient/WithAllowedHosts("127.0.0.1")`.
+
+**Legacy install (`backend/legacy`).** Older installers ran as admin into Program Files and registered under HKLM `...\Uninstall\Naipe Logger` (no InstallLocation, unquoted `uninst.exe`) or `...\Uninstall\Naipe Sync SolutionsTeamwork Logger` (DisplayName "Teamwork Logger"). The current installer is per-user (HKCU). `legacy_windows.go` reads HKLM (64- and 32-bit views) via `golang.org/x/sys/windows/registry`; `legacy_other.go` is the stub for other OSes. Selection logic (`Select`) is OS-independent and tested with a fake `Registry`. `RunLegacyUninstaller` re-detects (the command never comes from JS) and runs it with `ShellExecute "runas"` (UAC). Check `GOOS=linux go vet ./...` and `GOOS=darwin go vet ./...` when touching OS-specific files.
+
+**Shared disk helpers (`backend/internal/fsutil`).** `WriteFileAtomic`, `AppDir()` (`~/.teamwork-logger`) and the 0700/0600 permission constants.
 
 **Security (`backend/security`).** The API token lives only in the OS keyring (`go-keyring`). Invariants to preserve:
 - The token is never written to `config.json` and never crosses to JavaScript — the frontend gets `PublicConfig` with a `Configured` boolean. `api.Config`/`LoginResponse` must not serialize the token (covered by tests in `host_test.go`).
 - Tests touching the keyring must call `keyring.MockInit()` so they never hit the real vault (CI is headless).
-- Logging goes through `sanitizeForLog`.
+- Logging goes through slog + `logging.NewRedactingHandler`; the token must never appear in `app.log` (covered by `TestTokenNuncaApareceNoLog`).
 
 **Frontend (`frontend/src`).** React Router pages in `pages/` (Dashboard, Config, Task, TimeLog, Templates), shared UI in `components/`, theme in `contexts/ThemeContext.jsx`. Pages call Go directly via imports from `../wailsjs/go/backend/App`. The batch "retry only failed" and "undo batch" flows in TimeLog/TimeEntryManager rely on per-entry results and IDs returned by the backend — retries match by day+task and never resend an entry that succeeded.
 
@@ -55,3 +70,5 @@ Go tests use only the standard library; HTTP behaviour is tested with `httptest.
 ## Commits
 
 Conventional Commits in Portuguese, without accents (e.g. `feat: reenvia so os lancamentos/exclusoes que falharam`, `refactor: fatia app.go em bindings por dominio`).
+
+Dependabot (`.github/dependabot.yml`) opens weekly PRs for gomod, npm (`/frontend`) and GitHub Actions, grouping minor/patch, with `chore(deps)`/`chore(ci)` prefixes.
