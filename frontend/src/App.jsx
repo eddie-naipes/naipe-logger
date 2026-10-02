@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Route, Routes, useLocation, useNavigate} from 'react-router-dom';
 import {toast, ToastContainer} from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+// O react-toastify 11 injeta o próprio CSS; não há mais import de ReactToastify.css.
 
 import {GetAppSettings, IsConfigured, SaveAppSettings} from '../wailsjs/go/backend/App';
 
