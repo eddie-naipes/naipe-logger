@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +25,20 @@ func (t *TeamworkAPI) IsConfigured() bool {
 // BaseURL devolve o host da API já normalizado para https. Hosts inválidos ou
 // http são reduzidos a "" para que createRequest recuse a requisição em vez de
 // vazar o token em claro.
+//
+// A normalização é feita uma vez em NewTeamworkAPI. O host bruto que a gerou
+// fica guardado: se Config.ApiHost for trocado depois (ou se o cliente foi
+// montado sem o construtor, como em ValidateToken e nos testes), o valor é
+// recalculado em vez de servir um host desatualizado.
 func (t *TeamworkAPI) BaseURL() string {
-	normalized, err := NormalizeHost(t.Config.ApiHost)
+	if t.hostNormalized && t.normalizedFrom == t.Config.ApiHost {
+		return t.baseURL
+	}
+	return normalizeHostOrEmpty(t.Config.ApiHost)
+}
+
+func normalizeHostOrEmpty(host string) string {
+	normalized, err := NormalizeHost(host)
 	if err != nil {
 		return ""
 	}
@@ -79,6 +92,15 @@ func getHTTPClient() *http.Client {
 	return httpClient
 }
 
+// client devolve o cliente HTTP das chamadas de API. Os testes injetam o
+// cliente de um httptest.NewTLSServer, já que createRequest só aceita https.
+func (t *TeamworkAPI) client() *http.Client {
+	if t.httpClient != nil {
+		return t.httpClient
+	}
+	return getHTTPClient()
+}
+
 // getDownloadClient serve downloads de relatório, que podem levar bem mais que
 // o timeout curto usado nas chamadas de API.
 func getDownloadClient() *http.Client {
@@ -116,7 +138,7 @@ func (t *TeamworkAPI) GetJSON(path string) ([]byte, int, error) {
 // idempotentes, em falha de rede ou erro 5xx. Sem isso um lote grande de
 // lançamentos era abandonado inteiro no primeiro 429 do Teamwork.
 func (t *TeamworkAPI) doRequest(req *http.Request) (*http.Response, []byte, error) {
-	client := getHTTPClient()
+	client := t.client()
 	idempotent := isIdempotent(req.Method)
 
 	var retryAfter time.Duration
@@ -203,7 +225,36 @@ func (t *TeamworkAPI) TestConnection() (bool, string) {
 	return true, "Conexão estabelecida com sucesso!"
 }
 
+// debugLogging liga os logs de diagnóstico. Desligado por padrão: um lote de
+// lançamentos gerava uma linha por tarefa×dia e despejava corpos de resposta
+// inteiros no console. Defina TEAMWORK_LOGGER_DEBUG=1 para investigar.
+var debugLogging = isTruthy(os.Getenv("TEAMWORK_LOGGER_DEBUG"))
+
+func isTruthy(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on", "sim":
+		return true
+	default:
+		return false
+	}
+}
+
+// logDebug registra mensagens de diagnóstico, só quando debugLogging está
+// ligado. Os argumentos passam por sanitizeForLog.
 func (t *TeamworkAPI) logDebug(format string, args ...interface{}) {
+	if !debugLogging {
+		return
+	}
+	t.logAlways(format, args...)
+}
+
+// logWarn registra falhas que o usuário (ou quem der suporte) precisa ver
+// mesmo sem o modo de diagnóstico ligado.
+func (t *TeamworkAPI) logWarn(format string, args ...interface{}) {
+	t.logAlways(format, args...)
+}
+
+func (t *TeamworkAPI) logAlways(format string, args ...interface{}) {
 	safeArgs := make([]interface{}, len(args))
 	for i, arg := range args {
 		safeArgs[i] = sanitizeForLog(arg)

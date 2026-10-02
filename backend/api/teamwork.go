@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -16,6 +17,15 @@ type TeamworkAPI struct {
 	// de backoff em vez de deixá-las rodando até o fim.
 	ctxMutex sync.RWMutex
 	ctx      context.Context
+
+	// baseURL é o host já normalizado no construtor, para não refazer o parse
+	// a cada requisição. normalizedFrom guarda o valor bruto que o originou.
+	baseURL        string
+	normalizedFrom string
+	hostNormalized bool
+
+	// httpClient substitui o cliente compartilhado; usado pelos testes.
+	httpClient *http.Client
 }
 
 func NewTeamworkAPI(config Config) *TeamworkAPI {
@@ -24,8 +34,11 @@ func NewTeamworkAPI(config Config) *TeamworkAPI {
 	}
 
 	return &TeamworkAPI{
-		Config: config,
-		cache:  NewCache(),
+		Config:         config,
+		cache:          NewCache(),
+		baseURL:        normalizeHostOrEmpty(config.ApiHost),
+		normalizedFrom: config.ApiHost,
+		hostNormalized: true,
 	}
 }
 
