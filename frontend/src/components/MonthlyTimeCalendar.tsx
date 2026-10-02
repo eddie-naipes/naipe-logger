@@ -1,4 +1,4 @@
-import {type Ref, useEffect, useImperativeHandle, useMemo, useState} from 'react';
+import {type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState} from 'react';
 import {
     FiAlertCircle,
     FiCalendar,
@@ -23,6 +23,7 @@ import {toYMD, utcTimestampToYMD} from '../utils/dates';
 import {errMsg} from '../utils/errors';
 import {DIAS_ABREV, formatHoursMinutes} from '../utils/time';
 import type {CalendarDayTuple, LoggedTimeResponse, NonWorkingDay} from '../types/backend';
+import {useOnTimeEntriesChanged} from '../contexts/TimeEntriesContext';
 
 type DayStatus = 'complete' | 'incomplete' | 'missing' | 'holiday' | 'weekend';
 
@@ -188,6 +189,9 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
     useImperativeHandle(ref, (): MonthlyTimeCalendarHandle => ({
         refresh: () => setReloadToken(t => t + 1)
     }), []);
+
+    // Lançamentos criados ou apagados em qualquer tela recarregam o mês exibido.
+    useOnTimeEntriesChanged(useCallback(() => setReloadToken(t => t + 1), []));
 
     useEffect(() => {
         // Ao trocar de mês rápido, a resposta do mês anterior pode chegar por

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import {DeleteMultipleTimeEntries, GetTimeEntriesForPeriodV2} from '@wailsjs/go/backend/App';
 import type {TimeEntryReport} from '../types/backend';
 import TimeEntryManager from './TimeEntryManager';
+import {TimeEntriesContext} from '../contexts/TimeEntriesContext';
 
 vi.mock('@wailsjs/go/backend/App', () => ({
     DeleteMultipleTimeEntries: vi.fn(),
@@ -90,5 +91,29 @@ describe('TimeEntryManager: reenviar exclusões que falharam', () => {
         await userEvent.click(within(dialog).getByRole('button', {name: 'Deletar (1)'}));
 
         expect(DeleteMultipleTimeEntries).toHaveBeenCalledWith([1]);
+    });
+
+    // O dashboard e o calendário dependem desse sinal: sem ele, apagar pelo
+    // gerenciador aberto na Sidebar não atualizava o dashboard.
+    it('avisa o app inteiro quando alguma exclusão dá certo, e só nesse caso', async () => {
+        vi.mocked(GetTimeEntriesForPeriodV2).mockResolvedValue([entrada(1, 'Alfa'), entrada(2, 'Beta')] as never);
+        vi.mocked(DeleteMultipleTimeEntries)
+            .mockResolvedValueOnce([{entryId: 1, success: false, message: 'erro'}, {entryId: 2, success: false, message: 'erro'}] as never)
+            .mockResolvedValueOnce([{entryId: 1, success: true, message: 'ok'}, {entryId: 2, success: false, message: 'erro'}] as never);
+
+        const notifyChanged = vi.fn();
+        render(
+            <TimeEntriesContext.Provider value={{version: 0, notifyChanged}}>
+                <TimeEntryManager isOpen onClose={vi.fn()}/>
+            </TimeEntriesContext.Provider>
+        );
+        const dialog = await screen.findByRole('dialog');
+
+        await userEvent.click(await within(dialog).findByRole('checkbox', {name: 'Selecionar todas as entradas ativas visíveis'}));
+        await userEvent.click(within(dialog).getByRole('button', {name: 'Deletar (2)'}));
+        expect(notifyChanged).not.toHaveBeenCalled();
+
+        await userEvent.click(await within(dialog).findByRole('button', {name: 'Reenviar 2 que falharam'}));
+        await waitFor(() => expect(notifyChanged).toHaveBeenCalledTimes(1));
     });
 });

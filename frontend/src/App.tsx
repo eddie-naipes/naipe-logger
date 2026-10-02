@@ -10,6 +10,7 @@ import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
 import UpdateBanner from './components/UpdateBanner';
 import StartupNotices from './components/StartupNotices';
+import {TimeEntriesContext, type TimeEntriesSignal} from './contexts/TimeEntriesContext';
 
 import Dashboard from './pages/Dashboard';
 import Config from './pages/Config';
@@ -34,6 +35,13 @@ function App() {
     // Lê a preferência só na inicialização: mudar o toggle na Config vale para
     // a próxima abertura do app.
     const updater = useUpdate({autoCheck: autoCheckUpdates});
+
+    const [timeEntriesVersion, setTimeEntriesVersion] = useState(0);
+    const notifyTimeEntriesChanged = useCallback(() => setTimeEntriesVersion(v => v + 1), []);
+    const timeEntriesSignal = useMemo<TimeEntriesSignal>(
+        () => ({version: timeEntriesVersion, notifyChanged: notifyTimeEntriesChanged}),
+        [timeEntriesVersion, notifyTimeEntriesChanged]
+    );
 
     // O frontend só recebe um booleano; o token vive no cofre do sistema.
     const checkIfConfigured = useCallback(async (): Promise<void> => {
@@ -116,6 +124,7 @@ function App() {
     return (
         <ThemeContext.Provider value={themeValue}>
             <UpdateContext.Provider value={updater}>
+                <TimeEntriesContext.Provider value={timeEntriesSignal}>
                 <div className="flex h-full bg-gray-50 dark:bg-gray-900">
                     {/* Sidebar */}
                     <Sidebar
@@ -163,6 +172,7 @@ function App() {
                     pauseOnHover
                     theme={darkMode ? 'dark' : 'light'}
                 />
+                </TimeEntriesContext.Provider>
             </UpdateContext.Provider>
         </ThemeContext.Provider>
     );
