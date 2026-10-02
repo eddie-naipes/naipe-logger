@@ -77,7 +77,7 @@ func (t *TeamworkAPI) getProjectInfo(projectID int) []Project {
 }
 
 func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
-	cacheKey := fmt.Sprintf("dashboard_stats_%d", t.Config.UserID)
+	cacheKey := fmt.Sprintf("%s%d", cacheKeyDashboardStatsPrefix, t.Config.UserID)
 	if cached, found := getCached[map[string]interface{}](t.cache, cacheKey); found {
 		// Cópia: o chamador ajusta "horasLogadas" no mapa devolvido, e mutar o
 		// objeto em cache contaminaria as próximas leituras.

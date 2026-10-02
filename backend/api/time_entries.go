@@ -159,6 +159,7 @@ func (t *TeamworkAPI) LogTime(taskID int, entry TimeEntry) (*TimeLogResult, erro
 	}
 
 	if resp.StatusCode == 201 {
+		t.invalidateTimeEntryCaches()
 		result.Success = true
 		result.Message = fmt.Sprintf("Entrada de tempo enviada com sucesso: %s %s",
 			entry.Date, entry.Time)
@@ -315,83 +316,74 @@ func (t *TeamworkAPI) LogMultipleTimes(workDays []WorkDay) ([]*TimeLogResult, er
 		return nil, fmt.Errorf("nenhum dia de trabalho fornecido para lançamento")
 	}
 
-	t.logDebug("Iniciando lançamento de horas para %d dias", len(workDays))
-
-	totalEntries := 0
-	for _, day := range workDays {
-		totalEntries += len(day.Entries)
+	type pendente struct {
+		date  string
+		entry EntryTask
 	}
 
-	results := make([]*TimeLogResult, 0, totalEntries)
-	resultChan := make(chan *TimeLogResult, totalEntries)
-	errorChan := make(chan error, totalEntries)
+	fila := make([]pendente, 0)
+	for _, dia := range workDays {
+		for _, alocacao := range dia.Entries {
+			fila = append(fila, pendente{date: dia.Date, entry: alocacao})
+		}
+	}
+
+	if len(fila) == 0 {
+		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
+	}
+
+	t.logDebug("Iniciando lançamento de %d entradas em %d dias", len(fila), len(workDays))
+
+	// Cada goroutine escreve na sua posição: o painel de resultados e o
+	// "reenviar só as falhas" leem na ordem do plano, não na ordem em que as
+	// requisições terminaram (mesmo critério do delete em lote).
+	results := make([]*TimeLogResult, len(fila))
+	ctx := t.requestContext()
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 3)
 
-	for _, dia := range workDays {
-		if len(dia.Entries) == 0 {
-			continue
-		}
+	for i, item := range fila {
+		wg.Add(1)
+		go func(pos int, d string, a EntryTask) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-		for _, alocacao := range dia.Entries {
-			wg.Add(1)
-			go func(d string, a EntryTask) {
-				defer wg.Done()
-				semaphore <- struct{}{}
-				defer func() { <-semaphore }()
-
-				entrada := a.Entry
-				entrada.Date = d
-
-				if a.TaskID <= 0 {
-					resultChan <- &TimeLogResult{
-						Success: false,
-						Message: fmt.Sprintf("ID de tarefa inválido: %d", a.TaskID),
-						Date:    d,
-						TaskID:  a.TaskID,
-					}
-					return
+			if a.TaskID <= 0 {
+				results[pos] = &TimeLogResult{
+					Success: false,
+					Message: fmt.Sprintf("ID de tarefa inválido: %d", a.TaskID),
+					Date:    d,
+					TaskID:  a.TaskID,
 				}
+				return
+			}
 
-				result, err := t.LogTime(a.TaskID, entrada)
+			entrada := a.Entry
+			entrada.Date = d
+
+			result, err := t.LogTime(a.TaskID, entrada)
+			if result == nil {
+				msg := "falha desconhecida ao lançar"
 				if err != nil {
-					if result == nil {
-						resultChan <- &TimeLogResult{
-							Success: false,
-							Message: err.Error(),
-							Date:    d,
-							TaskID:  a.TaskID,
-						}
-					} else {
-						resultChan <- result
-					}
-					errorChan <- err
-				} else {
-					resultChan <- result
+					msg = err.Error()
 				}
+				result = &TimeLogResult{Success: false, Message: msg, Date: d, TaskID: a.TaskID}
+			}
+			results[pos] = result
 
-				time.Sleep(500 * time.Millisecond)
-			}(dia.Date, alocacao)
-		}
+			// Respiro entre chamadas para não esbarrar no rate limit. Sai antes
+			// se o aplicativo estiver fechando.
+			_ = sleepContext(ctx, 500*time.Millisecond)
+		}(i, item.date, item.entry)
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultChan)
-		close(errorChan)
-	}()
+	wg.Wait()
 
-	for result := range resultChan {
-		results = append(results, result)
-	}
-
-	if len(results) == 0 {
-		if len(errorChan) > 0 {
-			return nil, <-errorChan
-		}
-		return nil, fmt.Errorf("nenhum resultado de lançamento de horas")
-	}
+	// Invalida de novo ao fim: um dashboard carregado no meio do lote teria
+	// recolocado no cache números já desatualizados.
+	t.invalidateTimeEntryCaches()
 
 	return results, nil
 }
@@ -611,7 +603,7 @@ const (
 // dashboard exibia como se fossem reais. Agora todos os campos vêm da API; se
 // não houver lançamentos, o card fica vazio em vez de mostrar dado inventado.
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
-	cacheKey := "recent_activities"
+	cacheKey := cacheKeyRecentActivities
 	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
 		return cached, nil
 	}
@@ -775,6 +767,7 @@ func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
 			resp.StatusCode, resp.Status, string(body))
 	}
 
+	t.invalidateTimeEntryCaches()
 	return nil
 }
 
@@ -824,6 +817,8 @@ func (t *TeamworkAPI) DeleteMultipleTimeEntries(entryIDs []int) ([]DeleteTimeEnt
 	}
 
 	wg.Wait()
+
+	t.invalidateTimeEntryCaches()
 
 	return results, nil
 }
@@ -1032,6 +1027,7 @@ func (t *TeamworkAPI) UpdateTimeEntry(entryID int, entry TimeEntry) (*TimeLogRes
 	}
 
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
+		t.invalidateTimeEntryCaches()
 		result.Success = true
 		result.Message = fmt.Sprintf("Entrada de tempo atualizada com sucesso")
 		return result, nil
