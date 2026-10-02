@@ -1,0 +1,134 @@
+{
+  "included": {},
+  "meta": {
+    "page": {
+      "count": 1,
+      "hasMore": false,
+      "pageOffset": 0,
+      "pageSize": 1
+    }
+  },
+  "projects": [
+    {
+      "activePages": {
+        "billing": true,
+        "board": true,
+        "comments": true,
+        "files": true,
+        "finance": true,
+        "forms": true,
+        "gantt": true,
+        "links": true,
+        "list": true,
+        "messages": true,
+        "milestones": true,
+        "notebooks": true,
+        "proofs": true,
+        "riskRegister": true,
+        "schedule": true,
+        "table": true,
+        "tasks": true,
+        "tickets": true,
+        "time": true,
+        "timeline": true
+      },
+      "allowNotifyAnyone": false,
+      "announcement": "",
+      "archivedAt": null,
+      "archivedBy": null,
+      "budgetCount": 0,
+      "category": null,
+      "categoryId": null,
+      "company": {
+        "id": 1008,
+        "type": "companies"
+      },
+      "companyId": 1008,
+      "completedAt": null,
+      "completedBy": null,
+      "createdAt": "2019-06-24T17:34:01Z",
+      "createdBy": 1009,
+      "customFieldValueIds": null,
+      "customFieldValues": [],
+      "customfieldValues": [],
+      "defaultPrivacy": "Texto ficticio 3",
+      "deletedAt": null,
+      "deletedBy": null,
+      "description": "",
+      "directFileUploadsEnabled": true,
+      "endAt": null,
+      "endDate": null,
+      "financialBudget": null,
+      "financialBudgetId": null,
+      "harvestTimersEnabled": false,
+      "id": 1007,
+      "integrations": {
+        "googleDrive": {
+          "access": "",
+          "enabled": false,
+          "folder": "",
+          "folderName": ""
+        },
+        "oneDriveBusiness": {
+          "account": "",
+          "enabled": false,
+          "folder": "Texto ficticio 4",
+          "folderName": "Nome ficticio 4"
+        },
+        "sharepoint": {
+          "account": "",
+          "enabled": false,
+          "folder": "Texto ficticio 4",
+          "folderName": "Nome ficticio 4"
+        },
+        "xero": {
+          "baseCurrency": "",
+          "connected": false,
+          "countryCode": "",
+          "enabled": false,
+          "organisation": ""
+        }
+      },
+      "isBillable": true,
+      "isOnBoardingProject": false,
+      "isSampleProject": false,
+      "logo": "",
+      "logoColor": null,
+      "logoIcon": null,
+      "name": "Nome ficticio 5",
+      "notifyCommentIncludeCreator": true,
+      "notifyEveryone": false,
+      "notifyTaskAssignee": false,
+      "overviewStartPage": "Texto ficticio 5",
+      "ownedBy": 0,
+      "ownerId": 0,
+      "privacyEnabled": false,
+      "projectNumber": null,
+      "projectOwner": {
+        "id": 0,
+        "type": "users"
+      },
+      "projectOwnerId": 0,
+      "replyByEmailEnabled": true,
+      "showAnnouncement": false,
+      "skipWeekends": false,
+      "startAt": null,
+      "startDate": null,
+      "startPage": "Texto ficticio 6",
+      "status": "active",
+      "subStatus": "current",
+      "tagIds": null,
+      "tags": [],
+      "tasksStartPage": "Texto ficticio 5",
+      "timeBudget": null,
+      "timeBudgetId": null,
+      "timelogRequiresTask": false,
+      "type": "normal",
+      "update": null,
+      "updateId": null,
+      "updatedAt": "2026-10-01T15:36:36Z",
+      "updatedBy": 1010,
+      "workflowIds": null
+    }
+  ]
+}

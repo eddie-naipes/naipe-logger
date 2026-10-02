@@ -1,0 +1,49 @@
+{
+  "included": {},
+  "timelog": {
+    "billable": true,
+    "billableRate": 0,
+    "costRate": 0,
+    "createdAt": "2026-09-29T14:00:36Z",
+    "dateCreated": "2026-09-29T14:00:36Z",
+    "dateDeleted": null,
+    "dateEdited": "2026-09-29T14:00:36Z",
+    "deleted": false,
+    "deletedAt": null,
+    "deletedBy": null,
+    "deletedByUserId": null,
+    "description": "Descricao ficticia 5",
+    "deskTicketId": null,
+    "editedByUserId": 1004,
+    "hasStartTime": true,
+    "id": 1042,
+    "isBillable": true,
+    "isLocked": false,
+    "loggedBy": 1004,
+    "loggedByUserId": 1004,
+    "minutes": 135,
+    "project": {
+      "id": 1007,
+      "type": "projects"
+    },
+    "projectBillingInvoice": null,
+    "projectBillingInvoiceId": null,
+    "projectId": 1007,
+    "task": {
+      "id": 1043,
+      "type": "tasks"
+    },
+    "taskId": 1043,
+    "taskIdPreMove": null,
+    "taskPreMove": null,
+    "timeLogged": "2026-09-01T11:00:00Z",
+    "updatedAt": "2026-09-29T14:00:36Z",
+    "updatedBy": 1004,
+    "user": {
+      "id": 1004,
+      "type": "users"
+    },
+    "userId": 1004,
+    "verified": false
+  }
+}

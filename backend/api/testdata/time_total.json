@@ -1,0 +1,24 @@
+{
+  "financialTotals": {
+    "totalCost": 0,
+    "totalCostBillable": 0,
+    "totalCostBilled": 0
+  },
+  "subTasks": {
+    "estimatedMinutes": 0,
+    "minutes": 0,
+    "minutesBillable": 0
+  },
+  "time-totals": {
+    "estimatedMinutes": 0,
+    "estimatedMinutesActive": 0,
+    "estimatedMinutesCompleted": 0,
+    "estimatedMinutesFiltered": 0,
+    "estimatedMinutesWithLoggedTime": 570,
+    "minutes": 10080,
+    "minutesBillable": 10080,
+    "minutesBilled": 0,
+    "minutesNonBillable": 0,
+    "minutesNonBilled": 10080
+  }
+}
