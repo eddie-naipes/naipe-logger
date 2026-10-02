@@ -53,16 +53,36 @@ type TimeEntriesResponse struct {
 	} `json:"meta"`
 }
 
+// FlexString aceita texto ou número no JSON e guarda como texto. O
+// loggedtime.json manda cada dia como ["1790812800000", 0.25, 15]: o
+// timestamp vem como texto, horas e minutos como números. Tipado como
+// [3]string, todo mês com horas lançadas falhava ao decodificar.
+type FlexString string
+
+func (f *FlexString) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*f = FlexString(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err != nil {
+		return fmt.Errorf("valor não é texto nem número: %s", data)
+	}
+	*f = FlexString(n.String())
+	return nil
+}
+
 type LoggedTimeResponse struct {
 	STATUS string `json:"STATUS"`
 	User   struct {
-		Billable    [][3]string `json:"billable"`
-		Firstname   string      `json:"firstname"`
-		Lastname    string      `json:"lastname"`
-		Nonbillable [][3]string `json:"nonbillable"`
-		ID          string      `json:"id"`
-		Endepoch    string      `json:"endepoch"`
-		Startepoch  string      `json:"startepoch"`
+		Billable    [][3]FlexString `json:"billable"`
+		Firstname   string          `json:"firstname"`
+		Lastname    string          `json:"lastname"`
+		Nonbillable [][3]FlexString `json:"nonbillable"`
+		ID          string          `json:"id"`
+		Endepoch    string          `json:"endepoch"`
+		Startepoch  string          `json:"startepoch"`
 	} `json:"user"`
 }
 
@@ -265,7 +285,10 @@ func (t *TeamworkAPI) GetLoggedTimeFromCalendarAPI(month, year int) (*LoggedTime
 
 	var response LoggedTimeResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("erro ao decodificar resposta JSON: %v\nBody: %s", err, string(body))
+		// Sem o corpo na mensagem: ele chega à tela e ao log e traz nome e
+		// horas do usuário.
+		slog.Debug("Resposta do calendário não decodificada", "corpo", sanitizeForLog(truncateForError(body, 300)))
+		return nil, fmt.Errorf("erro ao decodificar resposta do calendário: %v", err)
 	}
 
 	if response.STATUS != "OK" {
