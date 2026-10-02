@@ -62,8 +62,8 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # typecheck e lint geram antes .wails-types/ (scripts/wails-types.mjs)
-      # a partir dos bindings versionados em frontend/wailsjs.
+      # O typecheck usa os bindings versionados em frontend/wailsjs: se o Go
+      # mudar sem regenerá-los, a falha aparece aqui.
       - name: Typecheck do frontend
         working-directory: frontend
         run: npm run typecheck

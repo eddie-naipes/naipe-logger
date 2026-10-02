@@ -35,6 +35,20 @@ export type TimeEntryReport = Dados<api.TimeEntryReport>;
 export type TeamworkTask = Dados<api.TeamworkTask>;
 export type Project = Dados<api.Project>;
 export type Template = Dados<api.Template>;
+export type Holiday = Dados<api.Holiday>;
+
+// GetHolidayCacheStats. O Wails tipa os campos time.Time como `any`; no JSON
+// eles chegam como texto RFC 3339. Slices e mapas nil do Go viram null.
+export type HolidayCacheDetail = Omit<Dados<api.HolidayCacheDetail>, 'cached_at' | 'expires_at' | 'sources'> & {
+    cached_at: string;
+    expires_at: string;
+    sources: string[] | null;
+};
+
+export type HolidayCacheStats = Omit<Dados<api.HolidayCacheStats>, 'years' | 'cache_details'> & {
+    years: number[] | null;
+    cache_details: Record<number, HolidayCacheDetail> | null;
+};
 
 // --- Bindings que devolvem map[string]interface{} -------------------------
 
@@ -82,33 +96,6 @@ export interface NonWorkingDay {
     isOptional?: boolean;
 }
 
-// GetBrazilianHolidays / RefreshHolidaysForYear (api.Holiday em
-// backend/api/Holiday.go). Declarado aqui porque o models.ts gerado atualmente
-// não traz api.Holiday.
-export interface Holiday {
-    date: string;
-    name: string;
-    description?: string;
-    type: string;
-    isOptional: boolean;
-    source?: string;
-}
-
-// GetHolidayCacheStats (api.HolidayCacheStats). As datas chegam como texto
-// RFC 3339 (time.Time serializado).
-export interface HolidayCacheDetail {
-    holidays_count: number;
-    cached_at: string;
-    expires_at: string;
-    sources: string[] | null;
-    is_expired: boolean;
-}
-
-export interface HolidayCacheStats {
-    cached_years: number;
-    years: number[] | null;
-    cache_details: Record<string, HolidayCacheDetail> | null;
-}
 
 // --- Campos que são structs anônimas no Go (tipados como any pelo Wails) ---
 

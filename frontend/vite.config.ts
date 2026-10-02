@@ -6,8 +6,7 @@ export default defineConfig({
     plugins: [react()],
     resolve: {
         alias: {
-            // Bindings gerados pelo Wails. O tsc usa a cópia de tipos em
-            // .wails-types/ (ver tsconfig.json e scripts/wails-types.mjs).
+            // Bindings gerados pelo Wails (mesmo alias em tsconfig.json).
             '@wailsjs': fileURLToPath(new URL('./wailsjs', import.meta.url)),
         },
     },

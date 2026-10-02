@@ -24,8 +24,8 @@ import {errMsg} from '../utils/errors';
 import type {Holiday, HolidayCacheStats} from '../types/backend';
 
 // Datas 'YYYY-MM-DD' ordenam corretamente como texto.
-const sortHolidays = (holidaysData: Record<string, Holiday> | null | undefined): Holiday[] =>
-    Object.values(holidaysData ?? {}).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+const sortHolidays = (holidaysData: readonly Holiday[] | null | undefined): Holiday[] =>
+    [...(holidaysData ?? [])].sort((a, b) => a.date.localeCompare(b.date));
 
 interface HolidayManagerProps {
     isOpen: boolean;
@@ -42,8 +42,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
     const loadCacheStats = useCallback(async (): Promise<void> => {
         try {
             setLoading(true);
-            // O binding devolve map genérico; o formato é o de api.HolidayCacheStats.
-            const stats = (await GetHolidayCacheStats()) as unknown as HolidayCacheStats;
+            const stats: HolidayCacheStats = await GetHolidayCacheStats();
             setCacheStats(stats);
         } catch (error) {
             console.error('Erro ao carregar estatísticas do cache:', error);
@@ -65,7 +64,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
     const loadHolidaysForYear = async (year: number) => {
         try {
             setLoading(true);
-            const holidaysData: Record<string, Holiday> = await GetBrazilianHolidays(year);
+            const holidaysData: Holiday[] = await GetBrazilianHolidays(year);
 
             // Converter map para array e ordenar por data
             const holidaysArray = sortHolidays(holidaysData);
@@ -83,7 +82,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
     const refreshYear = async (year: number) => {
         try {
             setLoading(true);
-            const holidaysData: Record<string, Holiday> = await RefreshHolidaysForYear(year);
+            const holidaysData: Holiday[] = await RefreshHolidaysForYear(year);
 
             const holidaysArray = sortHolidays(holidaysData);
 

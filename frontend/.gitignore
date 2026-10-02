@@ -1,4 +1,2 @@
-# Copia corrigida dos tipos do Wails, gerada por scripts/wails-types.mjs.
-.wails-types/
 # Relatorio de cobertura do Vitest.
 coverage/

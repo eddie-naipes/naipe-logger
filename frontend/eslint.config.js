@@ -8,8 +8,8 @@ import globals from 'globals';
 
 export default tseslint.config(
     {
-        // wailsjs/ é gerado pelo Wails e .wails-types/ pelo scripts/wails-types.mjs.
-        ignores: ['dist/', 'coverage/', 'wailsjs/', '.wails-types/', 'node_modules/'],
+        // wailsjs/ é gerado pelo Wails.
+        ignores: ['dist/', 'coverage/', 'wailsjs/', 'node_modules/'],
     },
     js.configs.recommended,
     {

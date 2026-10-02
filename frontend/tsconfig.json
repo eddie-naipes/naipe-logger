@@ -22,11 +22,11 @@
     "skipLibCheck": true,
     "noEmit": true,
 
-    // Para o tsc, @wailsjs aponta para a cópia corrigida dos tipos gerados
-    // (scripts/wails-types.mjs); em tempo de execução o Vite resolve o mesmo
-    // alias para wailsjs/.
+    // Bindings gerados pelo Wails (o mesmo alias existe no vite.config.ts).
+    // models.ts é checado junto com o código: uma struct anônima no Go gera
+    // TypeScript inválido e quebra o typecheck — dê nome à struct.
     "paths": {
-      "@wailsjs/*": ["./.wails-types/*"]
+      "@wailsjs/*": ["./wailsjs/*"]
     }
   },
   "include": ["src"]
