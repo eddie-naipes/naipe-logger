@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiSave, FiLoader, FiEye, FiEyeOff, FiUser, FiLogOut, FiAlertTriangle, FiExternalLink, FiClock } from 'react-icons/fi';
-import whaleTeamLogo from '../assets/whaleTeam.png';
+import whaleTeamLogo from '../assets/whaleTeam.webp';
 import {
     ConnectWithToken,
     GetPublicConfig,

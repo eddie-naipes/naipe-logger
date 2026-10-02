@@ -1,7 +1,7 @@
 // src/components/UserProfile.jsx
 import React, { useState, useEffect } from 'react';
 import { FiUser, FiMail } from 'react-icons/fi';
-import mascotImage from '../assets/mascot.png';
+import mascotImage from '../assets/mascot.webp';
 import {GetUserProfile} from '../../wailsjs/go/backend/App';
 import {errMsg} from '../utils/errors';
 
