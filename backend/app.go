@@ -16,6 +16,7 @@ import (
 	"logTime-go/backend/config"
 	"logTime-go/backend/internal/fsutil"
 	"logTime-go/backend/logging"
+	"logTime-go/backend/update"
 )
 
 // errAPINaoConfigurada é devolvido por todo binding que precisa falar com o
@@ -37,6 +38,9 @@ type App struct {
 
 	// version é a versão embutida no binário (wails.json, injetada pelo CI).
 	version string
+
+	// updater consulta as GitHub Releases; nil nos testes que montam App{}.
+	updater *update.Updater
 }
 
 // Options reúne o que main.go descobre antes de criar a App.
@@ -96,6 +100,7 @@ func NewApp(ctx context.Context, opts Options) (*App, error) {
 	}
 
 	app := &App{configManager: configManager, logsDir: opts.LogsDir, version: opts.Version}
+	app.updater = update.New(app.GetAppVersion(), goos())
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 
@@ -147,6 +152,8 @@ func (a *App) Startup(ctx context.Context) {
 			slog.Warn("Erro ao pré-carregar feriados", "err", err)
 		}
 	}()
+
+	go a.checkUpdatesOnStartup()
 }
 
 // GetPublicConfig devolve ao frontend apenas o que ele precisa saber. O token
