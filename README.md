@@ -75,7 +75,8 @@ teamwork-logger/
 │   │   └── config.go       # Persistência de config, tarefas e templates
 │   ├── security/
 │   │   └── credentials.go  # Token no cofre do SO
-│   └── app.go              # Bindings expostos ao frontend
+│   ├── app.go              # Ciclo de vida, conexão e fronteira do token
+│   └── app_*.go            # Bindings expostos ao frontend, por domínio
 ├── frontend/
 │   ├── src/
 │   │   ├── components/     # Sidebar, Header, MonthlyTimeCalendar,
@@ -186,15 +187,21 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 
 O token de API **não** fica nesses arquivos — ele reside no cofre de credenciais do sistema operacional.
 
+- O diretório é criado com `0700`; arquivos e diretório de instalações antigas têm as permissões corrigidas na inicialização.
+- As gravações são atômicas (arquivo temporário + `rename`): uma queda no meio da escrita deixa a versão anterior intacta, nunca um JSON pela metade.
+- Se `config.json` ou `templates.json` estiver corrompido, o aplicativo abre mesmo assim com a configuração padrão e renomeia o arquivo para `<nome>.corrompido-<data-hora>` na mesma pasta, para inspeção.
+- Versões antigas gravavam esses arquivos ao lado do executável; eles são migrados para `~/.teamwork-logger/` só se ainda não houver configuração lá.
+
 O cache (projetos, tarefas, feriados, estatísticas) é mantido apenas em memória e se perde ao fechar o aplicativo.
 
 ## 🔧 Desenvolvimento
 
 ### Requisitos
 - Go 1.24+
-- Node.js 20+
-- [Wails CLI v2.10.1](https://wails.io/docs/gettingstarted/installation)
-- Linux: `libgtk-3-dev`, `libwebkit2gtk-4.0-dev` (ou 4.1)
+- Node.js 22+ (o Vite 7 não roda no Node 18)
+- [Wails CLI v2.10.1](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1`
+- Windows, para gerar o instalador: [NSIS](https://nsis.sourceforge.io/Download) com `makensis` no `PATH`
+- Linux (Ubuntu 22.04+/Debian 12+): `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev`, e a build tag `webkit2_41` em todo `wails dev`/`wails build`
 
 ### Rodando
 
@@ -205,8 +212,12 @@ cd teamwork-logger
 go mod download
 cd frontend && npm ci && cd ..
 
-wails dev
+wails dev                    # Linux: wails dev -tags webkit2_41
 ```
+
+`frontend/dist/index.html` é um placeholder versionado: `main.go` embute `frontend/dist` com `//go:embed`, e sem ele `go vet`/`go test` não compilam antes do frontend existir. Um `npm run build`/`wails build` o sobrescreve — não comite essa versão (`git checkout -- frontend/dist/index.html` restaura).
+
+Ao mudar um binding em `backend/app*.go`, rode `wails generate module` e comite o que mudar em `frontend/wailsjs/`.
 
 ### Testes e verificações
 
@@ -222,15 +233,32 @@ cd frontend && npm audit --audit-level=high
 ### Build de produção
 
 ```bash
-wails build
+wails build -platform windows/amd64 -nsis   # Windows: executável + instalador
+wails build -platform darwin/universal      # macOS
+wails build -platform linux/amd64 -tags webkit2_41
 
-# Executável gerado em:
-# Windows: ./build/bin/teamwork-logger.exe
-# macOS:   ./build/bin/teamwork-logger.app
-# Linux:   ./build/bin/teamwork-logger
+# Saída em ./build/bin/:
+# Windows: teamwork-logger.exe e TeamworkLogger-amd64-installer.exe
+# macOS:   teamwork-logger.app
+# Linux:   teamwork-logger
 ```
 
-O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar para as três plataformas e, em tags `v*`, publica uma release com checksums SHA-256.
+O instalador Windows é o do próprio Wails (`-nsis`), definido em `build/windows/installer/project.nsi` — é ali que ficam as personalizações, porque o `wails_tools.nsh` ao lado é regenerado a cada build. Ele instala **por usuário**, sem pedir administrador, em `%LOCALAPPDATA%\Programs\Teamwork Logger`, com atalhos no menu Iniciar e na área de trabalho e desinstalador em *Aplicativos instalados*. Nome, empresa e versão vêm de `info` em `wails.json`.
+
+Não há scripts de build próprios na raiz: tudo passa pelo Wails CLI, local ou no CI.
+
+### Versão e releases
+
+A versão do app é `info.productVersion` em `wails.json` (e `version` em `frontend/package.json`, mantida igual). O CI (`.github/workflows/build.yml`) roda as verificações antes de compilar para as três plataformas e, em tags `vX.Y.Z`, grava a versão da tag em `wails.json` antes do build e publica uma release com:
+
+- `teamwork-logger.exe` (portátil) e `TeamworkLogger-amd64-installer.exe` (instalador)
+- `naipe-logger-linux.AppImage`
+- `naipe-logger-macos.dmg` e `naipe-logger-macos.app.zip`
+- `SHA256SUMS.txt`
+
+Tags fora do formato `vX.Y.Z` (ex.: `v1.2.0-rc1`) falham no build, porque o Windows exige versão numérica no executável e no instalador.
+
+Os nomes "Naipe Logger"/"Teamwork Logger" convivem por compatibilidade: o diretório de configuração (`~/.teamwork-logger`), o identificador no cofre do sistema (`com.teamwork-logger`) e os nomes dos artefatos publicados são mantidos para não quebrar instalações e links existentes.
 
 ### Aviso do SmartScreen no Windows
 
@@ -244,7 +272,7 @@ Para prosseguir, o próprio usuário confirma que confia no arquivo:
 Antes disso, vale conferir que o download é autêntico comparando o hash do arquivo com o publicado em `SHA256SUMS.txt` na release:
 
 ```powershell
-Get-FileHash .\teamwork-logger.exe -Algorithm SHA256
+Get-FileHash .\TeamworkLogger-amd64-installer.exe -Algorithm SHA256
 ```
 
 O valor deve bater com a linha correspondente no `SHA256SUMS.txt` daquela versão. O aviso desaparece quando o app ganha reputação suficiente no SmartScreen, ou de vez com um certificado de assinatura — nenhum dos dois está em vigor hoje.
