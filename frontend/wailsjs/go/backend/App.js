@@ -46,6 +46,10 @@ export function DeleteTemplate(arg1) {
   return window['go']['backend']['App']['DeleteTemplate'](arg1);
 }
 
+export function DiscardTimer() {
+  return window['go']['backend']['App']['DiscardTimer']();
+}
+
 export function DownloadAndInstallUpdate() {
   return window['go']['backend']['App']['DownloadAndInstallUpdate']();
 }
@@ -94,6 +98,10 @@ export function GetLogsPath() {
   return window['go']['backend']['App']['GetLogsPath']();
 }
 
+export function GetNotificationStatus() {
+  return window['go']['backend']['App']['GetNotificationStatus']();
+}
+
 export function GetProjects() {
   return window['go']['backend']['App']['GetProjects']();
 }
@@ -104,6 +112,10 @@ export function GetPublicConfig() {
 
 export function GetRecentActivities() {
   return window['go']['backend']['App']['GetRecentActivities']();
+}
+
+export function GetReminderSettings() {
+  return window['go']['backend']['App']['GetReminderSettings']();
 }
 
 export function GetSavedTasks() {
@@ -136,6 +148,14 @@ export function GetTimeEntriesForPeriodV2(arg1, arg2, arg3) {
 
 export function GetTimeTotalsForPeriod(arg1, arg2) {
   return window['go']['backend']['App']['GetTimeTotalsForPeriod'](arg1, arg2);
+}
+
+export function GetTimerSettings() {
+  return window['go']['backend']['App']['GetTimerSettings']();
+}
+
+export function GetTimerState() {
+  return window['go']['backend']['App']['GetTimerState']();
 }
 
 export function GetUserProfile() {
@@ -178,8 +198,16 @@ export function OpenReleasePage() {
   return window['go']['backend']['App']['OpenReleasePage']();
 }
 
+export function PauseTimer() {
+  return window['go']['backend']['App']['PauseTimer']();
+}
+
 export function PreloadHolidays() {
   return window['go']['backend']['App']['PreloadHolidays']();
+}
+
+export function PreviewTimerStop() {
+  return window['go']['backend']['App']['PreviewTimerStop']();
 }
 
 export function RefreshHolidaysForYear(arg1) {
@@ -190,12 +218,20 @@ export function RemoveTask(arg1) {
   return window['go']['backend']['App']['RemoveTask'](arg1);
 }
 
+export function ResumeTimer() {
+  return window['go']['backend']['App']['ResumeTimer']();
+}
+
 export function RunLegacyUninstaller() {
   return window['go']['backend']['App']['RunLegacyUninstaller']();
 }
 
 export function SaveAppSettings(arg1) {
   return window['go']['backend']['App']['SaveAppSettings'](arg1);
+}
+
+export function SaveReminderSettings(arg1) {
+  return window['go']['backend']['App']['SaveReminderSettings'](arg1);
 }
 
 export function SaveTask(arg1) {
@@ -206,8 +242,24 @@ export function SaveTemplate(arg1) {
   return window['go']['backend']['App']['SaveTemplate'](arg1);
 }
 
+export function SaveTimerSettings(arg1) {
+  return window['go']['backend']['App']['SaveTimerSettings'](arg1);
+}
+
+export function SendTestReminder() {
+  return window['go']['backend']['App']['SendTestReminder']();
+}
+
 export function SetMinutosPorDia(arg1) {
   return window['go']['backend']['App']['SetMinutosPorDia'](arg1);
+}
+
+export function StartTimer(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['StartTimer'](arg1, arg2, arg3);
+}
+
+export function StopTimer(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['StopTimer'](arg1, arg2, arg3);
 }
 
 export function UpdateTimeEntry(arg1, arg2) {

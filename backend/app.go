@@ -41,6 +41,9 @@ type App struct {
 
 	// updater consulta as GitHub Releases; nil nos testes que montam App{}.
 	updater *update.Updater
+
+	// features guarda lembretes, cronômetro e notificações (app_notifications.go).
+	features features
 }
 
 // Options reúne o que main.go descobre antes de criar a App.
@@ -126,7 +129,8 @@ func setupHolidayDiskCache() {
 
 // Startup recebe o contexto da aplicação. O cliente criado em NewApp é mantido
 // (a configuração não mudou desde então); só passa a usar esse contexto.
-// Não há OnShutdown: toda mutação de configuração já grava o disco na hora.
+// A configuração não precisa de OnShutdown (toda mutação grava o disco na
+// hora); Shutdown só encerra lembretes e cronômetro.
 func (a *App) Startup(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -154,6 +158,13 @@ func (a *App) Startup(ctx context.Context) {
 	}()
 
 	go a.checkUpdatesOnStartup()
+
+	a.startFeatures(ctx)
+}
+
+// Shutdown encerra as verificações periódicas (lembretes, cronômetro).
+func (a *App) Shutdown(ctx context.Context) {
+	a.stopFeatures(ctx)
 }
 
 // GetPublicConfig devolve ao frontend apenas o que ele precisa saber. O token
