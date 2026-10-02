@@ -60,6 +60,12 @@ type AppSettings struct {
 	AutoUpdate     bool   `json:"autoUpdate"`
 	StartMinimized bool   `json:"startMinimized"`
 	Language       string `json:"language"`
+	// CheckUpdatesOnStartup consulta as GitHub Releases ao abrir o app. Padrão
+	// true: como Load decodifica por cima de defaultAppConfig, um config.json
+	// de versão anterior (sem o campo) também fica ligado. O frontend deve
+	// salvar a partir do objeto de GetAppSettings, senão o campo ausente
+	// chega como false.
+	CheckUpdatesOnStartup bool `json:"checkUpdatesOnStartup"`
 }
 
 func NewManager() (*Manager, error) {
@@ -94,7 +100,8 @@ func defaultAppConfig() *AppConfig {
 		},
 		SavedTasks: []api.Task{},
 		AppSettings: AppSettings{
-			Language: "pt-BR",
+			Language:              "pt-BR",
+			CheckUpdatesOnStartup: true,
 		},
 	}
 }
