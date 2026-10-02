@@ -735,7 +735,7 @@ func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
 		Description:   entry.Description,
 		IsBillable:    entry.IsBillable,
 		IsBilled:      entry.IsBilled,
-		StartTime:     "",
+		StartTime:     v2StartTime(entry),
 		EndTime:       "",
 	}
 }
