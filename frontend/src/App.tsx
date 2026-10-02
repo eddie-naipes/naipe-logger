@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
 import UpdateBanner from './components/UpdateBanner';
+import StartupNotices from './components/StartupNotices';
 
 import Dashboard from './pages/Dashboard';
 import Config from './pages/Config';
@@ -146,6 +147,8 @@ function App() {
                         </main>
                     </div>
                 </div>
+
+                <StartupNotices/>
 
                 {/* Notificações */}
                 <ToastContainer
