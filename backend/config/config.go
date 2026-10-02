@@ -53,6 +53,8 @@ type AppConfig struct {
 	TeamworkConfig api.Config  `json:"teamworkConfig"`
 	SavedTasks     []api.Task  `json:"savedTasks"`
 	AppSettings    AppSettings `json:"appSettings"`
+	// GitIntegration: ver gitlog.go.
+	GitIntegration GitIntegration `json:"gitIntegration"`
 }
 
 type AppSettings struct {
@@ -103,6 +105,7 @@ func defaultAppConfig() *AppConfig {
 			Language:              "pt-BR",
 			CheckUpdatesOnStartup: true,
 		},
+		GitIntegration: defaultGitIntegration(),
 	}
 }
 

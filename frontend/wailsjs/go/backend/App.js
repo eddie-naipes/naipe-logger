@@ -6,6 +6,10 @@ export function ApplyTemplate(arg1) {
   return window['go']['backend']['App']['ApplyTemplate'](arg1);
 }
 
+export function BuildGitSuggestion(arg1) {
+  return window['go']['backend']['App']['BuildGitSuggestion'](arg1);
+}
+
 export function CheckForUpdate() {
   return window['go']['backend']['App']['CheckForUpdate']();
 }
@@ -76,6 +80,14 @@ export function GetBrazilianHolidays(arg1) {
 
 export function GetDashboardStats() {
   return window['go']['backend']['App']['GetDashboardStats']();
+}
+
+export function GetGitIntegration() {
+  return window['go']['backend']['App']['GetGitIntegration']();
+}
+
+export function GetGitSuggestion(arg1) {
+  return window['go']['backend']['App']['GetGitSuggestion'](arg1);
 }
 
 export function GetHolidayCacheStats() {
@@ -198,12 +210,20 @@ export function SaveAppSettings(arg1) {
   return window['go']['backend']['App']['SaveAppSettings'](arg1);
 }
 
+export function SaveGitIntegration(arg1) {
+  return window['go']['backend']['App']['SaveGitIntegration'](arg1);
+}
+
 export function SaveTask(arg1) {
   return window['go']['backend']['App']['SaveTask'](arg1);
 }
 
 export function SaveTemplate(arg1) {
   return window['go']['backend']['App']['SaveTemplate'](arg1);
+}
+
+export function SelectGitRepository() {
+  return window['go']['backend']['App']['SelectGitRepository']();
 }
 
 export function SetMinutosPorDia(arg1) {
