@@ -60,19 +60,28 @@ func (t *TeamworkAPI) requestContext() context.Context {
 	return t.ctx
 }
 
+// GetDashboardStats devolve os números do dashboard no formato de mapa que o
+// binding atual expõe. Mantido por compatibilidade; GetDashboardSummary é a
+// versão tipada. Cada chamada monta um mapa novo, então o chamador pode
+// alterá-lo sem contaminar o cache.
 func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
+	stats, err := t.GetDashboardSummary()
+	if err != nil {
+		return nil, err
+	}
+	return stats.toMap(), nil
+}
+
+// GetDashboardSummary calcula os números do dashboard do mês atual.
+func (t *TeamworkAPI) GetDashboardSummary() (DashboardStats, error) {
 	cacheKey := fmt.Sprintf("%s%d", cacheKeyDashboardStatsPrefix, t.Config.UserID)
-	if cached, found := getCached[map[string]interface{}](t.cache, cacheKey); found {
-		// Cópia: o chamador ajusta "horasLogadas" no mapa devolvido, e mutar o
-		// objeto em cache contaminaria as próximas leituras.
-		return copyStats(cached), nil
+	if cached, found := getCached[DashboardStats](t.cache, cacheKey); found {
+		return cached, nil
 	}
 
 	if !t.IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+		return DashboardStats{}, fmt.Errorf("API não configurada")
 	}
-
-	stats := make(map[string]interface{})
 
 	now := time.Now()
 	firstDay := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
@@ -123,63 +132,39 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 
 	wg.Wait()
 
-	if taskCountErr != nil {
-		stats["tarefasPendentes"] = 0
-	} else {
-		stats["tarefasPendentes"] = tarefasPendentes
-	}
+	// Falhas parciais viram zero no card correspondente em vez de derrubar o
+	// dashboard inteiro.
+	var stats DashboardStats
 
-	if projectCountErr != nil {
-		stats["projetos"] = 0
-	} else {
-		stats["projetos"] = projetosAtivos
+	if taskCountErr == nil {
+		stats.TarefasPendentes = tarefasPendentes
+	}
+	if projectCountErr == nil {
+		stats.Projetos = projetosAtivos
 	}
 
 	if hoursLoggedErr != nil {
 		t.logWarn("Erro ao obter horas do mês: %v", hoursLoggedErr)
-		stats["horasLogadas"] = 0.0
-		stats["horasLogadasChange"] = 0
 	} else {
-		stats["horasLogadas"] = horasLogadas
-		stats["horasLogadasChange"] = 0
+		stats.HorasLogadas = horasLogadas
 		if hoursPrevErr == nil && horasLogadasAnterior > 0 {
-			horasChange := ((horasLogadas - horasLogadasAnterior) / horasLogadasAnterior) * 100
-			stats["horasLogadasChange"] = int(horasChange)
+			stats.HorasLogadasChange = int(((horasLogadas - horasLogadasAnterior) / horasLogadasAnterior) * 100)
 		}
 	}
 
-	if workDaysErr != nil {
-		stats["diasUteisMes"] = 0
-		stats["diasUteisRestantes"] = 0
-		stats["diasUteisPassados"] = 0
-	} else {
-		diasUteisMes := len(diasUteis)
-		stats["diasUteisMes"] = diasUteisMes
+	if workDaysErr == nil {
+		stats.DiasUteisMes = len(diasUteis)
 
 		hoje := time.Now().Format("2006-01-02")
-		diasUteisRestantes := 0
-		diasUteisPassados := 0
-
 		for _, dia := range diasUteis {
 			if dia >= hoje {
-				diasUteisRestantes++
+				stats.DiasUteisRestantes++
 			} else {
-				diasUteisPassados++
+				stats.DiasUteisPassados++
 			}
 		}
-
-		stats["diasUteisRestantes"] = diasUteisRestantes
-		stats["diasUteisPassados"] = diasUteisPassados
 	}
 
-	t.cache.Set(cacheKey, copyStats(stats), 1*time.Hour)
+	t.cache.Set(cacheKey, stats, 1*time.Hour)
 	return stats, nil
-}
-
-func copyStats(stats map[string]interface{}) map[string]interface{} {
-	copied := make(map[string]interface{}, len(stats))
-	for k, v := range stats {
-		copied[k] = v
-	}
-	return copied
 }

@@ -530,33 +530,56 @@ func (t *TeamworkAPI) PreloadUpcomingHolidays() error {
 	return nil
 }
 
-// Método para obter estatísticas do cache
+// HolidayCacheStats descreve o cache de feriados, para a tela de manutenção.
+type HolidayCacheStats struct {
+	CachedYears  int                        `json:"cached_years"`
+	Years        []int                      `json:"years"`
+	CacheDetails map[int]HolidayCacheDetail `json:"cache_details"`
+}
+
+// HolidayCacheDetail é o estado do cache de um ano.
+type HolidayCacheDetail struct {
+	HolidaysCount int       `json:"holidays_count"`
+	CachedAt      time.Time `json:"cached_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	Sources       []string  `json:"sources"`
+	IsExpired     bool      `json:"is_expired"`
+}
+
+// GetHolidayCacheStats devolve o estado do cache no formato de mapa que o
+// binding atual expõe. O JSON é o mesmo de HolidayCacheSummary.
 func (t *TeamworkAPI) GetHolidayCacheStats() map[string]interface{} {
+	stats := t.HolidayCacheSummary()
+	return map[string]interface{}{
+		"cached_years":  stats.CachedYears,
+		"years":         stats.Years,
+		"cache_details": stats.CacheDetails,
+	}
+}
+
+// HolidayCacheSummary é a versão tipada de GetHolidayCacheStats.
+func (t *TeamworkAPI) HolidayCacheSummary() HolidayCacheStats {
 	holidayCacheLock.RLock()
 	defer holidayCacheLock.RUnlock()
 
-	stats := map[string]interface{}{
-		"cached_years":  len(holidayCache),
-		"years":         make([]int, 0, len(holidayCache)),
-		"cache_details": make(map[int]map[string]interface{}),
+	stats := HolidayCacheStats{
+		CachedYears:  len(holidayCache),
+		Years:        make([]int, 0, len(holidayCache)),
+		CacheDetails: make(map[int]HolidayCacheDetail, len(holidayCache)),
 	}
 
-	years := make([]int, 0, len(holidayCache))
-	for year := range holidayCache {
-		years = append(years, year)
-	}
-	sort.Ints(years)
-	stats["years"] = years
-
+	now := time.Now()
 	for year, cache := range holidayCache {
-		stats["cache_details"].(map[int]map[string]interface{})[year] = map[string]interface{}{
-			"holidays_count": len(cache.Holidays),
-			"cached_at":      cache.CachedAt,
-			"expires_at":     cache.ExpiresAt,
-			"sources":        cache.Sources,
-			"is_expired":     time.Now().After(cache.ExpiresAt),
+		stats.Years = append(stats.Years, year)
+		stats.CacheDetails[year] = HolidayCacheDetail{
+			HolidaysCount: len(cache.Holidays),
+			CachedAt:      cache.CachedAt,
+			ExpiresAt:     cache.ExpiresAt,
+			Sources:       cache.Sources,
+			IsExpired:     now.After(cache.ExpiresAt),
 		}
 	}
+	sort.Ints(stats.Years)
 
 	return stats
 }

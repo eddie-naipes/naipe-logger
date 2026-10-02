@@ -609,8 +609,17 @@ const upcomingDeadlinesLimit = 5
 // Ambos os campos já vinham da API e simplesmente não eram usados. Tarefas sem
 // prazo definido são omitidas em vez de receberem um prazo inventado.
 func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{}, error) {
+	tarefas, err := t.ListUpcomingDeadlines()
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(tarefas), nil
+}
+
+// ListUpcomingDeadlines é a versão tipada de GetTasksWithUpcomingDeadlines.
+func (t *TeamworkAPI) ListUpcomingDeadlines() ([]UpcomingDeadline, error) {
 	cacheKey := "upcoming_tasks"
-	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+	if cached, found := getCached[[]UpcomingDeadline](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
@@ -628,7 +637,7 @@ func (t *TeamworkAPI) GetTasksWithUpcomingDeadlines() ([]map[string]interface{},
 // filtrarEOrdenarPrazos mantém apenas as tarefas com prazo real a partir de
 // hoje, ordena da mais próxima para a mais distante e corta no limite.
 // Tarefas sem prazo, ou com prazo irreconhecível, são descartadas.
-func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []map[string]interface{} {
+func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []UpcomingDeadline {
 	type tarefaComPrazo struct {
 		task TeamworkTask
 		due  time.Time
@@ -654,20 +663,20 @@ func filtrarEOrdenarPrazos(tasks []TeamworkTask, hoje time.Time, limite int) []m
 		comPrazo = comPrazo[:limite]
 	}
 
-	tarefas := make([]map[string]interface{}, 0, len(comPrazo))
+	tarefas := make([]UpcomingDeadline, 0, len(comPrazo))
 	for _, item := range comPrazo {
 		nome := item.task.Content
 		if nome == "" {
 			nome = item.task.Name
 		}
 
-		tarefas = append(tarefas, map[string]interface{}{
-			"id":          item.task.ID,
-			"name":        nome,
-			"dueDate":     item.due.Format("2006-01-02"),
-			"priority":    item.task.Priority,
-			"projectId":   item.task.ProjectID,
-			"projectName": item.task.ProjectName,
+		tarefas = append(tarefas, UpcomingDeadline{
+			ID:          item.task.ID,
+			Name:        nome,
+			DueDate:     item.due.Format("2006-01-02"),
+			Priority:    item.task.Priority,
+			ProjectID:   item.task.ProjectID,
+			ProjectName: item.task.ProjectName,
 		})
 	}
 

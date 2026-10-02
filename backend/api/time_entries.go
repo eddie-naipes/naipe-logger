@@ -554,8 +554,17 @@ const (
 // dashboard exibia como se fossem reais. Agora todos os campos vêm da API; se
 // não houver lançamentos, o card fica vazio em vez de mostrar dado inventado.
 func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
+	atividades, err := t.ListRecentActivities()
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(atividades), nil
+}
+
+// ListRecentActivities é a versão tipada de GetRecentActivities.
+func (t *TeamworkAPI) ListRecentActivities() ([]RecentActivity, error) {
 	cacheKey := cacheKeyRecentActivities
-	if cached, found := getCached[[]map[string]interface{}](t.cache, cacheKey); found {
+	if cached, found := getCached[[]RecentActivity](t.cache, cacheKey); found {
 		return cached, nil
 	}
 
@@ -581,23 +590,23 @@ func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 		entries = entries[:recentActivitiesLimit]
 	}
 
-	atividades := make([]map[string]interface{}, 0, len(entries))
+	atividades := make([]RecentActivity, 0, len(entries))
 	for _, entry := range entries {
 		descricao := entry.Description
 		if descricao == "" {
 			descricao = entry.TaskName
 		}
 
-		atividades = append(atividades, map[string]interface{}{
-			"id":          entry.ID,
-			"type":        "timelog",
-			"description": descricao,
-			"minutes":     entry.Minutes,
-			"date":        entry.Date,
-			"projectId":   entry.ProjectID,
-			"projectName": entry.ProjectName,
-			"taskId":      entry.TaskID,
-			"taskName":    entry.TaskName,
+		atividades = append(atividades, RecentActivity{
+			ID:          entry.ID,
+			Type:        "timelog",
+			Description: descricao,
+			Minutes:     entry.Minutes,
+			Date:        entry.Date,
+			ProjectID:   entry.ProjectID,
+			ProjectName: entry.ProjectName,
+			TaskID:      entry.TaskID,
+			TaskName:    entry.TaskName,
 		})
 	}
 
@@ -605,7 +614,18 @@ func (t *TeamworkAPI) GetRecentActivities() ([]map[string]interface{}, error) {
 	return atividades, nil
 }
 
+// GetAllNonWorkingDays devolve fins de semana e feriados do mês no formato de
+// mapa que o binding atual expõe; ListNonWorkingDays é a versão tipada.
 func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
+	days, err := t.ListNonWorkingDays(year, month)
+	if err != nil {
+		return nil, err
+	}
+	return toMaps(days), nil
+}
+
+// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês.
+func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 
 	var endDate time.Time
@@ -621,15 +641,15 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 		holidays = []Holiday{}
 	}
 
-	nonWorkingDays := make([]map[string]interface{}, 0)
+	nonWorkingDays := make([]NonWorkingDay, 0)
 
 	current := startDate
 	for !current.After(endDate) {
 		if current.Weekday() == time.Saturday || current.Weekday() == time.Sunday {
-			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
-				"date": formatDate(current),
-				"type": "weekend",
-				"name": current.Weekday().String(),
+			nonWorkingDays = append(nonWorkingDays, NonWorkingDay{
+				Date: formatDate(current),
+				Type: nonWorkingDayWeekend,
+				Name: current.Weekday().String(),
 			})
 		}
 		current = current.AddDate(0, 0, 1)
@@ -643,12 +663,12 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 		}
 
 		if holidayDate.Weekday() != time.Saturday && holidayDate.Weekday() != time.Sunday {
-			nonWorkingDays = append(nonWorkingDays, map[string]interface{}{
-				"date":        holiday.Date,
-				"type":        "holiday",
-				"name":        holiday.Name,
-				"description": holiday.Description,
-				"isOptional":  holiday.IsOptional,
+			nonWorkingDays = append(nonWorkingDays, NonWorkingDay{
+				Date:        holiday.Date,
+				Type:        nonWorkingDayHoliday,
+				Name:        holiday.Name,
+				Description: holiday.Description,
+				IsOptional:  holiday.IsOptional,
 			})
 		}
 	}
