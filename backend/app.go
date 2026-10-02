@@ -8,11 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
+	"logTime-go/backend/internal/fsutil"
 	"logTime-go/backend/logging"
 )
 
@@ -92,7 +94,24 @@ func NewApp(ctx context.Context, opts Options) (*App, error) {
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 
+	setupHolidayDiskCache()
+
 	return app, nil
+}
+
+// setupHolidayDiskCache liga o cache de feriados em ~/.teamwork-logger/cache e
+// carrega o que já estava salvo. Sem disco o app segue só com a memória.
+func setupHolidayDiskCache() {
+	appDir, err := fsutil.AppDir()
+	if err != nil {
+		slog.Warn("Cache de feriados em disco desligado", "err", err)
+		return
+	}
+	if err := api.SetHolidayCacheDir(filepath.Join(appDir, "cache")); err != nil {
+		slog.Warn("Cache de feriados em disco desligado", "err", err)
+		return
+	}
+	api.LoadHolidayCacheFromDisk()
 }
 
 // Startup recebe o contexto da aplicação. O cliente criado em NewApp é mantido
@@ -107,8 +126,9 @@ func (a *App) Startup(ctx context.Context) {
 
 	a.setContext(ctx)
 
+	// O cache de feriados não é mais podado aqui: um ano vencido vindo da
+	// BrasilAPI continua valendo e é revalidado em segundo plano.
 	client := a.api()
-	client.ClearExpiredHolidayCache()
 
 	go func() {
 		// Um panic numa goroutine derruba o processo inteiro; o recover do

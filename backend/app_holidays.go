@@ -52,7 +52,8 @@ func (a *App) ClearHolidayCache() error {
 	if err != nil {
 		return err
 	}
-	client.ClearExpiredHolidayCache()
+	// A tela pede "limpar todo o cache"; antes só os anos vencidos saíam.
+	client.ClearAllHolidayCache()
 	return nil
 }
 
