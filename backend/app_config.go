@@ -44,16 +44,8 @@ func (a *App) ClearSavedTasks() error {
 	return a.configManager.SetSavedTasks([]api.Task{})
 }
 
-func (a *App) CalculateTotalMinutes(tarefas []api.Task) int {
-	return a.api().CalculateTotalMinutes(tarefas)
-}
-
 func (a *App) GetTemplates() map[string]api.Template {
 	return a.configManager.GetTemplates()
-}
-
-func (a *App) GetTemplate(name string) (api.Template, bool) {
-	return a.configManager.GetTemplate(name)
 }
 
 func (a *App) SaveTemplate(template api.Template) error {

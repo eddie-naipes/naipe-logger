@@ -5,12 +5,18 @@ package backend
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 
 	"logTime-go/backend/api"
 	"logTime-go/backend/config"
 )
+
+// errAPINaoConfigurada é devolvido por todo binding que precisa falar com o
+// Teamwork enquanto não há host e token válidos.
+var errAPINaoConfigurada = errors.New("API não configurada. Configure sua conta na tela de Configurações")
 
 type App struct {
 	ctx           context.Context
@@ -29,6 +35,18 @@ func (a *App) api() *api.TeamworkAPI {
 	return a.teamworkAPI
 }
 
+// client devolve o cliente atual se houver uma conexão configurada. Os
+// bindings devem lê-lo uma única vez e usar a mesma instância até o fim: chamar
+// a.api() várias vezes pode pegar clientes diferentes se a conexão mudar no
+// meio da chamada.
+func (a *App) client() (*api.TeamworkAPI, error) {
+	c := a.api()
+	if c == nil || !c.IsConfigured() {
+		return nil, errAPINaoConfigurada
+	}
+	return c, nil
+}
+
 // setAPI substitui o cliente e lhe entrega o contexto da aplicação, para que as
 // requisições do cliente novo também sejam abortadas no encerramento.
 func (a *App) setAPI(client *api.TeamworkAPI) {
@@ -41,11 +59,15 @@ func (a *App) setAPI(client *api.TeamworkAPI) {
 }
 
 // setContext guarda o contexto sob o mesmo lock que protege o cliente, já que
-// setAPI o lê para repassá-lo a cada cliente novo.
+// setAPI o lê para repassá-lo a cada cliente novo, e o entrega também ao
+// cliente atual.
 func (a *App) setContext(ctx context.Context) {
 	a.apiMutex.Lock()
 	defer a.apiMutex.Unlock()
 	a.ctx = ctx
+	if ctx != nil && a.teamworkAPI != nil {
+		a.teamworkAPI.SetContext(ctx)
+	}
 }
 
 func NewApp(ctx context.Context) (*App, error) {
@@ -61,27 +83,33 @@ func NewApp(ctx context.Context) (*App, error) {
 	return app, nil
 }
 
+// Startup recebe o contexto da aplicação. O cliente criado em NewApp é mantido
+// (a configuração não mudou desde então); só passa a usar esse contexto.
+// Não há OnShutdown: toda mutação de configuração já grava o disco na hora.
 func (a *App) Startup(ctx context.Context) {
-	a.setContext(ctx)
-	a.setAPI(api.NewTeamworkAPI(a.configManager.GetTeamworkConfig()))
-
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("Erro crítico durante a inicialização: %v\n", r)
 		}
 	}()
 
-	a.api().ClearExpiredHolidayCache()
+	a.setContext(ctx)
+
+	client := a.api()
+	client.ClearExpiredHolidayCache()
 
 	go func() {
-		if err := a.api().PreloadUpcomingHolidays(); err != nil {
+		// Um panic numa goroutine derruba o processo inteiro; o recover do
+		// Startup não a alcança.
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("Erro ao pré-carregar feriados: %v\n", r)
+			}
+		}()
+		if err := client.PreloadUpcomingHolidays(); err != nil {
 			fmt.Printf("Aviso: erro ao pré-carregar feriados: %v\n", err)
 		}
 	}()
-}
-
-func (a *App) Shutdown(ctx context.Context) {
-	_ = a.configManager.Save()
 }
 
 // GetPublicConfig devolve ao frontend apenas o que ele precisa saber. O token
@@ -107,15 +135,22 @@ func (a *App) LegacyCredentialPurged() bool {
 	return a.configManager.LegacyCredentialPurged()
 }
 
-func (a *App) TestConnection() ([]interface{}, error) {
-	success, message := a.api().TestConnection()
-	return []interface{}{success, message}, nil
+// CorruptedConfigBackups lista os arquivos de configuração que estavam
+// corrompidos na inicialização e foram renomeados (<nome>.corrompido-<data-hora>).
+// Vazio quando nada foi recuperado; caso contrário a UI deve avisar que a
+// configuração padrão está em uso e onde está o backup.
+func (a *App) CorruptedConfigBackups() []string {
+	return a.configManager.CorruptedConfigBackups()
 }
 
 // ConnectWithToken valida um token de API do Teamwork e, em caso de sucesso,
 // grava-o no cofre de credenciais do sistema. O token nunca é devolvido ao
 // frontend nem gravado em config.json.
 func (a *App) ConnectWithToken(token, host string) (*api.LoginResponse, error) {
+	// Aparado aqui para que o token validado seja exatamente o que vai para o
+	// cofre e para a memória.
+	token = strings.TrimSpace(token)
+
 	loginResponse, err := api.ValidateToken(token, host)
 	if err != nil {
 		return nil, err

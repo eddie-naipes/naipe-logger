@@ -10,32 +10,25 @@ import (
 // Bindings de feriados e dias não úteis.
 
 func (a *App) GetBrazilianHolidays(year int) (map[string]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetBrazilianHolidays(year)
-}
-
-func (a *App) GetHolidaysForMonth(year, month int) ([]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
-	}
-
-	return a.api().GetHolidaysForMonth(year, month)
+	return client.GetBrazilianHolidays(year)
 }
 
 func (a *App) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetAllNonWorkingDays(year, month)
+	return client.GetAllNonWorkingDays(year, month)
 }
 
 func (a *App) IsWorkDay(date string) (bool, error) {
-	if !a.api().IsConfigured() {
-		return false, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return false, err
 	}
 
 	dateObj, err := time.Parse("2006-01-02", date)
@@ -43,40 +36,40 @@ func (a *App) IsWorkDay(date string) (bool, error) {
 		return false, fmt.Errorf("formato de data inválido: %v", err)
 	}
 
-	return a.api().IsWorkDay(dateObj), nil
+	return client.IsWorkDay(dateObj), nil
 }
 
 func (a *App) GetHolidayCacheStats() (map[string]interface{}, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
-
-	return a.api().GetHolidayCacheStats(), nil
+	return client.GetHolidayCacheStats(), nil
 }
 
 func (a *App) ClearHolidayCache() error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return err
 	}
-
-	a.api().ClearExpiredHolidayCache()
+	client.ClearExpiredHolidayCache()
 	return nil
 }
 
 func (a *App) PreloadHolidays() error {
-	if !a.api().IsConfigured() {
-		return fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return err
 	}
-
-	return a.api().PreloadUpcomingHolidays()
+	return client.PreloadUpcomingHolidays()
 }
 
 func (a *App) RefreshHolidaysForYear(year int) (map[string]api.Holiday, error) {
-	if !a.api().IsConfigured() {
-		return nil, fmt.Errorf("API não configurada")
+	client, err := a.client()
+	if err != nil {
+		return nil, err
 	}
 
-	a.api().ClearHolidaysCacheForYear(year)
-
-	return a.api().GetBrazilianHolidays(year)
+	client.ClearHolidaysCacheForYear(year)
+	return client.GetBrazilianHolidays(year)
 }
