@@ -6,7 +6,7 @@
 // map[string]interface{} e campos que são structs anônimas no Go (o Wails os
 // tipa como `any`). Os nomes de campo seguem as tags `json` dos structs em
 // backend/api/*.go e backend/*.go.
-import type {api} from '@wailsjs/go/models';
+import type {api, config, legacy, update} from '@wailsjs/go/models';
 
 // As classes geradas pelo Wails têm, além dos campos, o método convertValues.
 // Dados<T> fica só com os campos — é o que de fato trafega em JSON — para que o
@@ -36,6 +36,16 @@ export type TeamworkTask = Dados<api.TeamworkTask>;
 export type Project = Dados<api.Project>;
 export type Template = Dados<api.Template>;
 export type Holiday = Dados<api.Holiday>;
+export type AppSettings = Dados<config.AppSettings>;
+export type UpdateInfo = Dados<update.Info>;
+export type LegacyInstall = Dados<legacy.Install>;
+
+// Payload do evento "update:progress" (update.Progress no Go). total pode ser
+// 0 quando o servidor não informa o tamanho do download.
+export interface UpdateProgress {
+    received: number;
+    total: number;
+}
 
 // GetHolidayCacheStats. O Wails tipa os campos time.Time como `any`; no JSON
 // eles chegam como texto RFC 3339. Slices e mapas nil do Go viram null.

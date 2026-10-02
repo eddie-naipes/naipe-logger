@@ -8,6 +8,7 @@ import {GetAppSettings, IsConfigured, SaveAppSettings} from '@wailsjs/go/backend
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
+import UpdateBanner from './components/UpdateBanner';
 
 import Dashboard from './pages/Dashboard';
 import Config from './pages/Config';
@@ -17,6 +18,8 @@ import Templates from './pages/Templates';
 import NotFound from './pages/NotFound';
 
 import {ThemeContext} from './contexts/ThemeContext';
+import {UpdateContext} from './contexts/UpdateContext';
+import useUpdate from './hooks/useUpdate';
 import {errMsg} from './utils/errors';
 
 function App() {
@@ -26,6 +29,10 @@ function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [loading, setLoading] = useState(true);
     const [isConfigured, setIsConfigured] = useState(false);
+    const [autoCheckUpdates, setAutoCheckUpdates] = useState(false);
+    // Lê a preferência só na inicialização: mudar o toggle na Config vale para
+    // a próxima abertura do app.
+    const updater = useUpdate({autoCheck: autoCheckUpdates});
 
     // O frontend só recebe um booleano; o token vive no cofre do sistema.
     const checkIfConfigured = useCallback(async (): Promise<void> => {
@@ -42,6 +49,7 @@ function App() {
             try {
                 const settings = await GetAppSettings();
                 setDarkMode(settings.darkMode);
+                setAutoCheckUpdates(settings.checkUpdatesOnStartup);
 
                 await checkIfConfigured();
             } catch (error) {
@@ -106,49 +114,53 @@ function App() {
 
     return (
         <ThemeContext.Provider value={themeValue}>
-            <div className="flex h-full bg-gray-50 dark:bg-gray-900">
-                {/* Sidebar */}
-                <Sidebar
-                    isOpen={sidebarOpen}
-                    onClose={() => setSidebarOpen(false)}
-                    isConfigured={isConfigured}
-                />
-
-                {/* Conteúdo principal */}
-                <div className="flex flex-col flex-1 overflow-hidden">
-                    <Header
-                        onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+            <UpdateContext.Provider value={updater}>
+                <div className="flex h-full bg-gray-50 dark:bg-gray-900">
+                    {/* Sidebar */}
+                    <Sidebar
+                        isOpen={sidebarOpen}
+                        onClose={() => setSidebarOpen(false)}
                         isConfigured={isConfigured}
                     />
 
-                    <main className="flex-1 overflow-y-auto p-4">
-                        <ErrorBoundary resetKey={location.pathname}>
-                            <Routes>
-                                <Route path="/" element={<Dashboard/>}/>
-                                <Route path="/config" element={<Config onConfigSaved={() => void checkIfConfigured()}/>}/>
-                                <Route path="/tasks" element={<Tasks/>}/>
-                                <Route path="/timelog" element={<TimeLog/>}/>
-                                <Route path="/templates" element={<Templates/>}/>
-                                <Route path="*" element={<NotFound/>}/>
-                            </Routes>
-                        </ErrorBoundary>
-                    </main>
-                </div>
-            </div>
+                    {/* Conteúdo principal */}
+                    <div className="flex flex-col flex-1 overflow-hidden">
+                        <Header
+                            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+                            isConfigured={isConfigured}
+                        />
 
-            {/* Notificações */}
-            <ToastContainer
-                position="bottom-right"
-                autoClose={5000}
-                hideProgressBar={false}
-                newestOnTop
-                closeOnClick
-                rtl={false}
-                pauseOnFocusLoss
-                draggable
-                pauseOnHover
-                theme={darkMode ? 'dark' : 'light'}
-            />
+                        <UpdateBanner/>
+
+                        <main className="flex-1 overflow-y-auto p-4">
+                            <ErrorBoundary resetKey={location.pathname}>
+                                <Routes>
+                                    <Route path="/" element={<Dashboard/>}/>
+                                    <Route path="/config" element={<Config onConfigSaved={() => void checkIfConfigured()}/>}/>
+                                    <Route path="/tasks" element={<Tasks/>}/>
+                                    <Route path="/timelog" element={<TimeLog/>}/>
+                                    <Route path="/templates" element={<Templates/>}/>
+                                    <Route path="*" element={<NotFound/>}/>
+                                </Routes>
+                            </ErrorBoundary>
+                        </main>
+                    </div>
+                </div>
+
+                {/* Notificações */}
+                <ToastContainer
+                    position="bottom-right"
+                    autoClose={5000}
+                    hideProgressBar={false}
+                    newestOnTop
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                    theme={darkMode ? 'dark' : 'light'}
+                />
+            </UpdateContext.Provider>
         </ThemeContext.Provider>
     );
 }
