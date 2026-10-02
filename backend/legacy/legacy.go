@@ -67,7 +67,7 @@ func Select(entries []Entry, currentExeDir string) Install {
 			// do desinstalador.
 			exe, _ := SplitCommand(e.UninstallString)
 			if exe != "" {
-				location = filepath.Dir(exe)
+				location = windowsDir(exe)
 			}
 		}
 		if location == "" || (current != "" && normalizeDir(location) == current) {
@@ -139,4 +139,18 @@ func validateUninstaller(uninstallString string) (exe, args string, err error) {
 // (os testes rodam no CI Linux).
 func isAbsWindowsPath(p string) bool {
 	return len(p) >= 3 && p[1] == ':' && (p[2] == '\\' || p[2] == '/')
+}
+
+// windowsDir devolve a pasta de um caminho do Windows. Não usa filepath.Dir
+// porque, no CI Linux, "\" não é separador e o resultado seria ".".
+func windowsDir(p string) string {
+	i := strings.LastIndexAny(p, `\/`)
+	if i < 0 {
+		return ""
+	}
+	if i == 2 && p[1] == ':' {
+		// Raiz do volume: mantém a barra ("C:\").
+		return p[:3]
+	}
+	return p[:i]
 }
