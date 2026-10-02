@@ -10,9 +10,9 @@ on:
 # Versões fixas: `@latest` tornava o build irreprodutível e dependente do que
 # estivesse publicado no dia. WAILS_VERSION deve acompanhar go.mod.
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.27'
   NODE_VERSION: '22'
-  WAILS_VERSION: 'v2.10.1'
+  WAILS_VERSION: 'v2.16.0'
 
 permissions:
   contents: read

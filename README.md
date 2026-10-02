@@ -43,8 +43,8 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 
 ## 🚀 Tecnologias
 
-### Backend (Go 1.24)
-- **Wails v2.10.1** — aplicação desktop híbrida
+### Backend (Go 1.27)
+- **Wails v2.16.0** — aplicação desktop híbrida
 - **go-keyring** — cofre de credenciais do SO
 - **HTTP client** com connection pooling, timeouts e repetição com backoff exponencial
 - **Cache em memória** com TTL por tipo de dado; feriados também em disco
@@ -238,9 +238,9 @@ O aplicativo registra eventos e erros em `~/.teamwork-logger/logs/app.log` (form
 ## 🔧 Desenvolvimento
 
 ### Requisitos
-- Go 1.24+
+- Go 1.27+ (o `toolchain` do go.mod baixa a versão certa automaticamente)
 - Node.js 22+ (o Vite 7 não roda no Node 18)
-- [Wails CLI v2.10.1](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1`
+- [Wails CLI v2.16.0](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0`
 - Windows, para gerar o instalador: [NSIS](https://nsis.sourceforge.io/Download) com `makensis` no `PATH`
 - Linux (Ubuntu 22.04+/Debian 12+): `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev`, e a build tag `webkit2_41` em todo `wails dev`/`wails build`
 

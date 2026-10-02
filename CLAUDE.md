@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Teamwork Time Logger: a Wails v2 desktop app (Go 1.24 backend + React 19/TypeScript strict/Vite/Tailwind frontend) that bulk-logs hours into Teamwork from saved tasks and templates. Go module name is `logTime-go`. The UI, code comments, test names, README and commit messages are all in **Portuguese (pt-BR)** — keep new code and user-facing strings in Portuguese.
+Teamwork Time Logger: a Wails v2 desktop app (Go 1.27 backend + React 19/TypeScript strict/Vite/Tailwind frontend) that bulk-logs hours into Teamwork from saved tasks and templates. Go module name is `logTime-go`. The UI, code comments, test names, README and commit messages are all in **Portuguese (pt-BR)** — keep new code and user-facing strings in Portuguese.
 
 ## Commands
 
 ```bash
-wails dev                         # run the app with hot reload (needs Wails CLI v2.10.1)
+wails dev                         # run the app with hot reload (needs Wails CLI v2.16.0 — must match the go.mod version and WAILS_VERSION in CI)
 wails build                       # production build -> build/bin/teamwork-logger(.exe/.app)
 
 # Same checks CI runs (.github/workflows/build.yml, job "verify"):
