@@ -34,12 +34,17 @@ type App struct {
 	// logsDir é a pasta dos logs configurada em main.go ("" se o arquivo
 	// não pôde ser aberto).
 	logsDir string
+
+	// version é a versão embutida no binário (wails.json, injetada pelo CI).
+	version string
 }
 
 // Options reúne o que main.go descobre antes de criar a App.
 type Options struct {
 	// LogsDir é a pasta onde backend/logging grava app.log.
 	LogsDir string
+	// Version é info.productVersion do wails.json embutido (ver ParseProductVersion).
+	Version string
 }
 
 // api devolve o cliente atual sob lock de leitura.
@@ -90,7 +95,7 @@ func NewApp(ctx context.Context, opts Options) (*App, error) {
 		return nil, fmt.Errorf("erro ao inicializar gerenciador de configurações: %v", err)
 	}
 
-	app := &App{configManager: configManager, logsDir: opts.LogsDir}
+	app := &App{configManager: configManager, logsDir: opts.LogsDir, version: opts.Version}
 	app.setContext(ctx)
 	app.setAPI(api.NewTeamworkAPI(configManager.GetTeamworkConfig()))
 

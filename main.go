@@ -16,6 +16,12 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// wailsJSON é embutido para que o binário saiba a própria versão: o CI grava a
+// versão da tag em info.productVersion antes do `wails build`.
+//
+//go:embed wails.json
+var wailsJSON []byte
+
 func main() {
 	// O log é configurado antes de tudo para que a carga da configuração (e
 	// seus avisos de arquivo corrompido ou credencial antiga) já vá para o
@@ -31,14 +37,17 @@ func main() {
 	}
 	defer logger.Close()
 
+	version := backend.MarkDevVersion(backend.ParseProductVersion(wailsJSON), logging.DevBuild())
+
 	app, err := backend.NewApp(nil, backend.Options{
 		LogsDir: logger.Dir(),
+		Version: version,
 	})
 	if err != nil {
 		fatal("Erro ao inicializar a aplicação", err, logger)
 	}
 
-	slog.Info("Aplicação iniciada")
+	slog.Info("Aplicação iniciada", "versao", version)
 
 	if err := wails.Run(&options.App{
 		Title:  "Teamwork Time Logger",
