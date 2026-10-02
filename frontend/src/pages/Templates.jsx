@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { FiSave, FiEdit, FiTrash2, FiFolder, FiLoader, FiCopy, FiClock } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
     ApplyTemplate,
     ClearSavedTasks,

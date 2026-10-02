@@ -1,5 +1,5 @@
 import {useEffect, useState} from 'react';
-import {useLocation, useNavigate} from 'react-router-dom';
+import {useLocation, useNavigate} from 'react-router';
 import {toast} from 'react-toastify';
 import {GetSavedTasks} from '../../wailsjs/go/backend/App';
 import {errMsg} from '../utils/errors';

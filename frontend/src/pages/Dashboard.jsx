@@ -15,7 +15,7 @@ import {
     FiTrash2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 import TimeEntryManager from '../components/TimeEntryManager';

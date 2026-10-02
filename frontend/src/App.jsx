@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
-import {Route, Routes, useLocation, useNavigate} from 'react-router-dom';
+import {Route, Routes, useLocation, useNavigate} from 'react-router';
 import {toast, ToastContainer} from 'react-toastify';
 // O react-toastify 11 injeta o próprio CSS; não há mais import de ReactToastify.css.
 
