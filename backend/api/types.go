@@ -52,19 +52,19 @@ type EntryTask struct {
 }
 
 type TeamworkTask struct {
-	ID           int    `json:"id"`
-	Content      string `json:"content"`
-	Name         string `json:"name,omitempty"`
-	Description  string `json:"description,omitempty"`
-	ProjectID    int    `json:"projectId"`
-	ProjectName  string `json:"projectName"`
-	Status       string `json:"status,omitempty"`
-	Priority     string `json:"priority,omitempty"`
-	CreatedAt    string `json:"createdAt,omitempty"`
-	StartDate    string `json:"startDate,omitempty"`
-	DueDate      string `json:"dueDate,omitempty"`
-	TasklistID   int    `json:"tasklistId,omitempty"`
-	TasklistName string `json:"tasklistName,omitempty"`
+	ID            int            `json:"id"`
+	Content       string         `json:"content"`
+	Name          string         `json:"name,omitempty"`
+	Description   string         `json:"description,omitempty"`
+	ProjectID     int            `json:"projectId"`
+	ProjectName   string         `json:"projectName"`
+	Status        string         `json:"status,omitempty"`
+	Priority      string         `json:"priority,omitempty"`
+	CreatedAt     string         `json:"createdAt,omitempty"`
+	StartDate     string         `json:"startDate,omitempty"`
+	DueDate       string         `json:"dueDate,omitempty"`
+	TasklistID    int            `json:"tasklistId,omitempty"`
+	TasklistName  string         `json:"tasklistName,omitempty"`
 	Tags          []TaskTag      `json:"tags,omitempty"`
 	Assignees     []TaskAssignee `json:"assignees,omitempty"`
 	LoggedMinutes int            `json:"loggedMinutes,omitempty"`
