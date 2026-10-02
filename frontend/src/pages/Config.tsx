@@ -11,6 +11,8 @@ import {
 } from '@wailsjs/go/backend/App';
 import {errMsg} from '../utils/errors';
 import TimeInputComponent from '../components/TimeInputComponent';
+import AboutSection from '../components/config/AboutSection';
+import DiagnosticsSection from '../components/config/DiagnosticsSection';
 import {setMinutosPorDiaCache} from '../hooks/useMinutosPorDia';
 import {
     formatHoursMinutes,
@@ -373,6 +375,9 @@ const Config = ({ onConfigSaved }: ConfigProps) => {
                     </form>
                 </div>
             )}
+
+            <AboutSection/>
+            <DiagnosticsSection/>
         </div>
     );
 };
