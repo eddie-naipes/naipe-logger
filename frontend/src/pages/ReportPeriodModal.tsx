@@ -1,4 +1,4 @@
-import {type FormEvent, useEffect, useState} from 'react';
+import {type FormEvent, useState} from 'react';
 import {FiAlertCircle, FiCalendar, FiDownload, FiLoader} from 'react-icons/fi';
 import {toast} from 'react-toastify';
 import Modal from '../components/Modal';
@@ -18,9 +18,12 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
     const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (isOpen) setError(null);
-    }, [isOpen]);
+    // O erro some ao fechar, para o modal reabrir limpo (antes era um efeito
+    // que zerava o estado ao abrir).
+    const fechar = () => {
+        setError(null);
+        onClose();
+    };
 
     // Datas 'YYYY-MM-DD' comparam corretamente como texto.
     const invalidRange = Boolean(startDate && endDate && startDate > endDate);
@@ -42,7 +45,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
         setIsExporting(true);
         try {
             await onExport(startDate, endDate);
-            onClose();
+            fechar();
         } catch (err) {
             const msg = errMsg(err);
             console.error('Erro ao exportar relatório do período:', err);
@@ -58,7 +61,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
     return (
         <Modal
             isOpen={isOpen}
-            onClose={onClose}
+            onClose={fechar}
             size="sm"
             title="Exportar Relatório de Período"
             closeDisabled={isExporting}
@@ -126,7 +129,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
                 <div className="mt-6 flex justify-end space-x-3">
                     <button
                         type="button"
-                        onClick={onClose}
+                        onClick={fechar}
                         disabled={isExporting}
                         className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
                     >

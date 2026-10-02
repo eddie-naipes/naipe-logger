@@ -143,7 +143,8 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
                         {isConfigured && (
                             <>
                                 <button
-                                    onClick={handleExportReport}
+                                    type="button"
+                                    onClick={() => void handleExportReport()}
                                     disabled={isExporting}
                                     className="flex items-center w-full px-4 py-3 rounded-lg transition-colors text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 disabled:opacity-50"
                                 >

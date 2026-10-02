@@ -336,6 +336,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesChanged}: TimeEntryManagerP
             </Modal>
 
             <EditEntryModal
+                key={editingEntry?.id ?? 'nenhuma'}
                 entry={isOpen ? editingEntry : null}
                 onClose={() => setEditingEntry(null)}
                 onSaved={handleEntrySaved}

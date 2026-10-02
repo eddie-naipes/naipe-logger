@@ -55,6 +55,9 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
 
     useEffect(() => {
         if (isOpen) {
+            // Carga de dados ao abrir o modal: o setLoading(true) síncrono dentro
+            // de loadCacheStats é o indicador de carregamento, não estado derivado.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             void loadCacheStats();
         }
     }, [isOpen, loadCacheStats]);
@@ -361,7 +364,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                         <div className="text-center py-8">
                             <FiCalendar className="w-12 h-12 mx-auto text-gray-400 dark:text-gray-600 mb-4" />
                             <p className="text-gray-500 dark:text-gray-400">
-                                Nenhum feriado carregado. Selecione um ano e clique em "Carregar Feriados".
+                                Nenhum feriado carregado. Selecione um ano e clique em &quot;Carregar Feriados&quot;.
                             </p>
                         </div>
                     ) : (

@@ -41,7 +41,6 @@ const Tasks = () => {
         mountedRef.current = true;
         return () => {
             mountedRef.current = false;
-            tasksRequestRef.current++;
         };
     }, []);
 
@@ -61,7 +60,7 @@ const Tasks = () => {
     // que "atualizar" não anuncie sucesso depois de uma falha.
     const loadAllTasks = useCallback(async (): Promise<boolean> => {
         const requestId = ++tasksRequestRef.current;
-        const isCurrent = () => requestId === tasksRequestRef.current;
+        const isCurrent = () => mountedRef.current && requestId === tasksRequestRef.current;
 
         try {
             setIsLoading(true);
@@ -88,7 +87,7 @@ const Tasks = () => {
 
     const loadTasksForProject = useCallback(async (projectId: number): Promise<boolean> => {
         const requestId = ++tasksRequestRef.current;
-        const isCurrent = () => requestId === tasksRequestRef.current;
+        const isCurrent = () => mountedRef.current && requestId === tasksRequestRef.current;
         const id = Number(projectId);
 
         try {
@@ -152,6 +151,9 @@ const Tasks = () => {
         };
 
         void loadProjects();
+        // Carga inicial de dados; o setState dentro do carregador é o resultado
+        // da busca, não estado derivado de props.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void loadSavedTasks();
     }, [loadAllTasks, loadTasksForProject, loadSavedTasks]);
 

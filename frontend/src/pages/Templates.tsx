@@ -267,7 +267,7 @@ const Templates = () => {
 
                             {savedTasks.length === 0 ? (
                                 <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
-                                    Nenhuma tarefa disponível. Adicione tarefas na seção "Tarefas".
+                                    Nenhuma tarefa disponível. Adicione tarefas na seção &quot;Tarefas&quot;.
                                 </p>
                             ) : (
                                 <div className="overflow-y-auto max-h-60">

@@ -284,6 +284,9 @@ const Dashboard = () => {
     // loadDashboard é estável (useCallback sem dependências que mudem), então
     // o efeito roda só na montagem; recargas vêm das ações do usuário.
     useEffect(() => {
+        // Carga inicial de dados: o setError(null) síncrono de loadDashboard
+        // limpa o aviso anterior, não é estado derivado.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void loadDashboard();
     }, [loadDashboard]);
 

@@ -133,7 +133,10 @@ const Modal = ({
     };
 
     return (
+        // Fundo escurecido: o clique fora fecha (atalho de mouse). Pelo teclado o
+        // equivalente é o Esc, tratado no efeito acima — daí role="presentation".
         <div
+            role="presentation"
             className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-black bg-opacity-50 p-4`}
             onMouseDown={handleBackdrop}
         >

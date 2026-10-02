@@ -128,11 +128,11 @@ const TimeLog = () => {
                         <FiInfo className="mt-0.5 w-5 h-5 text-blue-500 dark:text-blue-600 mr-2" aria-hidden="true"/>
                         <div>
                             <h3 className="text-sm font-medium text-blue-800 dark:text-blue-400">
-                                Template "{appliedTemplate}" Aplicado
+                                Template &quot;{appliedTemplate}&quot; Aplicado
                             </h3>
                             <p className="mt-1 text-sm text-blue-700 dark:text-blue-200">
                                 {savedTasks.length} tarefas foram carregadas do template. Configure o período e clique
-                                em "Gerar Plano" para continuar.
+                                em &quot;Gerar Plano&quot; para continuar.
                             </p>
                         </div>
                     </div>

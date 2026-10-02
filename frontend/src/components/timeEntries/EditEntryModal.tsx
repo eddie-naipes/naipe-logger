@@ -1,4 +1,4 @@
-import {useEffect, useState} from 'react';
+import {useState} from 'react';
 import {toast} from 'react-toastify';
 import {FiEdit, FiLoader, FiSave} from 'react-icons/fi';
 import {ptBR} from 'date-fns/locale';
@@ -35,6 +35,9 @@ const formFromEntry = (entry: TimeEntryReport | null): EntryForm => {
 };
 
 // Edição de uma entrada de tempo. onSaved() é chamado só quando a API confirma.
+// O formulário nasce da entrada recebida: quem usa deve passar key={entry.id}
+// para que trocar de entrada recrie o estado (em vez de um efeito copiando
+// props para o estado).
 interface EditEntryModalProps {
     entry: TimeEntryReport | null;
     onClose: () => void;
@@ -45,9 +48,6 @@ const EditEntryModal = ({entry, onClose, onSaved}: EditEntryModalProps) => {
     const [form, setForm] = useState<EntryForm>(() => formFromEntry(entry));
     const [updating, setUpdating] = useState(false);
 
-    useEffect(() => {
-        setForm(formFromEntry(entry));
-    }, [entry]);
 
     const setField = <K extends keyof EntryForm>(field: K, value: EntryForm[K]) =>
         setForm(prev => ({...prev, [field]: value}));

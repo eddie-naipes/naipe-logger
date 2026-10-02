@@ -54,6 +54,9 @@ const useTimeEntries = (isOpen: boolean) => {
 
     useEffect(() => {
         if (isOpen) {
+            // Busca as entradas ao abrir e ao mudar o período: o setLoading(true)
+            // síncrono de reload é o indicador de carregamento.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             void reload();
         }
     }, [isOpen, reload]);

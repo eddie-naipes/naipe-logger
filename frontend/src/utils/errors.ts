@@ -16,5 +16,9 @@ export const errMsg = (error: unknown, fallback = 'Erro desconhecido'): string =
             return fallback;
         }
     }
-    return String(error as string | number | boolean | bigint | symbol);
+    if (typeof error === 'number' || typeof error === 'boolean' || typeof error === 'bigint') {
+        return String(error);
+    }
+    if (typeof error === 'symbol') return error.toString();
+    return fallback;
 };

@@ -26,7 +26,7 @@ const TaskSelector = ({savedTasks, selectedTasks, onToggle, onToggleAll}: TaskSe
                             Nenhuma tarefa salva
                         </h3>
                         <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-200">
-                            Adicione tarefas na seção "Tarefas" ou aplique um template da seção "Templates".
+                            Adicione tarefas na seção &quot;Tarefas&quot; ou aplique um template da seção &quot;Templates&quot;.
                         </p>
                     </div>
                 </div>
