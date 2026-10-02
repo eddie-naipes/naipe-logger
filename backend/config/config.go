@@ -50,9 +50,11 @@ type Manager struct {
 }
 
 type AppConfig struct {
-	TeamworkConfig api.Config  `json:"teamworkConfig"`
-	SavedTasks     []api.Task  `json:"savedTasks"`
-	AppSettings    AppSettings `json:"appSettings"`
+	TeamworkConfig api.Config       `json:"teamworkConfig"`
+	SavedTasks     []api.Task       `json:"savedTasks"`
+	AppSettings    AppSettings      `json:"appSettings"`
+	Reminders      ReminderSettings `json:"reminders"`
+	Timer          TimerSettings    `json:"timer"`
 }
 
 type AppSettings struct {
@@ -103,6 +105,8 @@ func defaultAppConfig() *AppConfig {
 			Language:              "pt-BR",
 			CheckUpdatesOnStartup: true,
 		},
+		Reminders: DefaultReminderSettings(),
+		Timer:     DefaultTimerSettings(),
 	}
 }
 
