@@ -521,85 +521,16 @@ func (t *TeamworkAPI) CalculateTotalMinutes(tarefas []Task) int {
 	return total
 }
 
+// GetHoursLoggedInPeriod devolve as horas lançadas pelo usuário no período,
+// somadas pelo próprio Teamwork em time/total.json. Listar time.json e somar
+// aqui exigiria paginar tudo — e a versão anterior ainda usava fromDate/toDate,
+// que a v3 ignora (o correto é startDate/endDate).
 func (t *TeamworkAPI) GetHoursLoggedInPeriod(startDate, endDate string) (float64, error) {
-	userID := strconv.Itoa(t.Config.UserID)
-	path := fmt.Sprintf("/projects/api/v3/time.json?userId=%s&fromDate=%s&toDate=%s",
-		userID, startDate, endDate)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
+	total, err := t.GetTimeTotalsForPeriod(startDate, endDate)
 	if err != nil {
 		return 0, err
 	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter registros de tempo: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	var response struct {
-		TimeEntries []struct {
-			Minutes float64 `json:"minutes"`
-		} `json:"timeEntries"`
-	}
-
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return t.GetHoursLoggedInPeriodLegacy(startDate, endDate)
-	}
-
-	totalMinutos := 0.0
-	for _, entry := range response.TimeEntries {
-		totalMinutos += entry.Minutes
-	}
-
-	return totalMinutos / 60.0, nil
-}
-
-func (t *TeamworkAPI) GetHoursLoggedInPeriodLegacy(startDate, endDate string) (float64, error) {
-	userID := strconv.Itoa(t.Config.UserID)
-	path := fmt.Sprintf("/time/total.json?userId=%s&fromDate=%s&toDate=%s",
-		userID, startDate, endDate)
-	url := t.buildURL(path)
-
-	req, err := t.createRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, body, err := t.doRequest(req)
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != 200 {
-		return 0, fmt.Errorf("erro ao obter registros de tempo legado: %d %s", resp.StatusCode, resp.Status)
-	}
-
-	var rawResponse map[string]interface{}
-	if err := json.Unmarshal(body, &rawResponse); err != nil {
-		return 0, err
-	}
-
-	totalMinutos := 0.0
-
-	if timeEntriesRaw, ok := rawResponse["time-entries"]; ok {
-		if timeEntriesArr, ok := timeEntriesRaw.([]interface{}); ok {
-			for _, entryRaw := range timeEntriesArr {
-				if entry, ok := entryRaw.(map[string]interface{}); ok {
-					if mins, ok := entry["minutes"].(float64); ok {
-						totalMinutos += mins
-					}
-				}
-			}
-		}
-	}
-
-	return totalMinutos / 60.0, nil
+	return float64(total.TimeTotals.Minutes) / 60.0, nil
 }
 
 func (t *TeamworkAPI) GetTimeLogsForPeriod(startDate, endDate string) ([]map[string]interface{}, float64, map[string]interface{}, error) {

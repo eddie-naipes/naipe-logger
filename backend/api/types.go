@@ -163,6 +163,12 @@ type ProjectsResponse struct {
 	TotalPages  int       `json:"totalPages"`
 	TotalItems  int       `json:"totalItems"`
 	ItemsOnPage int       `json:"itemsOnPage"`
+	Meta        struct {
+		Page struct {
+			HasMore    bool `json:"hasMore"`
+			TotalItems int  `json:"totalItems"`
+		} `json:"page"`
+	} `json:"meta"`
 }
 
 // LoginResponse é devolvido ao frontend após a validação do token. Não carrega

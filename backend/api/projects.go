@@ -71,6 +71,11 @@ func (t *TeamworkAPI) GetProjectCount() (int, error) {
 		return 0, fmt.Errorf("erro ao decodificar resposta: %v", err)
 	}
 
+	// A v3 informa o total em meta.page.totalItems, como em GetTaskCount. O
+	// campo no topo só existia em formatos antigos e vinha zerado.
+	if response.Meta.Page.TotalItems > 0 {
+		return response.Meta.Page.TotalItems, nil
+	}
 	return response.TotalItems, nil
 }
 

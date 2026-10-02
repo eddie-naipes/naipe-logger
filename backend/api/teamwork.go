@@ -97,13 +97,16 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	startDate := firstDay.Format("2006-01-02")
 	endDate := lastDay.Format("2006-01-02")
 
+	mesAnteriorInicio := firstDay.AddDate(0, -1, 0).Format("2006-01-02")
+	mesAnteriorFim := firstDay.AddDate(0, 0, -1).Format("2006-01-02")
+
 	var wg sync.WaitGroup
-	var taskCountErr, projectCountErr, hoursLoggedErr, workDaysErr error
+	var taskCountErr, projectCountErr, hoursLoggedErr, hoursPrevErr, workDaysErr error
 	var tarefasPendentes, projetosAtivos int
 	var horasLogadas, horasLogadasAnterior float64
 	var diasUteis []string
 
-	wg.Add(4)
+	wg.Add(5)
 
 	go func() {
 		defer wg.Done()
@@ -115,16 +118,18 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 		projetosAtivos, projectCountErr = t.GetProjectCount()
 	}()
 
+	// As horas vêm de time/total.json, que já soma no servidor. A versão
+	// anterior listava time.json com fromDate/toDate — parâmetros que a v3
+	// ignora — e sem paginar, então o número não batia com o Teamwork e o
+	// binding precisava sobrescrevê-lo.
 	go func() {
 		defer wg.Done()
 		horasLogadas, hoursLoggedErr = t.GetHoursLoggedInPeriod(startDate, endDate)
-		if hoursLoggedErr == nil {
-			mesAnteriorPrimeiroDia := time.Date(firstDay.Year(), firstDay.Month()-1, 1, 0, 0, 0, 0, firstDay.Location())
-			mesAnteriorUltimoDia := time.Date(firstDay.Year(), firstDay.Month(), 0, 0, 0, 0, 0, firstDay.Location())
-			startDateAnterior := mesAnteriorPrimeiroDia.Format("2006-01-02")
-			endDateAnterior := mesAnteriorUltimoDia.Format("2006-01-02")
-			horasLogadasAnterior, _ = t.GetHoursLoggedInPeriod(startDateAnterior, endDateAnterior)
-		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		horasLogadasAnterior, hoursPrevErr = t.GetHoursLoggedInPeriod(mesAnteriorInicio, mesAnteriorFim)
 	}()
 
 	go func() {
@@ -147,15 +152,15 @@ func (t *TeamworkAPI) GetDashboardStats() (map[string]interface{}, error) {
 	}
 
 	if hoursLoggedErr != nil {
+		t.logWarn("Erro ao obter horas do mês: %v", hoursLoggedErr)
 		stats["horasLogadas"] = 0.0
 		stats["horasLogadasChange"] = 0
 	} else {
 		stats["horasLogadas"] = horasLogadas
-		if horasLogadasAnterior > 0 {
+		stats["horasLogadasChange"] = 0
+		if hoursPrevErr == nil && horasLogadasAnterior > 0 {
 			horasChange := ((horasLogadas - horasLogadasAnterior) / horasLogadasAnterior) * 100
 			stats["horasLogadasChange"] = int(horasChange)
-		} else {
-			stats["horasLogadasChange"] = 0
 		}
 	}
 
