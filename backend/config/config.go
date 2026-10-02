@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"logTime-go/backend/api"
+	"logTime-go/backend/internal/fsutil"
 	"logTime-go/backend/security"
 	"os"
 	"path/filepath"
@@ -16,8 +17,8 @@ import (
 // Permissões dos arquivos de configuração: só o dono do perfil acessa. O token
 // não fica nesses arquivos, mas eles revelam host, ID de usuário e tarefas.
 const (
-	dirPerm  os.FileMode = 0700
-	filePerm os.FileMode = 0600
+	dirPerm  = fsutil.DirPerm
+	filePerm = fsutil.FilePerm
 )
 
 // Indireção sobre o cofre de credenciais para que os testes não dependam de um
@@ -158,12 +159,11 @@ func (m *Manager) CorruptedConfigBackups() []string {
 }
 
 func getConfigDir() (string, error) {
-	homeDir, err := os.UserHomeDir()
+	dir, err := fsutil.AppDir()
 	if err != nil {
 		return "", fmt.Errorf("erro ao obter diretório do usuário: %v", err)
 	}
-
-	return filepath.Join(homeDir, ".teamwork-logger"), nil
+	return dir, nil
 }
 
 func (m *Manager) GetTeamworkConfig() api.Config {
@@ -500,43 +500,8 @@ func (m *Manager) saveTemplatesLocked() error {
 	return nil
 }
 
-// writeFileAtomic grava data em path sem nunca deixar um arquivo pela metade:
-// escreve num temporário do mesmo diretório, força para o disco e o renomeia
-// por cima do destino. Uma queda de energia ou um crash no meio da escrita
-// deixa o arquivo antigo intacto em vez de um JSON truncado.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) (err error) {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	closed := false
-	defer func() {
-		if err != nil {
-			if !closed {
-				_ = tmp.Close()
-			}
-			_ = os.Remove(tmpName)
-		}
-	}()
-
-	if _, err = tmp.Write(data); err != nil {
-		return err
-	}
-	if err = tmp.Sync(); err != nil {
-		return err
-	}
-	closed = true
-	if err = tmp.Close(); err != nil {
-		return err
-	}
-	// O rename leva junto as permissões do temporário, de modo que um destino
-	// antigo com permissões abertas passa a ter perm.
-	if err = os.Chmod(tmpName, perm); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
-}
+// writeFileAtomic é a gravação atômica compartilhada com o cache de feriados.
+var writeFileAtomic = fsutil.WriteFileAtomic
 
 // CheckAndMoveConfigFromExecDir migra config.json/templates.json deixados ao
 // lado do executável (versões antigas) para ~/.teamwork-logger. Devolve true
