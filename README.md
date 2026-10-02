@@ -52,11 +52,12 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 - **log/slog** com arquivo rotativo próprio (sem dependências)
 - **golang.org/x/sys/windows/registry** para detectar instalações antigas
 
-### Frontend (React 18)
-- **React Router**, **TailwindCSS**, **React Icons (Feather)**
-- **date-fns** com locale pt-BR
+### Frontend (React 19 + TypeScript)
+- **TypeScript** em modo estrito, com os bindings tipados pelo código gerado pelo Wails
+- **React Router 7**, **TailwindCSS**, **React Icons (Feather)**
+- **date-fns 4** com locale pt-BR
 - **React Toastify**, **clsx**
-- **Vite 7**
+- **Vite 7**, **Vitest** + Testing Library, **ESLint** (typescript-eslint)
 
 ## 🛠️ Estrutura do Projeto
 
@@ -89,12 +90,16 @@ teamwork-logger/
 │   └── app_*.go            # Bindings expostos ao frontend, por domínio
 ├── frontend/
 │   ├── src/
-│   │   ├── components/     # Sidebar, Header, MonthlyTimeCalendar,
-│   │   │                   # TimeEntryManager, HolidayManager, UserProfile,
-│   │   │                   # TimeInputComponent
+│   │   ├── components/     # Sidebar, Header, Modal, MonthlyTimeCalendar,
+│   │   │                   # TimeEntryManager, HolidayManager, UpdateBanner,
+│   │   │                   # StartupNotices, ...
 │   │   ├── pages/          # Dashboard, Config, Task, TimeLog, Templates,
 │   │   │                   # ReportPeriodModal, NotFound
-│   │   └── contexts/       # ThemeContext
+│   │   ├── hooks/          # usePlan, useBatchSubmit, useUpdate, ...
+│   │   ├── utils/          # Datas, horas, erros, repetição
+│   │   ├── types/          # Tipos dos dados do backend
+│   │   └── contexts/       # ThemeContext, UpdateContext
+│   ├── wailsjs/            # Bindings gerados pelo Wails (alias @wailsjs)
 │   └── index.html
 └── main.go
 ```
@@ -171,6 +176,10 @@ Templates são salvos em `templates.json`. Não há versionamento nem exportaç�
 - Domínio da empresa e token de API
 - Validação do token contra a API antes de salvar
 - Logout, que remove o token do cofre do sistema
+- **Sobre / Atualizações**: versão atual, botão "Verificar atualizações" e a opção "Verificar atualizações ao iniciar"
+- **Diagnóstico**: caminho do arquivo de log e atalho para abrir a pasta
+
+Quando há versão nova, um aviso no topo da janela mostra as novidades da release e oferece "Atualizar agora" (Windows, com barra de progresso) ou "Abrir página da versão"; dá para dispensá-lo até a próxima abertura. Na inicialização o app também avisa se a configuração estava corrompida (listando os backups) e, no Windows, se há uma instalação antiga para remover.
 
 ### 🗂️ Gerenciador de Apontamentos
 
@@ -257,9 +266,14 @@ Ao mudar um binding em `backend/app*.go`, rode `wails generate module` e comite 
 gofmt -l backend/ main.go   # deve não listar nada
 go vet ./...
 go test ./...
-go test -race ./...         # requer CGO_ENABLED=1 e um compilador C
+go test -race ./...         # requer CGO_ENABLED=1 e gcc (no Windows: MinGW, ex. `scoop install mingw`)
 
-cd frontend && npm audit --audit-level=high
+cd frontend
+npm run typecheck           # TypeScript estrito
+npm run lint                # ESLint, sem avisos
+npm test                    # Vitest
+npm run coverage            # Vitest com cobertura
+npm audit --audit-level=high
 ```
 
 ### Build de produção
