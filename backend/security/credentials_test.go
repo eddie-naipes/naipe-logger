@@ -114,3 +114,33 @@ func TestStoreTokenSobrescreveAnterior(t *testing.T) {
 		t.Errorf("LoadToken = %q, esperava o token mais recente", got)
 	}
 }
+
+// errCofreIndisponivel simula um cofre do sistema que falha (chaveiro trancado,
+// Secret Service ausente etc.), o que é diferente de não haver token gravado.
+var errCofreIndisponivel = errors.New("cofre indisponível")
+
+func TestErroGenericoDoCofreEPropagado(t *testing.T) {
+	keyring.MockInitWithError(errCofreIndisponivel)
+	t.Cleanup(keyring.MockInit)
+
+	if err := StoreToken("tkn"); !errors.Is(err, errCofreIndisponivel) {
+		t.Errorf("StoreToken = %v, esperava erro envolvendo a falha do cofre", err)
+	}
+
+	got, err := LoadToken()
+	if !errors.Is(err, errCofreIndisponivel) {
+		t.Errorf("LoadToken = %v, esperava erro envolvendo a falha do cofre", err)
+	}
+	// Falha do cofre não pode ser confundida com "não configurado": a UI
+	// mandaria o usuário reconectar sem que o problema fosse o token.
+	if errors.Is(err, ErrNoToken) {
+		t.Error("LoadToken tratou falha do cofre como ErrNoToken")
+	}
+	if got != "" {
+		t.Errorf("LoadToken devolveu %q junto com erro", got)
+	}
+
+	if err := DeleteToken(); !errors.Is(err, errCofreIndisponivel) {
+		t.Errorf("DeleteToken = %v, esperava erro envolvendo a falha do cofre", err)
+	}
+}
