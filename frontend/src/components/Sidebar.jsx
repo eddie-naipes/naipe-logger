@@ -18,6 +18,8 @@ import { ThemeContext } from '../contexts/ThemeContext';
 import UserProfile from './UserProfile';
 import TimeEntryManager from './TimeEntryManager';
 import clsx from 'clsx';
+import {DownloadCurrentMonthReport, OpenDirectoryPath} from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
 
 const Sidebar = ({ isOpen, onClose, isConfigured }) => {
     const { darkMode, toggleDarkMode } = useContext(ThemeContext);
@@ -70,12 +72,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
         setIsExporting(true);
 
         try {
-            const filePath = await window.go.backend.App.DownloadCurrentMonthReport();
+            const filePath = await DownloadCurrentMonthReport();
             toast.success(`Relatório exportado com sucesso para: ${filePath}`);
-            await window.go.backend.App.OpenDirectoryPath(filePath);
+            await OpenDirectoryPath(filePath);
         } catch (error) {
             console.error("Erro ao exportar relatório:", error);
-            toast.error("Não foi possível exportar o relatório: " + (error.message || "Erro desconhecido"));
+            toast.error("Não foi possível exportar o relatório: " + errMsg(error));
         } finally {
             setIsExporting(false);
         }
@@ -91,6 +93,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                 <div
                     className="fixed inset-0 z-10 bg-gray-900 bg-opacity-50 lg:hidden"
                     onClick={onClose}
+                    aria-hidden="true"
                 />
             )}
 
@@ -107,6 +110,7 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
                         </h1>
                         <button
                             onClick={onClose}
+                            aria-label="Fechar menu"
                             className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 lg:hidden"
                         >
                             <FiX className="w-5 h-5 text-gray-500 dark:text-gray-400" />
@@ -184,9 +188,6 @@ const Sidebar = ({ isOpen, onClose, isConfigured }) => {
             <TimeEntryManager
                 isOpen={isTimeManagerOpen}
                 onClose={handleTimeManagerClose}
-                onEntriesDeleted={() => {
-                    toast.success('Entradas deletadas com sucesso!');
-                }}
             />
         </>
     );

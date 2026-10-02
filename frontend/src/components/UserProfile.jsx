@@ -1,7 +1,9 @@
 // src/components/UserProfile.jsx
 import React, { useState, useEffect } from 'react';
 import { FiUser, FiMail } from 'react-icons/fi';
-import mascotImage from '../assets/mascot.png';
+import mascotImage from '../assets/mascot.webp';
+import {GetUserProfile} from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
 
 const UserProfile = () => {
     const [profile, setProfile] = useState(null);
@@ -12,12 +14,12 @@ const UserProfile = () => {
         const loadProfile = async () => {
             try {
                 setLoading(true);
-                const userProfile = await window.go.backend.App.GetUserProfile();
+                const userProfile = await GetUserProfile();
                 setProfile(userProfile);
                 setError(null);
             } catch (error) {
                 console.error('Erro ao carregar perfil:', error);
-                setError(error.message || 'Erro ao carregar perfil');
+                setError(errMsg(error, 'Erro ao carregar perfil'));
             } finally {
                 setLoading(false);
             }

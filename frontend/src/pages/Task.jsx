@@ -1,7 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { FiList, FiRefreshCw, FiSearch, FiPlus, FiTrash2, FiSave, FiClock, FiEdit, FiFilter } from 'react-icons/fi';
 import TimeInputComponent from '../components/TimeInputComponent';
+import {
+    GetProjects,
+    GetSavedTasks,
+    GetTasks,
+    GetTasksByProject,
+    RemoveTask,
+    SaveTask
+} from '../../wailsjs/go/backend/App';
+import {errMsg} from '../utils/errors';
+import {
+    DIAS_SEMANA,
+    formatWorkingDays,
+    hoursAndMinutesToMinutes,
+    minutesToHoursAndMinutes,
+    sumEntryMinutes
+} from '../utils/time';
 
 const Tasks = () => {
     const [projects, setProjects] = useState([]);
@@ -14,100 +30,106 @@ const Tasks = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTask, setSelectedTask] = useState(null);
 
-    const diasSemana = [
-        { id: 1, nome: 'Segunda', abrev: 'Seg' },
-        { id: 2, nome: 'Terça', abrev: 'Ter' },
-        { id: 3, nome: 'Quarta', abrev: 'Qua' },
-        { id: 4, nome: 'Quinta', abrev: 'Qui' },
-        { id: 5, nome: 'Sexta', abrev: 'Sex' },
-        { id: 6, nome: 'Sábado', abrev: 'Sáb' },
-        { id: 0, nome: 'Domingo', abrev: 'Dom' }
-    ];
+    // Cada carga de tarefas recebe um id; respostas de cargas antigas (ex.: o
+    // usuário trocou de projeto antes da anterior terminar) são descartadas.
+    const tasksRequestRef = useRef(0);
+    const mountedRef = useRef(true);
 
-    // Funções auxiliares para conversão de tempo
-    const minutesToHoursAndMinutes = (totalMinutes) => {
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        return { hours, minutes };
-    };
-
-    const hoursAndMinutesToMinutes = (hours, minutes) => {
-        return (hours * 60) + minutes;
-    };
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+            tasksRequestRef.current++;
+        };
+    }, []);
 
     useEffect(() => {
         const loadProjects = async () => {
             try {
                 setIsLoadingProjects(true);
-                const projectsList = await window.go.backend.App.GetProjects();
-                setProjects(projectsList);
+                const projectsList = await GetProjects();
+                if (!mountedRef.current) return;
+                setProjects(projectsList || []);
 
                 if (projectsList && projectsList.length > 0) {
-                    setSelectedProjectId(projectsList[0].id);
-                    loadTasksForProject(projectsList[0].id);
+                    const firstId = Number(projectsList[0].id);
+                    setSelectedProjectId(firstId);
+                    loadTasksForProject(firstId);
                 } else {
                     loadAllTasks();
                 }
             } catch (error) {
                 console.error('Erro ao carregar projetos:', error);
-                toast.error('Erro ao carregar projetos. Tentando carregar tarefas diretamente...');
+                if (!mountedRef.current) return;
+                toast.error('Erro ao carregar projetos (' + errMsg(error) + '). Tentando carregar tarefas diretamente...');
                 loadAllTasks();
             } finally {
-                setIsLoadingProjects(false);
+                if (mountedRef.current) setIsLoadingProjects(false);
             }
         };
 
         loadProjects();
         loadSavedTasks();
+        // Carga inicial apenas.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadSavedTasks = async () => {
         try {
-            const saved = await window.go.backend.App.GetSavedTasks();
-            setSavedTasks(saved);
+            const saved = await GetSavedTasks();
+            if (mountedRef.current) setSavedTasks(saved || []);
         } catch (error) {
             console.error('Erro ao carregar tarefas salvas:', error);
-            toast.error('Erro ao carregar tarefas salvas.');
+            toast.error('Erro ao carregar tarefas salvas: ' + errMsg(error));
         }
     };
 
+    // loadAllTasks/loadTasksForProject devolvem true em caso de sucesso, para
+    // que "atualizar" não anuncie sucesso depois de uma falha.
     const loadAllTasks = async () => {
+        const requestId = ++tasksRequestRef.current;
+        const isCurrent = () => requestId === tasksRequestRef.current;
+
         try {
             setIsLoading(true);
             setTasks([]);
 
-            const teamworkTasks = await window.go.backend.App.GetTasks();
+            const teamworkTasks = await GetTasks();
+            if (!isCurrent()) return false;
             setTasks(teamworkTasks || []);
 
             if (!teamworkTasks || teamworkTasks.length === 0) {
                 toast.info('Nenhuma tarefa encontrada.');
             }
+            return true;
         } catch (error) {
             console.error('Erro ao carregar todas as tarefas:', error);
-            toast.error('Erro ao carregar tarefas: ' + (error.message || 'Erro desconhecido'));
+            if (!isCurrent()) return false;
+            toast.error('Erro ao carregar tarefas: ' + errMsg(error));
             setTasks([]);
+            return false;
         } finally {
-            setIsLoading(false);
+            if (isCurrent()) setIsLoading(false);
         }
     };
 
     const loadTasksForProject = async (projectId) => {
+        const requestId = ++tasksRequestRef.current;
+        const isCurrent = () => requestId === tasksRequestRef.current;
+        const id = Number(projectId);
+
         try {
             setIsLoading(true);
             setTasks([]);
 
-            console.log(`Carregando tarefas para projeto ID: ${projectId} (tipo: ${typeof projectId})`);
-
-            const teamworkTasks = await window.go.backend.App.GetTasksByProject(projectId);
+            const teamworkTasks = await GetTasksByProject(id);
+            if (!isCurrent()) return false;
 
             if (teamworkTasks && teamworkTasks.length > 0) {
+                // projectId 0 = a API não informou o projeto da tarefa.
                 const validTasks = teamworkTasks.filter(task =>
-                    task.projectId === projectId || task.projectId === 0
+                    Number(task.projectId) === id || task.projectId === 0
                 );
-
-                if (validTasks.length !== teamworkTasks.length) {
-                    console.warn(`Filtradas ${teamworkTasks.length - validTasks.length} tarefas de outros projetos`);
-                }
 
                 setTasks(validTasks);
 
@@ -118,29 +140,29 @@ const Tasks = () => {
                 setTasks([]);
                 toast.info('Nenhuma tarefa encontrada neste projeto.');
             }
+            return true;
         } catch (error) {
-            console.error(`Erro ao carregar tarefas do projeto ${projectId}:`, error);
-            toast.error('Erro ao carregar tarefas do projeto: ' + (error.message || 'Erro desconhecido'));
+            console.error(`Erro ao carregar tarefas do projeto ${id}:`, error);
+            if (!isCurrent()) return false;
+            toast.error('Erro ao carregar tarefas do projeto: ' + errMsg(error));
             setTasks([]);
+            return false;
         } finally {
-            setIsLoading(false);
+            if (isCurrent()) setIsLoading(false);
         }
     };
 
     const refreshTasks = async () => {
+        setIsRefreshing(true);
         try {
-            setIsRefreshing(true);
-            if (selectedProjectId) {
-                await loadTasksForProject(selectedProjectId);
-            } else {
-                await loadAllTasks();
+            const ok = selectedProjectId
+                ? await loadTasksForProject(selectedProjectId)
+                : await loadAllTasks();
+            if (ok) {
+                toast.success('Tarefas atualizadas com sucesso!');
             }
-            toast.success('Tarefas atualizadas com sucesso!');
-        } catch (error) {
-            console.error('Erro ao atualizar tarefas:', error);
-            toast.error('Erro ao atualizar tarefas.');
         } finally {
-            setIsRefreshing(false);
+            if (mountedRef.current) setIsRefreshing(false);
         }
     };
 
@@ -149,20 +171,24 @@ const Tasks = () => {
         setSearchTerm('');
         setSelectedTask(null);
 
-        setSelectedProjectId(projectId);
-
-        if (projectId) {
-            const projectIdNumber = parseInt(projectId, 10);
-            if (!isNaN(projectIdNumber) && projectIdNumber > 0) {
-                loadTasksForProject(projectIdNumber);
-            } else {
-                console.error('Project ID inválido:', projectId);
-                toast.error('ID do projeto inválido');
-                setTasks([]);
-            }
-        } else {
+        // O <select> devolve string; o id é guardado como Number para casar com
+        // task.projectId e com o tipo esperado pelo binding.
+        if (projectId === '' || projectId === null || projectId === undefined) {
+            setSelectedProjectId('');
             loadAllTasks();
+            return;
         }
+
+        const projectIdNumber = Number(projectId);
+        if (!Number.isInteger(projectIdNumber) || projectIdNumber <= 0) {
+            console.error('Project ID inválido:', projectId);
+            toast.error('ID do projeto inválido');
+            setSelectedProjectId('');
+            return;
+        }
+
+        setSelectedProjectId(projectIdNumber);
+        loadTasksForProject(projectIdNumber);
     };
 
     const handleSelectTask = (task) => {
@@ -222,7 +248,7 @@ const Tasks = () => {
         const currentDays = selectedTask.workingDays || [];
         const newDays = currentDays.includes(dayId)
             ? currentDays.filter(day => day !== dayId)
-            : [...currentDays, dayId].sort();
+            : [...currentDays, dayId].sort((a, b) => a - b);
 
         setSelectedTask({
             ...selectedTask,
@@ -298,45 +324,25 @@ const Tasks = () => {
         }
 
         try {
-            await window.go.backend.App.SaveTask(selectedTask);
+            await SaveTask(selectedTask);
             await loadSavedTasks();
             setSelectedTask(null);
             toast.success('Tarefa salva com sucesso!');
         } catch (error) {
             console.error('Erro ao salvar tarefa:', error);
-            toast.error('Erro ao salvar tarefa.');
+            toast.error('Erro ao salvar tarefa: ' + errMsg(error));
         }
     };
 
     const removeTask = async (taskId) => {
         try {
-            await window.go.backend.App.RemoveTask(taskId);
+            await RemoveTask(taskId);
             await loadSavedTasks();
             toast.success('Tarefa removida com sucesso!');
         } catch (error) {
             console.error('Erro ao remover tarefa:', error);
-            toast.error('Erro ao remover tarefa.');
+            toast.error('Erro ao remover tarefa: ' + errMsg(error));
         }
-    };
-
-    const formatWorkingDays = (workingDays) => {
-        if (!workingDays || workingDays.length === 0) return 'Todos os dias';
-
-        const diasNomes = {
-            0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua',
-            4: 'Qui', 5: 'Sex', 6: 'Sáb'
-        };
-
-        if (workingDays.length === 7) return 'Todos os dias';
-        if (workingDays.length === 5 &&
-            [1,2,3,4,5].every(day => workingDays.includes(day))) {
-            return 'Dias úteis';
-        }
-
-        return workingDays
-            .sort()
-            .map(day => diasNomes[day])
-            .join(', ');
     };
 
     const filteredTasks = tasks.filter(task =>
@@ -344,9 +350,7 @@ const Tasks = () => {
         (task.projectName && task.projectName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    const totalMinutes = selectedTask
-        ? selectedTask.entries.reduce((sum, entry) => sum + entry.minutes, 0)
-        : 0;
+    const totalMinutes = selectedTask ? sumEntryMinutes(selectedTask.entries) : 0;
 
     return (
         <div>
@@ -365,6 +369,8 @@ const Tasks = () => {
                         <button
                             onClick={refreshTasks}
                             disabled={isRefreshing}
+                            aria-label="Atualizar tarefas"
+                            title="Atualizar tarefas"
                             className="p-2 text-gray-500 hover:text-primary-600 dark:text-gray-400 dark:hover:text-primary-500"
                         >
                             <FiRefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -378,11 +384,7 @@ const Tasks = () => {
                         <select
                             id="projectSelect"
                             value={selectedProjectId}
-                            onChange={(e) => {
-                                const value = e.target.value;
-                                console.log(`Projeto selecionado: "${value}" (tipo: ${typeof value})`);
-                                handleProjectChange(value);
-                            }}
+                            onChange={(e) => handleProjectChange(e.target.value)}
                             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             disabled={isLoadingProjects}
                         >
@@ -409,6 +411,7 @@ const Tasks = () => {
                             type="text"
                             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
                             placeholder="Pesquisar tarefas..."
+                            aria-label="Pesquisar tarefas"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -455,7 +458,7 @@ const Tasks = () => {
                                                             {task.projectName}
                                                         </p>
                                                     )}
-                                                    {process.env.NODE_ENV === 'development' && (
+                                                    {import.meta.env.DEV && (
                                                         <p className="text-xs text-gray-400">
                                                             ID: {task.id} | ProjectID: {task.projectId || 'N/A'}
                                                         </p>
@@ -463,6 +466,7 @@ const Tasks = () => {
                                                 </div>
                                                 <button
                                                     onClick={() => handleSelectTask(task)}
+                                                    aria-label={`Adicionar tarefa ${task.content || task.name || task.id} às favoritas`}
                                                     className="ml-2 p-1 text-primary-600 hover:bg-primary-50 rounded dark:text-primary-500 dark:hover:bg-gray-700"
                                                     title="Adicionar tarefa à lista de favoritas"
                                                 >
@@ -511,13 +515,13 @@ const Tasks = () => {
                                             onClick={selectAllDays}
                                             className="text-xs text-primary-600 dark:text-primary-500 hover:underline"
                                         >
-                                            {diasSemana.every(day => selectedTask.workingDays?.includes(day.id)) ? 'Desmarcar Todos' : 'Todos os Dias'}
+                                            {DIAS_SEMANA.every(day => selectedTask.workingDays?.includes(day.id)) ? 'Desmarcar Todos' : 'Todos os Dias'}
                                         </button>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-7 gap-2">
-                                    {diasSemana.map(dia => (
+                                    {DIAS_SEMANA.map(dia => (
                                         <label
                                             key={dia.id}
                                             className={`flex flex-col items-center p-2 rounded-lg border-2 cursor-pointer transition-colors ${
@@ -571,7 +575,10 @@ const Tasks = () => {
                                                     Entrada {index + 1}
                                                 </h5>
                                                 <button
+                                                    type="button"
                                                     onClick={() => removeEntry(index)}
+                                                    aria-label={`Remover entrada ${index + 1}`}
+                                                    title="Remover entrada"
                                                     className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                                                 >
                                                     <FiTrash2 className="w-4 h-4" />
@@ -588,10 +595,11 @@ const Tasks = () => {
                                                 />
 
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                    <label htmlFor={`entry-${index}-time`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                         Hora
                                                     </label>
                                                     <input
+                                                        id={`entry-${index}-time`}
                                                         type="time"
                                                         value={entry.time ? entry.time.substring(0, 5) : "09:00"}
                                                         onChange={(e) => updateEntry(index, 'time', e.target.value + ":00")}
@@ -601,10 +609,11 @@ const Tasks = () => {
                                             </div>
 
                                             <div className="mb-3">
-                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label htmlFor={`entry-${index}-description`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Descrição
                                                 </label>
                                                 <input
+                                                    id={`entry-${index}-description`}
                                                     type="text"
                                                     value={entry.description}
                                                     onChange={(e) => updateEntry(index, 'description', e.target.value)}
@@ -613,10 +622,11 @@ const Tasks = () => {
                                             </div>
 
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                <label htmlFor={`entry-${index}-billable`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                                                     Cobrável
                                                 </label>
                                                 <select
+                                                    id={`entry-${index}-billable`}
                                                     value={entry.isBillable.toString()}
                                                     onChange={(e) => updateEntry(index, 'isBillable', e.target.value)}
                                                     className="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2 dark:bg-gray-600 dark:border-gray-500 dark:text-white"
@@ -677,7 +687,7 @@ const Tasks = () => {
                                                         </h3>
                                                         <p className="text-xs text-gray-500 dark:text-gray-400">
                                                             {task.projectName} • {task.entries.length} entradas •
-                                                            {task.entries.reduce((sum, e) => sum + e.minutes, 0)} min
+                                                            {sumEntryMinutes(task.entries)} min
                                                             {task.workingDays && (
                                                                 <span className="block text-blue-600 dark:text-blue-400 mt-1">
                                                                    <FiClock className="inline w-3 h-3 mr-1" />
@@ -688,13 +698,19 @@ const Tasks = () => {
                                                     </div>
                                                     <div className="flex space-x-1">
                                                         <button
+                                                            type="button"
                                                             onClick={() => editSavedTask(task)}
+                                                            aria-label={`Editar tarefa ${task.taskName}`}
+                                                            title="Editar tarefa"
                                                             className="p-1 text-primary-600 hover:bg-primary-50 rounded dark:text-primary-500 dark:hover:bg-gray-700"
                                                         >
                                                             <FiEdit className="w-5 h-5" />
                                                         </button>
                                                         <button
+                                                            type="button"
                                                             onClick={() => removeTask(task.taskId)}
+                                                            aria-label={`Remover tarefa ${task.taskName}`}
+                                                            title="Remover tarefa"
                                                             className="p-1 text-red-500 hover:bg-red-50 rounded dark:text-red-400 dark:hover:bg-gray-700"
                                                         >
                                                             <FiTrash2 className="w-5 h-5" />

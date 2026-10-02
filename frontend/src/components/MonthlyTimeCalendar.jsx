@@ -1,454 +1,392 @@
-import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { FiChevronLeft, FiChevronRight, FiClock, FiAlertCircle, FiCheckCircle, FiX, FiLoader, FiCalendar } from 'react-icons/fi';
-import { toast } from 'react-toastify';
+import React, {forwardRef, useEffect, useImperativeHandle, useMemo, useState} from 'react';
+import {
+    FiAlertCircle,
+    FiCalendar,
+    FiCheckCircle,
+    FiChevronLeft,
+    FiChevronRight,
+    FiClock,
+    FiRefreshCw,
+    FiX
+} from 'react-icons/fi';
+import {toast} from 'react-toastify';
+import {addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth} from 'date-fns';
+import {ptBR} from 'date-fns/locale';
+import {
+    GetAllNonWorkingDays,
+    GetLoggedTimeFromCalendarAPI,
+    GetTimeEntriesForPeriod
+} from '../../wailsjs/go/backend/App';
+import Modal from './Modal';
+import useMinutosPorDia from '../hooks/useMinutosPorDia';
+import {toYMD, utcTimestampToYMD} from '../utils/dates';
+import {errMsg} from '../utils/errors';
+import {DIAS_ABREV, formatHoursMinutes} from '../utils/time';
 
-const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [timeEntries, setTimeEntries] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedDay, setSelectedDay] = useState(null);
-    const [dayDetails, setDayDetails] = useState(null);
-    const [showModal, setShowModal] = useState(false);
-    const [error, setError] = useState(null);
-    const [holidays, setHolidays] = useState([]);
+const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
 
-    const dailyGoal = 480;
+const STATUS_LABEL = {
+    complete: 'Completo',
+    incomplete: 'Incompleto',
+    missing: 'Sem registros',
+    holiday: 'Feriado',
+    weekend: 'Fim de semana'
+};
 
-    const formatDate = (date) => {
-        return date.toISOString().split('T')[0];
-    };
+const isWeekend = (date) => {
+    const day = date.getDay();
+    return day === 0 || day === 6;
+};
 
-    const isWeekend = (date) => {
-        const day = date.getDay();
-        return day === 0 || day === 6;
-    };
+const getDayStatusClass = (status) => {
+    switch (status) {
+        case 'complete':
+            return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700';
+        case 'incomplete':
+            return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700';
+        case 'missing':
+            return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700';
+        case 'holiday':
+            return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-700';
+        case 'weekend':
+            return 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700';
+        default:
+            return 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-700';
+    }
+};
 
-    const isSameDay = (date1, date2) => {
-        return formatDate(date1) === formatDate(date2);
-    };
+// A API de calendário devolve pares [timestampUTC, horas, minutos] por dia,
+// separados em cobráveis e não cobráveis. Consolida tudo por data.
+const processCalendarData = (loggedTimeData) => {
+    const porDia = {};
 
-    const startOfMonth = (date) => {
-        return new Date(date.getFullYear(), date.getMonth(), 1);
-    };
+    const adicionar = (lista, isBillable) => {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(entry => {
+            if (!entry || entry.length < 3) return;
+            const timestamp = parseInt(entry[0], 10);
+            const hours = parseFloat(entry[1]) || 0;
+            const minutes = parseInt(entry[2], 10) || 0;
+            if (Number.isNaN(timestamp) || minutes <= 0) return;
 
-    const endOfMonth = (date) => {
-        return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-    };
+            const date = utcTimestampToYMD(timestamp);
+            if (!date) return;
 
-    const addMonths = (date, months) => {
-        const newDate = new Date(date);
-        newDate.setMonth(newDate.getMonth() + months);
-        return newDate;
-    };
+            const item = {
+                date,
+                minutes,
+                hours,
+                description: isBillable ? 'Tempo registrado (cobrável)' : 'Tempo registrado (não cobrável)',
+                projectName: 'Teamwork',
+                isBillable
+            };
 
-    const eachDayOfInterval = (start, end) => {
-        const days = [];
-        let current = new Date(start);
-
-        while (current <= end) {
-            days.push(new Date(current));
-            current.setDate(current.getDate() + 1);
-        }
-
-        return days;
-    };
-
-    useImperativeHandle(ref, () => ({
-        refresh: () => {
-            loadTimeEntries();
-            loadHolidays();
-        }
-    }));
-
-    useEffect(() => {
-        loadTimeEntries();
-        loadHolidays();
-    }, [currentMonth]);
-
-    const loadHolidays = async () => {
-        try {
-            const year = currentMonth.getFullYear();
-            const month = currentMonth.getMonth() + 1;
-
-            const nonWorkingDays = await window.go.backend.App.GetAllNonWorkingDays(year, month);
-
-            const monthHolidays = nonWorkingDays.filter(day => day.type === 'holiday');
-            setHolidays(monthHolidays);
-        } catch (error) {
-            console.error('Erro ao carregar feriados:', error);
-        }
-    };
-
-    const loadTimeEntries = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const startDate = formatDate(startOfMonth(currentMonth));
-            const endDate = formatDate(endOfMonth(currentMonth));
-
-            console.log(`Obtendo dados de tempo para o período: ${startDate} a ${endDate}`);
-
-            const monthNum = currentMonth.getMonth() + 1;
-            const yearNum = currentMonth.getFullYear();
-
-            try {
-                const loggedTimeData = await window.go.backend.App.GetLoggedTimeFromCalendarAPI(monthNum, yearNum);
-                console.log('Dados do calendário obtidos com sucesso:', loggedTimeData);
-
-                if (loggedTimeData && loggedTimeData.STATUS === "OK" && loggedTimeData.user) {
-                    const processedEntries = processCalendarData(loggedTimeData);
-                    setTimeEntries(processedEntries);
-                    setLoading(false);
-                    return;
-                }
-            } catch (calendarErr) {
-                console.log('Endpoint de calendário não disponível, usando dados alternativos:', calendarErr);
-            }
-
-            try {
-                const timeEntries = await window.go.backend.App.GetTimeEntriesForPeriod(startDate, endDate);
-                if (timeEntries && timeEntries.length > 0) {
-                    const processedEntries = timeEntries.map(entry => ({
-                        date: entry.date,
-                        minutes: entry.minutes || 0,
-                        hours: (entry.minutes || 0) / 60,
-                        description: entry.description || "Tempo registrado",
-                        projectName: entry.projectName || "Teamwork",
-                        isBillable: entry.isBillable !== undefined ? entry.isBillable : true,
-                        taskId: entry.taskId || 0
-                    }));
-
-                    setTimeEntries(processedEntries);
-                    setLoading(false);
-                    return;
-                }
-            } catch (entriesErr) {
-                console.log('Erro ao obter entradas detalhadas:', entriesErr);
-            }
-
-            const timeReport = await window.go.backend.App.GetTimeTotalsForPeriod(startDate, endDate);
-            if (timeReport && timeReport["time-totals"] && timeReport["time-totals"].minutes > 0) {
-                const workingDays = await window.go.backend.App.GetWorkingDays(startDate, endDate);
-
-                if (workingDays && workingDays.length > 0) {
-                    const minutesPerDay = Math.floor(timeReport["time-totals"].minutes / workingDays.length);
-
-                    const syntheticEntries = workingDays.map(day => ({
-                        date: day,
-                        minutes: minutesPerDay,
-                        hours: minutesPerDay / 60,
-                        description: "Tempo registrado (estimado)",
-                        projectName: "Teamwork",
-                        isBillable: true
-                    }));
-
-                    setTimeEntries(syntheticEntries);
-                }
-            }
-
-        } catch (error) {
-            console.error('Erro ao carregar entradas de tempo:', error);
-            setError(`Erro ao carregar dados: ${error.message || 'Erro desconhecido'}`);
-            setTimeEntries([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const processCalendarData = (loggedTimeData) => {
-        const processedEntries = [];
-
-        if (loggedTimeData.user.billable && Array.isArray(loggedTimeData.user.billable)) {
-            loggedTimeData.user.billable.forEach(entry => {
-                if (entry.length >= 3) {
-                    const timestamp = parseInt(entry[0]);
-                    const hours = parseFloat(entry[1]) || 0;
-                    const minutes = parseInt(entry[2]) || 0;
-
-                    if (!isNaN(timestamp) && minutes > 0) {
-                        const date = new Date(timestamp);
-                        const dateStr = formatDate(date);
-
-                        processedEntries.push({
-                            date: dateStr,
-                            minutes,
-                            hours,
-                            description: "Tempo registrado (cobrável)",
-                            projectName: "Teamwork",
-                            isBillable: true,
-                            timestamp
-                        });
-                    }
-                }
-            });
-        }
-
-        if (loggedTimeData.user.nonbillable && Array.isArray(loggedTimeData.user.nonbillable)) {
-            loggedTimeData.user.nonbillable.forEach(entry => {
-                if (entry.length >= 3) {
-                    const timestamp = parseInt(entry[0]);
-                    const hours = parseFloat(entry[1]) || 0;
-                    const minutes = parseInt(entry[2]) || 0;
-
-                    if (!isNaN(timestamp) && minutes > 0) {
-                        const date = new Date(timestamp);
-                        const dateStr = formatDate(date);
-
-                        processedEntries.push({
-                            date: dateStr,
-                            minutes,
-                            hours,
-                            description: "Tempo registrado (não cobrável)",
-                            projectName: "Teamwork",
-                            isBillable: false,
-                            timestamp
-                        });
-                    }
-                }
-            });
-        }
-
-        const consolidatedEntries = [];
-        const entriesByDay = {};
-
-        processedEntries.forEach(entry => {
-            if (!entriesByDay[entry.date]) {
-                entriesByDay[entry.date] = {
-                    date: entry.date,
-                    minutes: entry.minutes,
-                    hours: entry.hours,
-                    description: entry.description,
-                    projectName: entry.projectName,
-                    isBillable: entry.isBillable,
-                    isConsolidated: false,
-                    taskId: 0,
-                    entries: [entry]
-                };
+            if (!porDia[date]) {
+                porDia[date] = {...item, isConsolidated: false, entries: [item]};
             } else {
-                entriesByDay[entry.date].minutes += entry.minutes;
-                entriesByDay[entry.date].hours += entry.hours;
-                entriesByDay[entry.date].isConsolidated = true;
-                entriesByDay[entry.date].description = 'Consolidado (múltiplas entradas)';
-                entriesByDay[entry.date].entries.push(entry);
+                porDia[date].minutes += minutes;
+                porDia[date].hours += hours;
+                porDia[date].isConsolidated = true;
+                porDia[date].description = 'Consolidado (múltiplas entradas)';
+                porDia[date].entries.push(item);
             }
         });
-
-        return Object.values(entriesByDay);
     };
 
-    const getMinutesForDay = (day) => {
-        const dayStr = formatDate(day);
-        return timeEntries
-            .filter(entry => entry.date === dayStr)
-            .reduce((total, entry) => total + entry.minutes, 0);
-    };
+    adicionar(loggedTimeData.user.billable, true);
+    adicionar(loggedTimeData.user.nonbillable, false);
 
-    const getEntriesForDay = (day) => {
-        const dayStr = formatDate(day);
-        return timeEntries.filter(entry => entry.date === dayStr);
-    };
+    return Object.values(porDia);
+};
 
-    const getDayStatus = (day) => {
+// Busca o tempo do mês: primeiro a API de calendário (agregada por dia) e, se
+// ela não estiver disponível, as entradas detalhadas do período. Se as duas
+// falharem, o erro sobe — não inventamos horas estimadas.
+const fetchMonthEntries = async (month) => {
+    const startDate = toYMD(startOfMonth(month));
+    const endDate = toYMD(endOfMonth(month));
+
+    let calendarError = null;
+    try {
+        const loggedTimeData = await GetLoggedTimeFromCalendarAPI(month.getMonth() + 1, month.getFullYear());
+        if (loggedTimeData && loggedTimeData.STATUS === 'OK' && loggedTimeData.user) {
+            return processCalendarData(loggedTimeData);
+        }
+    } catch (error) {
+        calendarError = error;
+    }
+
+    try {
+        const timeEntries = await GetTimeEntriesForPeriod(startDate, endDate);
+        return (timeEntries || []).map(entry => ({
+            date: entry.date,
+            minutes: entry.minutes || 0,
+            hours: (entry.minutes || 0) / 60,
+            description: entry.description || 'Tempo registrado',
+            projectName: entry.projectName || 'Teamwork',
+            isBillable: entry.isBillable !== undefined ? entry.isBillable : true
+        }));
+    } catch (entriesError) {
+        console.error('Erro ao obter o tempo do mês:', calendarError, entriesError);
+        throw entriesError;
+    }
+};
+
+// onDayClick(dataYMD) é chamado ao clicar num dia útil.
+const MonthlyTimeCalendar = forwardRef(({onDayClick}, ref) => {
+    const dailyGoal = useMinutosPorDia();
+    const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
+    const [timeEntries, setTimeEntries] = useState([]);
+    const [holidays, setHolidays] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [reloadToken, setReloadToken] = useState(0);
+    const [dayDetails, setDayDetails] = useState(null);
+
+    // refresh recarrega o mês exibido, sem voltar ao mês atual.
+    useImperativeHandle(ref, () => ({
+        refresh: () => setReloadToken(t => t + 1)
+    }), []);
+
+    useEffect(() => {
+        // Ao trocar de mês rápido, a resposta do mês anterior pode chegar por
+        // último; o flag descarta respostas de efeitos já substituídos.
+        let cancelled = false;
+
+        const load = async () => {
+            setLoading(true);
+            setError(null);
+
+            const [entriesResult, holidaysResult] = await Promise.allSettled([
+                fetchMonthEntries(currentMonth),
+                GetAllNonWorkingDays(currentMonth.getFullYear(), currentMonth.getMonth() + 1)
+            ]);
+
+            if (cancelled) return;
+
+            if (entriesResult.status === 'fulfilled') {
+                setTimeEntries(entriesResult.value);
+            } else {
+                setTimeEntries([]);
+                setError(`Não foi possível carregar as horas do mês: ${errMsg(entriesResult.reason)}`);
+            }
+
+            if (holidaysResult.status === 'fulfilled') {
+                setHolidays((holidaysResult.value || []).filter(day => day.type === 'holiday'));
+            } else {
+                console.error('Erro ao carregar feriados:', holidaysResult.reason);
+                setHolidays([]);
+            }
+
+            setLoading(false);
+        };
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [currentMonth, reloadToken]);
+
+    // Índices por data calculados uma vez por carga, em vez de filtrar todas as
+    // entradas para cada célula do mês.
+    const entriesByDate = useMemo(() => {
+        const map = new Map();
+        timeEntries.forEach(entry => {
+            const lista = map.get(entry.date);
+            if (lista) lista.push(entry);
+            else map.set(entry.date, [entry]);
+        });
+        return map;
+    }, [timeEntries]);
+
+    const minutesByDate = useMemo(() => {
+        const map = new Map();
+        entriesByDate.forEach((lista, date) => {
+            map.set(date, lista.reduce((total, entry) => total + (entry.minutes || 0), 0));
+        });
+        return map;
+    }, [entriesByDate]);
+
+    const holidaysByDate = useMemo(() => {
+        const map = new Map();
+        holidays.forEach(h => map.set(h.date, h));
+        return map;
+    }, [holidays]);
+
+    const getDayStatus = (day, dayStr) => {
         if (isWeekend(day)) return 'weekend';
+        if (holidaysByDate.has(dayStr)) return 'holiday';
 
-        const dayStr = formatDate(day);
-        const isHoliday = holidays.some(holiday => holiday.date === dayStr);
-        if (isHoliday) return 'holiday';
-
-        const minutes = getMinutesForDay(day);
-
+        const minutes = minutesByDate.get(dayStr) || 0;
         if (minutes === 0) return 'missing';
         if (minutes < dailyGoal) return 'incomplete';
         return 'complete';
     };
 
-    const getDayStatusClass = (status) => {
-        switch (status) {
-            case 'complete': return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700';
-            case 'incomplete': return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700';
-            case 'missing': return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700';
-            case 'holiday': return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-700';
-            case 'weekend': return 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700';
-            default: return 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-700';
-        }
-    };
-
-    const handlePrevMonth = () => {
-        setCurrentMonth(addMonths(currentMonth, -1));
-    };
-
-    const handleNextMonth = () => {
-        setCurrentMonth(addMonths(currentMonth, 1));
-    };
-
     const handleDayClick = (day) => {
         if (isWeekend(day)) return;
 
-        const dayStr = formatDate(day);
-        const isHoliday = holidays.some(holiday => holiday.date === dayStr);
-        if (isHoliday) {
-            const holiday = holidays.find(h => h.date === dayStr);
+        const dayStr = toYMD(day);
+        const holiday = holidaysByDate.get(dayStr);
+        if (holiday) {
             toast.info(`Feriado: ${holiday.name}. Não é possível lançar horas em feriados.`);
             return;
         }
 
-        setSelectedDay(day);
-
-        const dayEntries = getEntriesForDay(day);
-        const minutesLogged = dayEntries.reduce((total, entry) => total + entry.minutes, 0);
-        const hoursLogged = (minutesLogged / 60).toFixed(1);
+        const dayEntries = entriesByDate.get(dayStr) || [];
+        const minutesLogged = minutesByDate.get(dayStr) || 0;
 
         setDayDetails({
             date: day,
+            dateStr: dayStr,
             entries: dayEntries,
             totalMinutes: minutesLogged,
-            totalHours: hoursLogged,
-            status: getDayStatus(day)
+            totalHours: (minutesLogged / 60).toFixed(1),
+            status: getDayStatus(day, dayStr)
         });
 
-        setShowModal(true);
-
         if (onDayClick) {
-            onDayClick(day, dayEntries);
+            onDayClick(dayStr);
         }
     };
 
-    const closeModal = () => {
-        setShowModal(false);
-        setSelectedDay(null);
-        setDayDetails(null);
-    };
+    const closeModal = () => setDayDetails(null);
+
+    const todayStr = toYMD(new Date());
 
     const renderDayCell = (day) => {
+        const dayStr = toYMD(day);
         const dayNum = day.getDate();
-        const isToday = isSameDay(day, new Date());
-        const status = getDayStatus(day);
+        const isToday = dayStr === todayStr;
+        const status = getDayStatus(day, dayStr);
         const statusClass = getDayStatusClass(status);
-        const minutes = getMinutesForDay(day);
+        const minutes = minutesByDate.get(dayStr) || 0;
         const hours = (minutes / 60).toFixed(1);
+        const isSelected = dayDetails?.dateStr === dayStr;
+        const holiday = holidaysByDate.get(dayStr);
+        const weekend = status === 'weekend';
 
-        const isSelected = selectedDay && isSameDay(day, selectedDay);
+        const descricao = [
+            format(day, "EEEE, d 'de' MMMM", {locale: ptBR}),
+            holiday ? `Feriado: ${holiday.name}` : STATUS_LABEL[status],
+            !weekend && !holiday ? `${hours} horas registradas` : null
+        ].filter(Boolean).join('. ');
 
-        const dayStr = formatDate(day);
-        const holiday = holidays.find(h => h.date === dayStr);
-        const isHoliday = holiday !== undefined;
+        const className = `relative p-2 border text-left ${statusClass} ${isToday ? 'ring-2 ring-primary-500 dark:ring-primary-400' : ''}
+                ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}
+                ${!weekend && !holiday ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600`;
 
-        return (
-            <div
-                key={day.toString()}
-                onClick={() => handleDayClick(day)}
-                className={`relative p-2 border ${statusClass} ${isToday ? 'ring-2 ring-primary-500 dark:ring-primary-400' : ''} 
-                ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''} 
-                ${!isWeekend(day) && !isHoliday ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col`}
-            >
-                <div className="text-sm font-medium mb-1">
+        const conteudo = (
+            <>
+                <span className="text-sm font-medium mb-1" aria-hidden="true">
                     {dayNum}
-                </div>
+                </span>
 
-                {isHoliday && (
-                    <div className="text-xs text-purple-700 dark:text-purple-300 mt-auto overflow-hidden text-ellipsis">
-                        <FiCalendar className="inline mr-1 w-3 h-3" />
+                {holiday && (
+                    <span className="text-xs text-purple-700 dark:text-purple-300 mt-auto overflow-hidden text-ellipsis" aria-hidden="true">
+                        <FiCalendar className="inline mr-1 w-3 h-3"/>
                         <span className="whitespace-nowrap overflow-hidden text-ellipsis">
                             {holiday.name}
                         </span>
-                    </div>
+                    </span>
                 )}
 
-                {!isWeekend(day) && !isHoliday && (
+                {!weekend && !holiday && (
                     <>
-                        <div className="text-xs mt-auto">
+                        <span className="text-xs mt-auto" aria-hidden="true">
                             {minutes > 0 ? (
-                                <div className="flex items-center">
-                                    <FiClock className="mr-1 w-3 h-3" />
+                                <span className="flex items-center">
+                                    <FiClock className="mr-1 w-3 h-3"/>
                                     <span>{hours}h</span>
-                                </div>
+                                </span>
                             ) : (
                                 <span className="text-gray-400 dark:text-gray-500">Sem registros</span>
                             )}
-                        </div>
+                        </span>
 
-                        {status === 'complete' && (
-                            <div className="absolute top-1 right-1">
-                                <FiCheckCircle className="w-4 h-4 text-green-500 dark:text-green-400" />
-                            </div>
-                        )}
-
-                        {status === 'incomplete' && (
-                            <div className="absolute top-1 right-1">
-                                <FiAlertCircle className="w-4 h-4 text-yellow-500 dark:text-yellow-400" />
-                            </div>
-                        )}
-
-                        {status === 'missing' && (
-                            <div className="absolute top-1 right-1">
-                                <FiX className="w-4 h-4 text-red-500 dark:text-red-400" />
-                            </div>
-                        )}
+                        <span className="absolute top-1 right-1" aria-hidden="true">
+                            {status === 'complete' && <FiCheckCircle className="w-4 h-4 text-green-500 dark:text-green-400"/>}
+                            {status === 'incomplete' && <FiAlertCircle className="w-4 h-4 text-yellow-500 dark:text-yellow-400"/>}
+                            {status === 'missing' && <FiX className="w-4 h-4 text-red-500 dark:text-red-400"/>}
+                        </span>
                     </>
                 )}
+            </>
+        );
+
+        if (weekend) {
+            return (
+                <div key={dayStr} className={className} role="gridcell" aria-label={descricao}>
+                    {conteudo}
+                </div>
+            );
+        }
+
+        return (
+            <div key={dayStr} role="gridcell">
+                <button
+                    type="button"
+                    onClick={() => handleDayClick(day)}
+                    className={className}
+                    aria-label={descricao}
+                    aria-current={isToday ? 'date' : undefined}
+                >
+                    {conteudo}
+                </button>
             </div>
         );
     };
 
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(currentMonth);
-    const days = eachDayOfInterval(monthStart, monthEnd);
+    const days = eachDayOfInterval({start: startOfMonth(currentMonth), end: endOfMonth(currentMonth)});
+    const cells = [
+        ...Array.from({length: startOfMonth(currentMonth).getDay()}, () => null),
+        ...days
+    ];
+    while (cells.length % 7 !== 0) cells.push(null);
 
     const weeks = [];
-    let week = [];
-
-    const firstDayOfMonth = monthStart.getDay();
-    for (let i = 0; i < firstDayOfMonth; i++) {
-        week.push(null);
+    for (let i = 0; i < cells.length; i += 7) {
+        weeks.push(cells.slice(i, i + 7));
     }
 
-    days.forEach(day => {
-        week.push(day);
-        if (week.length === 7) {
-            weeks.push(week);
-            week = [];
-        }
-    });
-
-    if (week.length > 0) {
-        for (let i = week.length; i < 7; i++) {
-            week.push(null);
-        }
-        weeks.push(week);
-    }
-
-    const monthNames = [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-    ];
-
-    const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    const metaLabel = formatHoursMinutes(dailyGoal);
+    const monthTitle = `${MONTH_NAMES[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 mb-6">
             <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white" aria-live="polite">
+                    {monthTitle}
                 </h2>
 
                 <div className="flex space-x-2">
                     <button
-                        onClick={handlePrevMonth}
+                        type="button"
+                        onClick={() => setCurrentMonth(m => addMonths(m, -1))}
+                        aria-label="Mês anterior"
+                        title="Mês anterior"
                         className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                        <FiChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                        <FiChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true"/>
                     </button>
                     <button
-                        onClick={() => setCurrentMonth(new Date())}
+                        type="button"
+                        onClick={() => setCurrentMonth(startOfMonth(new Date()))}
                         className="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                     >
                         Hoje
                     </button>
                     <button
-                        onClick={handleNextMonth}
+                        type="button"
+                        onClick={() => setCurrentMonth(m => addMonths(m, 1))}
+                        aria-label="Próximo mês"
+                        title="Próximo mês"
                         className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                        <FiChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                        <FiChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" aria-hidden="true"/>
                     </button>
                 </div>
             </div>
@@ -456,11 +394,11 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
             <div className="flex flex-wrap gap-2 mb-4">
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full mr-1"></div>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Completo (8h+)</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Completo ({metaLabel}+)</span>
                 </div>
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-yellow-500 dark:bg-yellow-400 rounded-full mr-1"></div>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Incompleto (&lt;8h)</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Incompleto (&lt;{metaLabel})</span>
                 </div>
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-red-500 dark:bg-red-400 rounded-full mr-1"></div>
@@ -477,110 +415,110 @@ const MonthlyTimeCalendar = forwardRef(({ onDayClick }, ref) => {
             </div>
 
             {loading && (
-                <div className="flex justify-center items-center py-8">
+                <div className="flex justify-center items-center py-8" role="status" aria-label="Carregando calendário">
                     <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full"></div>
                 </div>
             )}
 
             {error && !loading && (
-                <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4">
-                    <div className="flex">
-                        <FiAlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 flex-shrink-0" />
-                        <div className="ml-3">
+                <div role="alert" className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4">
+                    <div className="flex items-start">
+                        <FiAlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 flex-shrink-0" aria-hidden="true"/>
+                        <div className="ml-3 flex-1">
                             <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
+                            <button
+                                type="button"
+                                onClick={() => setReloadToken(t => t + 1)}
+                                className="mt-2 inline-flex items-center text-sm text-red-700 dark:text-red-300 hover:underline"
+                            >
+                                <FiRefreshCw className="w-4 h-4 mr-1" aria-hidden="true"/>
+                                Tentar novamente
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
             {!loading && !error && (
-                <>
-                    <div className="grid grid-cols-7 gap-1 mb-1">
-                        {weekDays.map((day, index) => (
-                            <div key={index} className="p-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div role="grid" aria-label={`Calendário de ${monthTitle}`}>
+                    <div role="row" className="grid grid-cols-7 gap-1 mb-1">
+                        {DIAS_ABREV.map((day) => (
+                            <div key={day} role="columnheader"
+                                 className="p-1 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
                                 {day}
                             </div>
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-7 gap-1">
-                        {weeks.flat().map((day, index) => (
-                            day ? renderDayCell(day) : <div key={`empty-${index}`} className="border border-gray-200 dark:border-gray-700 rounded-md h-20"></div>
-                        ))}
-                    </div>
-                </>
-            )}
-
-            {showModal && dayDetails && (
-                <div className="fixed inset-0 bg-black bg-opacity-30 dark:bg-opacity-60 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
-                        <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                                {new Date(dayDetails.date).toLocaleDateString('pt-BR', {weekday: 'long', day: 'numeric', month: 'long'})}
-                            </h3>
-                            <button
-                                onClick={closeModal}
-                                className="rounded-full p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                                <FiX className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-                            </button>
+                    {weeks.map((week, weekIndex) => (
+                        <div key={`semana-${weekIndex}`} role="row" className="grid grid-cols-7 gap-1 mb-1">
+                            {week.map((day, index) => (
+                                day ? renderDayCell(day) : (
+                                    <div key={`vazio-${weekIndex}-${index}`} role="gridcell"
+                                         className="border border-gray-200 dark:border-gray-700 rounded-md h-20"></div>
+                                )
+                            ))}
                         </div>
-
-                        <div className="p-5">
-                            <div className={`mb-4 p-3 rounded-lg ${getDayStatusClass(dayDetails.status)} border`}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center">
-                                        {dayDetails.status === 'complete' && <FiCheckCircle className="w-5 h-5 mr-2" />}
-                                        {dayDetails.status === 'incomplete' && <FiAlertCircle className="w-5 h-5 mr-2" />}
-                                        {dayDetails.status === 'missing' && <FiX className="w-5 h-5 mr-2" />}
-                                        <span className="font-medium">
-                                            {dayDetails.status === 'complete' && 'Completo'}
-                                            {dayDetails.status === 'incomplete' && 'Incompleto'}
-                                            {dayDetails.status === 'missing' && 'Sem Registros'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <FiClock className="w-4 h-4 inline mr-1" />
-                                        <span>{dayDetails.totalHours}h</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {dayDetails.entries.length > 0 ? (
-                                <div className="space-y-3 max-h-60 overflow-y-auto">
-                                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">Lançamentos</h4>
-                                    {dayDetails.entries.map((entry, idx) => (
-                                        <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                                            <div className="flex justify-between mb-1">
-                                                <span className="font-medium text-sm">{entry.description || 'Sem descrição'}</span>
-                                                <span className="text-sm">{(entry.minutes / 60).toFixed(1)}h</span>
-                                            </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                <div>Projeto: {entry.projectName || 'N/A'}</div>
-                                                <div>Horário: {entry.startTime ? entry.startTime.substring(0, 5) : 'N/A'}</div>
-                                                <div>Cobrável: {entry.isBillable ? 'Sim' : 'Não'}</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-6">
-                                    <p className="text-gray-500 dark:text-gray-400">Nenhum lançamento para este dia.</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-                            <button
-                                onClick={closeModal}
-                                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md"
-                            >
-                                Fechar
-                            </button>
-                        </div>
-                    </div>
+                    ))}
                 </div>
             )}
+
+            <Modal
+                isOpen={Boolean(dayDetails)}
+                onClose={closeModal}
+                size="sm"
+                title={dayDetails ? format(dayDetails.date, "EEEE, d 'de' MMMM", {locale: ptBR}) : ''}
+                footer={
+                    <button
+                        type="button"
+                        onClick={closeModal}
+                        className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md"
+                    >
+                        Fechar
+                    </button>
+                }
+            >
+                {dayDetails && (
+                    <>
+                        <div className={`mb-4 p-3 rounded-lg ${getDayStatusClass(dayDetails.status)} border`}>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    {dayDetails.status === 'complete' && <FiCheckCircle className="w-5 h-5 mr-2" aria-hidden="true"/>}
+                                    {dayDetails.status === 'incomplete' && <FiAlertCircle className="w-5 h-5 mr-2" aria-hidden="true"/>}
+                                    {dayDetails.status === 'missing' && <FiX className="w-5 h-5 mr-2" aria-hidden="true"/>}
+                                    <span className="font-medium">{STATUS_LABEL[dayDetails.status]}</span>
+                                </div>
+                                <div>
+                                    <FiClock className="w-4 h-4 inline mr-1" aria-hidden="true"/>
+                                    <span>{dayDetails.totalHours}h de {metaLabel}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {dayDetails.entries.length > 0 ? (
+                            <div className="space-y-3 max-h-60 overflow-y-auto">
+                                <h3 className="font-medium text-gray-900 dark:text-white mb-2">Lançamentos</h3>
+                                {dayDetails.entries.map((entry, idx) => (
+                                    <div key={`${entry.date}-${idx}`} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                        <div className="flex justify-between mb-1">
+                                            <span className="font-medium text-sm">{entry.description || 'Sem descrição'}</span>
+                                            <span className="text-sm">{(entry.minutes / 60).toFixed(1)}h</span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                                            <div>Projeto: {entry.projectName || 'N/A'}</div>
+                                            <div>Cobrável: {entry.isBillable ? 'Sim' : 'Não'}</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <p className="text-gray-500 dark:text-gray-400">Nenhum lançamento para este dia.</p>
+                            </div>
+                        )}
+                    </>
+                )}
+            </Modal>
         </div>
     );
 });
