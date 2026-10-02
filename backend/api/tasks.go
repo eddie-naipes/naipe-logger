@@ -246,7 +246,9 @@ func (t *TeamworkAPI) GetTaskCount() (int, error) {
 		return 0, fmt.Errorf("API não configurada")
 	}
 
-	path := fmt.Sprintf("/projects/api/v3/tasks.json?assignedTo=%d&filter=active&page=1&pageSize=1",
+	// responsiblePartyIds é o filtro por responsável que a v3 respeita;
+	// assignedTo é ignorado e contava todas as tarefas visíveis.
+	path := fmt.Sprintf("/projects/api/v3/tasks.json?responsiblePartyIds=%d&page=1&pageSize=1",
 		t.Config.UserID)
 	url := t.buildURL(path)
 
@@ -264,20 +266,7 @@ func (t *TeamworkAPI) GetTaskCount() (int, error) {
 		return 0, fmt.Errorf("erro ao obter tarefas: %d %s", resp.StatusCode, resp.Status)
 	}
 
-	var response struct {
-		Meta struct {
-			Page struct {
-				TotalItems int `json:"totalItems"`
-			} `json:"page"`
-		} `json:"meta"`
-	}
-
-	err = json.Unmarshal(body, &response)
-	if err != nil {
-		return 0, fmt.Errorf("erro ao decodificar resposta: %v", err)
-	}
-
-	return response.Meta.Page.TotalItems, nil
+	return totalFromMeta(body)
 }
 
 func (t *TeamworkAPI) GetTasksByProject(projectID int) ([]TeamworkTask, error) {
@@ -629,10 +618,27 @@ func (t *TeamworkAPI) ListUpcomingDeadlines() ([]UpcomingDeadline, error) {
 		return nil, fmt.Errorf("erro ao obter tarefas: %v", err)
 	}
 
-	tarefas := filtrarEOrdenarPrazos(tasks, startOfToday(), upcomingDeadlinesLimit)
+	// GetTasks traz todas as tarefas visíveis (é a lista de onde o usuário
+	// escolhe onde lançar horas), mas o card promete só as atribuídas a ele.
+	atribuidas := somenteAtribuidas(tasks, t.Config.UserID)
+	tarefas := filtrarEOrdenarPrazos(atribuidas, startOfToday(), upcomingDeadlinesLimit)
 
 	t.cache.Set(cacheKey, tarefas, 30*time.Minute)
 	return tarefas, nil
+}
+
+// somenteAtribuidas mantém as tarefas que têm o usuário entre os responsáveis.
+func somenteAtribuidas(tasks []TeamworkTask, userID int) []TeamworkTask {
+	atribuidas := make([]TeamworkTask, 0, len(tasks))
+	for _, task := range tasks {
+		for _, a := range task.Assignees {
+			if a.ID == userID && (a.Type == "" || a.Type == "users") {
+				atribuidas = append(atribuidas, task)
+				break
+			}
+		}
+	}
+	return atribuidas
 }
 
 // filtrarEOrdenarPrazos mantém apenas as tarefas com prazo real a partir de

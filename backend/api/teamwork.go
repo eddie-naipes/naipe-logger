@@ -138,10 +138,14 @@ func (t *TeamworkAPI) GetDashboardSummary() (DashboardStats, error) {
 	// dashboard inteiro.
 	var stats DashboardStats
 
-	if taskCountErr == nil {
+	if taskCountErr != nil {
+		slog.Warn("Erro ao contar tarefas pendentes", "err", taskCountErr)
+	} else {
 		stats.TarefasPendentes = tarefasPendentes
 	}
-	if projectCountErr == nil {
+	if projectCountErr != nil {
+		slog.Warn("Erro ao contar projetos ativos", "err", projectCountErr)
+	} else {
 		stats.Projetos = projetosAtivos
 	}
 
