@@ -2,6 +2,7 @@ package backend
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"logTime-go/backend/api"
@@ -9,12 +10,29 @@ import (
 
 // Bindings de feriados e dias não úteis.
 
-func (a *App) GetBrazilianHolidays(year int) (map[string]api.Holiday, error) {
+// GetBrazilianHolidays devolve os feriados do ano ordenados por data. Era um
+// mapa data->feriado: o gerador do Wails não emitia api.Holiday em models.ts
+// para valores de mapa (App.d.ts referenciava um tipo inexistente). O
+// frontend já fazia Object.values(...).sort, que funciona igual com a lista.
+func (a *App) GetBrazilianHolidays(year int) ([]api.Holiday, error) {
 	client, err := a.client()
 	if err != nil {
 		return nil, err
 	}
-	return client.GetBrazilianHolidays(year)
+	holidays, err := client.GetBrazilianHolidays(year)
+	if err != nil {
+		return nil, err
+	}
+	return sortedHolidays(holidays), nil
+}
+
+func sortedHolidays(holidays map[string]api.Holiday) []api.Holiday {
+	list := make([]api.Holiday, 0, len(holidays))
+	for _, h := range holidays {
+		list = append(list, h)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].Date < list[j].Date })
+	return list
 }
 
 func (a *App) GetAllNonWorkingDays(year, month int) ([]map[string]interface{}, error) {
@@ -39,12 +57,14 @@ func (a *App) IsWorkDay(date string) (bool, error) {
 	return client.IsWorkDay(dateObj), nil
 }
 
-func (a *App) GetHolidayCacheStats() (map[string]interface{}, error) {
+// GetHolidayCacheStats devolve o estado do cache de feriados. Tipado (mesmo
+// JSON do antigo map[string]interface{}) para gerar o modelo em models.ts.
+func (a *App) GetHolidayCacheStats() (api.HolidayCacheStats, error) {
 	client, err := a.client()
 	if err != nil {
-		return nil, err
+		return api.HolidayCacheStats{}, err
 	}
-	return client.GetHolidayCacheStats(), nil
+	return client.HolidayCacheSummary(), nil
 }
 
 func (a *App) ClearHolidayCache() error {
@@ -65,12 +85,17 @@ func (a *App) PreloadHolidays() error {
 	return client.PreloadUpcomingHolidays()
 }
 
-func (a *App) RefreshHolidaysForYear(year int) (map[string]api.Holiday, error) {
+// RefreshHolidaysForYear descarta o ano (memória e disco) e o busca de novo.
+func (a *App) RefreshHolidaysForYear(year int) ([]api.Holiday, error) {
 	client, err := a.client()
 	if err != nil {
 		return nil, err
 	}
 
 	client.ClearHolidaysCacheForYear(year)
-	return client.GetBrazilianHolidays(year)
+	holidays, err := client.GetBrazilianHolidays(year)
+	if err != nil {
+		return nil, err
+	}
+	return sortedHolidays(holidays), nil
 }

@@ -65,15 +65,21 @@ type TeamworkTask struct {
 	DueDate      string `json:"dueDate,omitempty"`
 	TasklistID   int    `json:"tasklistId,omitempty"`
 	TasklistName string `json:"tasklistName,omitempty"`
-	Tags         []struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	} `json:"tags,omitempty"`
-	Assignees []struct {
-		ID   int    `json:"id"`
-		Type string `json:"type"`
-	} `json:"assignees,omitempty"`
-	LoggedMinutes int `json:"loggedMinutes,omitempty"`
+	Tags          []TaskTag      `json:"tags,omitempty"`
+	Assignees     []TaskAssignee `json:"assignees,omitempty"`
+	LoggedMinutes int            `json:"loggedMinutes,omitempty"`
+}
+
+// TaskTag e TaskAssignee têm nome próprio porque o gerador do Wails emite
+// structs anônimas como `export class  {`, TypeScript inválido em models.ts.
+type TaskTag struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type TaskAssignee struct {
+	ID   int    `json:"id"`
+	Type string `json:"type"`
 }
 
 // TasksResponse é uma página de tarefas da API v3. As tarefas vêm no formato
