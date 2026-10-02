@@ -62,6 +62,20 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # typecheck e lint geram antes .wails-types/ (scripts/wails-types.mjs)
+      # a partir dos bindings versionados em frontend/wailsjs.
+      - name: Typecheck do frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint do frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Testes do frontend
+        working-directory: frontend
+        run: npm test
+
       - name: npm audit
         working-directory: frontend
         run: npm audit --audit-level=high
