@@ -10,6 +10,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"logTime-go/backend/api"
 	"logTime-go/backend/config"
 	"logTime-go/backend/internal/fsutil"
 	"logTime-go/backend/notify"
@@ -237,7 +238,11 @@ func (a *App) stopTimerFromNotification() {
 	if err != nil {
 		slog.Warn("Não foi possível parar e lançar o cronômetro pela notificação", "err", err)
 		payload.Error = err.Error()
+		payload.Result.State = a.timerService().State()
 		bringWindowToFront(ctx)
+	}
+	if payload.Result.Results == nil {
+		payload.Result.Results = []api.TimeLogResult{}
 	}
 	payload.Logged = payload.Result.Logged
 	emitEvent(ctx, EventTimerLogged, payload)
