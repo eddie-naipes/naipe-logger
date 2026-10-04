@@ -18,6 +18,7 @@ import Tasks from './pages/Task';
 import TimeLog from './pages/TimeLog';
 import Templates from './pages/Templates';
 import CompletarPeriodo from './pages/CompletarPeriodo';
+import Semana from './pages/Semana';
 import NotFound from './pages/NotFound';
 
 import {ThemeContext} from './contexts/ThemeContext';
@@ -152,6 +153,7 @@ function App() {
                                     <Route path="/timelog" element={<TimeLog/>}/>
                                     <Route path="/templates" element={<Templates/>}/>
                                     <Route path="/completar" element={<CompletarPeriodo/>}/>
+                                    <Route path="/semana" element={<Semana/>}/>
                                     <Route path="*" element={<NotFound/>}/>
                                 </Routes>
                             </ErrorBoundary>
