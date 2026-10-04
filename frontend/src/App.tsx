@@ -22,6 +22,7 @@ import NotFound from './pages/NotFound';
 import {ThemeContext} from './contexts/ThemeContext';
 import {UpdateContext} from './contexts/UpdateContext';
 import useUpdate from './hooks/useUpdate';
+import useReminderNavigation from './hooks/useReminderNavigation';
 import {errMsg} from './utils/errors';
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
     // Lê a preferência só na inicialização: mudar o toggle na Config vale para
     // a próxima abertura do app.
     const updater = useUpdate({autoCheck: autoCheckUpdates});
+    useReminderNavigation();
 
     const [timeEntriesVersion, setTimeEntriesVersion] = useState(0);
     const notifyTimeEntriesChanged = useCallback(() => setTimeEntriesVersion(v => v + 1), []);
