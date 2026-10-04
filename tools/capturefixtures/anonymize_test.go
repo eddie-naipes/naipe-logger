@@ -8,10 +8,10 @@ import (
 
 func TestAnonymizeTrocaDadosPessoaisEPreservaEstrutura(t *testing.T) {
 	body := `{
-		"person": {"id": 244599, "firstName": "Fulano", "lastName": "Silva", "email": "fulano@empresa.com",
+		"person": {"id": 123456, "firstName": "Fulano", "lastName": "Silva", "email": "fulano@empresa.com",
 			"avatarUrl": "https://empresa.teamwork.com/a.png", "company": {"id": "77", "name": "Empresa X"}},
 		"tasks": [{"id": 5, "name": "Corrigir login", "tasklistId": 9, "status": "new",
-			"assignees": [{"id": 244599, "type": "users"}], "tagIds": [3, 0], "dueDate": "2026-09-30T00:00:00Z"}],
+			"assignees": [{"id": 123456, "type": "users"}], "tagIds": [3, 0], "dueDate": "2026-09-30T00:00:00Z"}],
 		"included": {"tasklists": {"9": {"id": 9, "name": "Sprint 1"}}},
 		"billable": [["1790812800000", 0.25, 15]],
 		"meta": {"page": {"count": 12, "hasMore": true}}
@@ -24,7 +24,7 @@ func TestAnonymizeTrocaDadosPessoaisEPreservaEstrutura(t *testing.T) {
 	}
 	s := string(out)
 
-	for _, sensivel := range []string{"Fulano", "Silva", "empresa", "Corrigir", "Sprint", "244599", "Empresa X"} {
+	for _, sensivel := range []string{"Fulano", "Silva", "empresa", "Corrigir", "Sprint", "123456", "Empresa X"} {
 		if strings.Contains(s, sensivel) {
 			t.Errorf("saída ainda contém %q:\n%s", sensivel, s)
 		}
