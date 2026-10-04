@@ -1,8 +1,8 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {render, screen, waitFor} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {BuildGitSuggestion, GetGitIntegration, GetGitSuggestion} from '@wailsjs/go/backend/App';
-import type {config, gitlog} from '@wailsjs/go/models';
+import type {gitlog} from '@wailsjs/go/models';
 import CommitSuggestButton from './CommitSuggestButton';
 
 vi.mock('@wailsjs/go/backend/App', () => ({
@@ -12,7 +12,7 @@ vi.mock('@wailsjs/go/backend/App', () => ({
 }));
 
 const integracao = (repos: string[], enabled = true) =>
-    ({enabled, repositories: repos, authorEmail: ''}) as config.GitIntegration;
+    ({enabled, repositories: repos, authorEmail: ''});
 
 const sugestao = {
     suggestion: 'corrige login; ajusta relatorio',
@@ -94,8 +94,8 @@ describe('CommitSuggestButton', () => {
         render(<CommitSuggestButton date="2026-09-15" onSuggest={vi.fn()}/>);
         await userEvent.click(await screen.findByRole('button', {name: /Sugerir pelos commits/}));
         const campo = await screen.findByLabelText('Dia dos commits');
-        await userEvent.clear(campo);
-        await userEvent.type(campo, '2026-09-16');
+        // jsdom não digita em <input type="date">; o evento change basta.
+        fireEvent.change(campo, {target: {value: '2026-09-16'}});
         await waitFor(() => expect(GetGitSuggestion).toHaveBeenLastCalledWith('2026-09-16'));
     });
 });

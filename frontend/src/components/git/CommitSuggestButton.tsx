@@ -207,8 +207,8 @@ const CommitSuggestButton = ({date, onSuggest, disabled = false}: CommitSuggestB
                                                 onChange={() => void alternar(c)}
                                                 className="mt-1"
                                             />
-                                            <span className="min-w-0">
-                                                <span className="text-gray-900 dark:text-white">{c.subject}</span>
+                                            <span className="min-w-0 text-gray-900 dark:text-white">
+                                                {c.subject}
                                                 <span className="block text-xs text-gray-500 dark:text-gray-400">
                                                     {c.time} · <code>{c.hash}</code>{variosRepos && ` · ${c.repo}`}
                                                 </span>
