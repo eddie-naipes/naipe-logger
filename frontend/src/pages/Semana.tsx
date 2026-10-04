@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {toast} from 'react-toastify';
 import {FiAlertCircle, FiChevronLeft, FiChevronRight, FiCopy, FiGrid, FiLoader, FiRefreshCw} from 'react-icons/fi';
 import {addDays} from 'date-fns';
@@ -69,28 +69,34 @@ const Semana = () => {
     const days = grid?.days ?? [];
     const nonWorkingDays = useNonWorkingDays(days[0] ?? weekDate, days[6] ?? weekDate);
 
-    // Só a carga mais recente grava a grade (navegação rápida entre semanas).
-    const loadRef = useRef(0);
-    const loadGrid = useCallback(async (date: string): Promise<void> => {
-        const requestId = ++loadRef.current;
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await GetWeekGrid(date);
-            if (requestId !== loadRef.current) return;
-            setGrid(data);
-        } catch (err) {
-            if (requestId !== loadRef.current) return;
-            console.error('Erro ao carregar a semana:', err);
-            setError('Erro ao carregar a semana: ' + errMsg(err));
-        } finally {
-            if (requestId === loadRef.current) setIsLoading(false);
-        }
-    }, []);
+    // Recarregar = incrementar reloadTick; a carga em si fica num efeito só,
+    // com flag de cancelamento: navegar rápido entre semanas não deixa uma
+    // resposta antiga sobrescrever a nova. O "carregando" é ligado por quem
+    // dispara a recarga (eventos), já que o efeito não deve fazer setState
+    // síncrono.
+    const [reloadTick, setReloadTick] = useState(0);
 
     useEffect(() => {
-        void loadGrid(weekDate);
-    }, [weekDate, loadGrid]);
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const data = await GetWeekGrid(weekDate);
+                if (cancelled) return;
+                setGrid(data);
+                setError(null);
+            } catch (err) {
+                if (cancelled) return;
+                console.error('Erro ao carregar a semana:', err);
+                setError('Erro ao carregar a semana: ' + errMsg(err));
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
+        };
+        void load();
+        return () => {
+            cancelled = true;
+        };
+    }, [weekDate, reloadTick]);
 
     useEffect(() => {
         GetSavedTasks()
@@ -99,8 +105,9 @@ const Semana = () => {
     }, []);
 
     const reloadGrid = useCallback(() => {
-        void loadGrid(weekDate);
-    }, [loadGrid, weekDate]);
+        setIsLoading(true);
+        setReloadTick(t => t + 1);
+    }, []);
 
     // Mudanças feitas em outras telas (gerenciador da Sidebar) refletem aqui.
     useOnTimeEntriesChanged(reloadGrid);
@@ -121,12 +128,16 @@ const Semana = () => {
         const base = parseLocalDate(grid?.weekStart ?? weekDate);
         if (!base) return;
         void review.setPlan([]);
+        setIsLoading(true);
         setWeekDate(toYMD(addDays(base, offsetDays)));
     };
 
     const goToToday = () => {
+        const hoje = todayYMD();
+        if (hoje === weekDate) return;
         void review.setPlan([]);
-        setWeekDate(todayYMD());
+        setIsLoading(true);
+        setWeekDate(hoje);
     };
 
     const handleCellCommit = (row: WeekRow, dayIndex: number, target: number) => {
