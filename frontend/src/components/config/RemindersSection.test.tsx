@@ -21,8 +21,8 @@ const padrao = {enabled: true, dailyTime: '18:00', workDaysOnly: true, monthEndE
 describe('RemindersSection', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        vi.mocked(GetReminderSettings).mockResolvedValue(padrao as never);
-        vi.mocked(GetNotificationStatus).mockResolvedValue({available: true} as never);
+        vi.mocked(GetReminderSettings).mockResolvedValue(padrao);
+        vi.mocked(GetNotificationStatus).mockResolvedValue({available: true});
         vi.mocked(SaveReminderSettings).mockResolvedValue();
         vi.mocked(SendTestReminder).mockResolvedValue();
     });
@@ -49,7 +49,7 @@ describe('RemindersSection', () => {
     });
 
     it('avisa quando as notificações não estão disponíveis', async () => {
-        vi.mocked(GetNotificationStatus).mockResolvedValue({available: false, error: 'sem D-Bus'} as never);
+        vi.mocked(GetNotificationStatus).mockResolvedValue({available: false, error: 'sem D-Bus'});
         render(<RemindersSection/>);
         expect(await screen.findByRole('alert')).toHaveTextContent('sem D-Bus');
     });
