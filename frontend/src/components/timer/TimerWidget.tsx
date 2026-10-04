@@ -19,9 +19,13 @@ const TimerWidget = () => {
     const rodando = state?.running ?? false;
     useEffect(() => {
         if (!rodando) return undefined;
-        setAgora(Date.now());
-        const id = setInterval(() => setAgora(Date.now()), 1000);
-        return () => clearInterval(id);
+        const tick = () => setAgora(Date.now());
+        const primeiro = setTimeout(tick, 0);
+        const id = setInterval(tick, 1000);
+        return () => {
+            clearTimeout(primeiro);
+            clearInterval(id);
+        };
     }, [rodando]);
 
     if (!isTimerActive(state)) {
@@ -35,7 +39,9 @@ const TimerWidget = () => {
                     <FiWatch className="w-4 h-4 mr-1.5" aria-hidden="true"/>
                     Cronômetro
                 </button>
-                <StartTimerModal isOpen={startOpen} onClose={() => setStartOpen(false)} onStarted={setState}/>
+                {startOpen && (
+                    <StartTimerModal isOpen onClose={() => setStartOpen(false)} onStarted={setState}/>
+                )}
             </>
         );
     }
@@ -76,7 +82,9 @@ const TimerWidget = () => {
             <button type="button" className={iconButton} onClick={() => setStopOpen(true)} disabled={busy} aria-label="Parar cronômetro" title="Parar">
                 <FiSquare className="w-4 h-4" aria-hidden="true"/>
             </button>
-            <StopTimerModal isOpen={stopOpen} state={state} onClose={() => setStopOpen(false)} onStopped={setState}/>
+            {stopOpen && (
+                <StopTimerModal isOpen state={state} onClose={() => setStopOpen(false)} onStopped={setState}/>
+            )}
         </div>
     );
 };

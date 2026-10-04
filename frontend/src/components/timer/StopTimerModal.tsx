@@ -31,19 +31,16 @@ const StopTimerModal = ({isOpen, state, onClose, onStopped}: StopTimerModalProps
     const [enviando, setEnviando] = useState(false);
     const [confirmarDescarte, setConfirmarDescarte] = useState(false);
 
+    // O widget só monta este modal quando ele é aberto: o estado inicial (e a
+    // prévia) valem para esta abertura.
     useEffect(() => {
         if (!isOpen) return;
-        setEntries(null);
-        setConfirmarDescarte(false);
-        setDescricao(state.description);
         PreviewTimerStop()
             .then(prev => setEntries(prev ?? []))
             .catch((error: unknown) => {
                 toast.error('Erro ao calcular o tempo: ' + errMsg(error));
                 setEntries([]);
             });
-        // Só ao abrir: a descrição digitada não deve ser sobrescrita.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
     const setMinutos = (date: string, minutes: number) => {

@@ -31,11 +31,10 @@ const StartTimerModal = ({isOpen, onClose, onStarted}: StartTimerModalProps) => 
     const [faturavel, setFaturavel] = useState(true);
     const [iniciando, setIniciando] = useState(false);
 
+    // O widget só monta este modal quando ele é aberto, então o estado já
+    // começa limpo a cada abertura.
     useEffect(() => {
         if (!isOpen) return;
-        setSelecionada(null);
-        setBusca('');
-        setDescricao('');
         GetSavedTasks()
             .then(tasks => setSalvas((tasks ?? []).map(t => ({
                 taskId: t.taskId,
@@ -45,8 +44,9 @@ const StartTimerModal = ({isOpen, onClose, onStarted}: StartTimerModalProps) => 
             .catch((error: unknown) => toast.error('Erro ao carregar tarefas salvas: ' + errMsg(error)));
     }, [isOpen]);
 
-    useEffect(() => {
-        if (!isOpen || origem !== 'teamwork' || remotas !== null) return;
+    const abrirTeamwork = () => {
+        setOrigem('teamwork');
+        if (remotas !== null || carregandoRemotas) return;
         setCarregandoRemotas(true);
         GetTasks()
             .then(tasks => setRemotas((tasks ?? []).map(t => ({
@@ -59,7 +59,7 @@ const StartTimerModal = ({isOpen, onClose, onStarted}: StartTimerModalProps) => 
                 setRemotas([]);
             })
             .finally(() => setCarregandoRemotas(false));
-    }, [isOpen, origem, remotas]);
+    };
 
     const lista = useMemo(() => {
         const base = origem === 'salvas' ? salvas : (remotas ?? []);
@@ -119,7 +119,7 @@ const StartTimerModal = ({isOpen, onClose, onStarted}: StartTimerModalProps) => 
                     Tarefas salvas
                 </button>
                 <button type="button" role="tab" aria-selected={origem === 'teamwork'}
-                        className={abaClass(origem === 'teamwork')} onClick={() => setOrigem('teamwork')}>
+                        className={abaClass(origem === 'teamwork')} onClick={abrirTeamwork}>
                     Buscar no Teamwork
                 </button>
             </div>
