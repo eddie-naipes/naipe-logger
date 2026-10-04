@@ -149,6 +149,14 @@ Fechar o aplicativo cancela o que estiver em voo: as requisições carregam o co
 >
 > O aviso de duplicata não bloqueia o envio: lançamentos são **somados**, não substituídos.
 
+### 🎯 Completar Período
+
+Escolha um mês (por padrão, do dia 1 até hoje; marque "mês inteiro" para incluir os dias que ainda não chegaram) e um template ou um conjunto de tarefas salvas. O aplicativo lê quanto já foi lançado em cada dia útil e monta um plano que lança **só o que falta** para atingir a jornada diária configurada: as entradas são usadas na ordem do template, a última é encurtada para não passar da jornada, dias completos ficam de fora e os dias da semana de cada tarefa são respeitados. Déficits menores que a granularidade escolhida (padrão 15 min) não geram lançamento. Como a API não informa o horário dos lançamentos existentes, o início das novas entradas é estimado a partir do primeiro horário do template mais o que já foi lançado no dia. Um resumo por dia mostra lançado, faltante e a lançar; o envio usa o mesmo fluxo do Lançamento de Horas (verificação de duplicatas, reenviar falhas e desfazer).
+
+### 🗓️ Semana
+
+Grade tarefa × dia (segunda a sexta, com opção de mostrar sábado e domingo), com navegação entre semanas, totais por dia e por tarefa, dias abaixo da jornada em destaque e fins de semana/feriados em cinza. As linhas são as tarefas com lançamento na semana mais as tarefas salvas. Digitar um valor **maior** numa célula cria um lançamento só com a diferença (descrição, horário e billable vêm da tarefa salva e podem ser ajustados); para **reduzir**, a célula abre a lista dos seus lançamentos para editar ou apagar um a um — nada é apagado automaticamente. **Copiar semana anterior** monta um plano com os lançamentos da semana passada no mesmo dia da semana (pulando dias não úteis), revisável e enviado com verificação de duplicatas, reenvio de falhas e desfazer.
+
 ### 📋 Gerenciamento de Tarefas
 
 ![Gerenciamento de Tarefas](frontend/src/assets/manager-task.png)
