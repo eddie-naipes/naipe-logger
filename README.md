@@ -77,7 +77,8 @@ teamwork-logger/
 │   │   ├── retry.go        # Política de repetição (rate limit e falhas de rede)
 │   │   ├── time_entries.go # CRUD de apontamentos e distribuição
 │   │   ├── Holiday.go      # Feriados (BrasilAPI + fallback)
-│   │   └── types.go
+│   │   ├── types.go
+│   │   └── testdata/       # Respostas reais anonimizadas (testes de contrato)
 │   ├── config/
 │   │   └── config.go       # Persistência de config, tarefas e templates
 │   ├── security/
@@ -85,6 +86,7 @@ teamwork-logger/
 │   ├── logging/            # slog, arquivo rotativo e mascaramento de segredos
 │   ├── update/             # Verificação/download de releases do GitHub
 │   ├── legacy/             # Detecção da instalação antiga (Windows/HKLM)
+│   ├── gitlog/             # Sugestão de descrição a partir do git log do dia
 │   ├── internal/fsutil/    # Gravação atômica e pasta ~/.teamwork-logger
 │   ├── app.go              # Ciclo de vida, conexão e fronteira do token
 │   └── app_*.go            # Bindings expostos ao frontend, por domínio
@@ -101,6 +103,7 @@ teamwork-logger/
 │   │   └── contexts/       # ThemeContext, UpdateContext
 │   ├── wailsjs/            # Bindings gerados pelo Wails (alias @wailsjs)
 │   └── index.html
+├── tools/capturefixtures/  # Captura (só GET) e anonimiza as fixtures da API
 └── main.go
 ```
 
@@ -186,6 +189,7 @@ Templates são salvos em `templates.json`. Não há versionamento nem exportaç�
 - Logout, que remove o token do cofre do sistema
 - **Sobre / Atualizações**: versão atual, botão "Verificar atualizações" e a opção "Verificar atualizações ao iniciar"
 - **Diagnóstico**: caminho do arquivo de log e atalho para abrir a pasta
+- **Integração com Git**: repositórios locais (e e-mail do autor, opcional) cujos commits do dia viram sugestão de descrição. O botão "Sugerir pelos commits" aparece na edição de lançamentos e nas entradas das tarefas salvas; ele lista os commits do dia (sem merges, só os seus) para você escolher quais entram. Os assuntos são juntados por "; " sem os prefixos Conventional Commits (`feat:`, `fix(api):`...), sem repetições, agrupados por repositório quando há mais de um e limitados a 250 caracteres. Requer o `git` no PATH; nada é escrito nos repositórios.
 
 Quando há versão nova, um aviso no topo da janela mostra as novidades da release e oferece "Atualizar agora" (Windows, com barra de progresso) ou "Abrir página da versão"; dá para dispensá-lo até a próxima abertura. Na inicialização o app também avisa se a configuração estava corrompida (listando os backups) e, no Windows, se há uma instalação antiga para remover.
 
@@ -271,7 +275,7 @@ Ao mudar um binding em `backend/app*.go`, rode `wails generate module` e comite 
 ### Testes e verificações
 
 ```bash
-gofmt -l backend/ main.go   # deve não listar nada
+gofmt -l backend/ main.go tools/   # deve não listar nada
 go vet ./...
 go test ./...
 go test -race ./...         # requer CGO_ENABLED=1 e gcc (no Windows: MinGW, ex. `scoop install mingw`)

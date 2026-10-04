@@ -1,0 +1,398 @@
+{
+  "included": {
+    "projects": {
+      "1007": {
+        "activePages": {
+          "billing": true,
+          "board": true,
+          "comments": true,
+          "files": true,
+          "finance": true,
+          "forms": true,
+          "gantt": true,
+          "links": true,
+          "list": true,
+          "messages": true,
+          "milestones": true,
+          "notebooks": true,
+          "proofs": true,
+          "riskRegister": true,
+          "schedule": true,
+          "table": true,
+          "tasks": true,
+          "tickets": true,
+          "time": true,
+          "timeline": true
+        },
+        "allowNotifyAnyone": false,
+        "announcement": "",
+        "archivedAt": null,
+        "archivedBy": null,
+        "budgetCount": 0,
+        "category": null,
+        "categoryId": null,
+        "company": {
+          "id": 1008,
+          "type": "companies"
+        },
+        "companyId": 1008,
+        "completedAt": null,
+        "completedBy": null,
+        "createdAt": "2019-06-24T17:34:01Z",
+        "createdBy": 1009,
+        "customFieldValueIds": null,
+        "customFieldValues": [],
+        "customfieldValues": [],
+        "defaultPrivacy": "Texto ficticio 3",
+        "deletedAt": null,
+        "deletedBy": null,
+        "description": "",
+        "directFileUploadsEnabled": true,
+        "endAt": null,
+        "endDate": null,
+        "financialBudget": null,
+        "financialBudgetId": null,
+        "harvestTimersEnabled": false,
+        "id": 1007,
+        "integrations": {
+          "googleDrive": {
+            "access": "",
+            "enabled": false,
+            "folder": "",
+            "folderName": ""
+          },
+          "oneDriveBusiness": {
+            "account": "",
+            "enabled": false,
+            "folder": "Texto ficticio 4",
+            "folderName": "Nome ficticio 4"
+          },
+          "sharepoint": {
+            "account": "",
+            "enabled": false,
+            "folder": "Texto ficticio 4",
+            "folderName": "Nome ficticio 4"
+          },
+          "xero": {
+            "baseCurrency": "",
+            "connected": false,
+            "countryCode": "",
+            "enabled": false,
+            "organisation": ""
+          }
+        },
+        "isBillable": true,
+        "isOnBoardingProject": false,
+        "isSampleProject": false,
+        "logo": "",
+        "logoColor": null,
+        "logoIcon": null,
+        "name": "Nome ficticio 5",
+        "notifyCommentIncludeCreator": true,
+        "notifyEveryone": false,
+        "notifyTaskAssignee": false,
+        "overviewStartPage": "Texto ficticio 5",
+        "ownedBy": 0,
+        "ownerId": 0,
+        "privacyEnabled": false,
+        "projectNumber": null,
+        "projectOwner": {
+          "id": 0,
+          "type": "users"
+        },
+        "projectOwnerId": 0,
+        "replyByEmailEnabled": true,
+        "showAnnouncement": false,
+        "skipWeekends": false,
+        "startAt": null,
+        "startDate": null,
+        "startPage": "Texto ficticio 6",
+        "status": "active",
+        "subStatus": "current",
+        "tagIds": null,
+        "tags": [],
+        "tasksStartPage": "Texto ficticio 5",
+        "timeBudget": null,
+        "timeBudgetId": null,
+        "timelogRequiresTask": false,
+        "type": "normal",
+        "update": null,
+        "updateId": null,
+        "updatedAt": "2026-10-01T15:36:36Z",
+        "updatedBy": 1010,
+        "workflowIds": null
+      }
+    },
+    "tasklists": {
+      "1035": {
+        "createdAt": "2026-06-30T20:59:19Z",
+        "defaultTask": null,
+        "defaultTaskId": null,
+        "description": "",
+        "displayOrder": 8,
+        "icon": null,
+        "id": 1035,
+        "isBillable": null,
+        "isPinned": false,
+        "isPrivate": false,
+        "lockdown": null,
+        "lockdownId": null,
+        "milestone": null,
+        "milestoneId": null,
+        "name": "Nome ficticio 18",
+        "project": {
+          "id": 1007,
+          "type": "projects"
+        },
+        "projectId": 1007,
+        "status": "new",
+        "tasklistBudget": null,
+        "updatedAt": "2026-10-01T15:36:41Z"
+      }
+    }
+  },
+  "meta": {
+    "page": {
+      "count": 14,
+      "hasMore": true,
+      "pageOffset": 0,
+      "pageSize": 3
+    }
+  },
+  "tasks": [
+    {
+      "accumulatedEstimatedMinutes": 0,
+      "assigneeCompanies": [],
+      "assigneeCompanyIds": null,
+      "assigneeJobRoleIds": null,
+      "assigneeJobRoles": [],
+      "assigneeTeamIds": null,
+      "assigneeTeams": [],
+      "assigneeUserIds": null,
+      "assigneeUsers": [],
+      "assignees": [],
+      "attachments": [],
+      "capacities": null,
+      "changeFollowers": [],
+      "commentFollowers": [],
+      "completeFollowers": [],
+      "createdAt": "2026-10-01T11:52:09Z",
+      "createdBy": 1010,
+      "createdByUserId": 1038,
+      "crmDealIds": null,
+      "dateUpdated": "2026-10-01T11:52:09Z",
+      "decimalDisplayOrder": 1986,
+      "deletedAt": null,
+      "deletedBy": null,
+      "description": "",
+      "descriptionContentType": "Descricao ficticia 1",
+      "displayOrder": 1986,
+      "dueDate": null,
+      "dueDateBase": null,
+      "dueDateFromMilestone": false,
+      "dueDateOffset": null,
+      "estimateMinutes": 0,
+      "hasDeskTickets": false,
+      "id": 1039,
+      "isArchived": false,
+      "isPrivate": 0,
+      "lockdown": null,
+      "name": "Nome ficticio 20",
+      "notify": false,
+      "parentTask": null,
+      "parentTaskId": 0,
+      "priority": null,
+      "progress": 0,
+      "proofs": null,
+      "sequence": null,
+      "sequenceId": null,
+      "startDate": null,
+      "startDateOffset": null,
+      "status": "new",
+      "tagIds": null,
+      "tags": null,
+      "tasklist": {
+        "id": 1035,
+        "meta": {
+          "name": "Nome ficticio 18",
+          "projectId": 1007
+        },
+        "type": "tasklists"
+      },
+      "tasklistId": 1035,
+      "updatedAt": "2026-10-01T12:00:45Z",
+      "updatedBy": 1010,
+      "userPermissions": {
+        "canAddSubtasks": true,
+        "canComplete": true,
+        "canEdit": true,
+        "canLogTime": true,
+        "canViewEstTime": true
+      }
+    },
+    {
+      "accumulatedEstimatedMinutes": 0,
+      "assigneeCompanies": [],
+      "assigneeCompanyIds": null,
+      "assigneeJobRoleIds": null,
+      "assigneeJobRoles": [],
+      "assigneeTeamIds": null,
+      "assigneeTeams": [],
+      "assigneeUserIds": [
+        1038
+      ],
+      "assigneeUsers": [
+        {
+          "id": 1038,
+          "type": "users"
+        }
+      ],
+      "assignees": [
+        {
+          "id": 1038,
+          "type": "users"
+        }
+      ],
+      "attachments": [],
+      "capacities": null,
+      "changeFollowers": [],
+      "commentFollowers": [],
+      "completeFollowers": [],
+      "createdAt": "2026-10-01T11:51:42Z",
+      "createdBy": 1010,
+      "createdByUserId": 1038,
+      "crmDealIds": null,
+      "dateUpdated": "2026-10-01T11:51:42Z",
+      "decimalDisplayOrder": 1987,
+      "deletedAt": null,
+      "deletedBy": null,
+      "description": "",
+      "descriptionContentType": "Descricao ficticia 1",
+      "displayOrder": 1987,
+      "dueDate": null,
+      "dueDateBase": null,
+      "dueDateFromMilestone": false,
+      "dueDateOffset": null,
+      "estimateMinutes": 0,
+      "hasDeskTickets": false,
+      "id": 1040,
+      "isArchived": false,
+      "isPrivate": 0,
+      "lockdown": null,
+      "name": "Nome ficticio 21",
+      "notify": false,
+      "parentTask": null,
+      "parentTaskId": 0,
+      "priority": null,
+      "progress": 0,
+      "proofs": null,
+      "sequence": null,
+      "sequenceId": null,
+      "startDate": null,
+      "startDateOffset": null,
+      "status": "new",
+      "tagIds": null,
+      "tags": null,
+      "tasklist": {
+        "id": 1035,
+        "meta": {
+          "name": "Nome ficticio 18",
+          "projectId": 1007
+        },
+        "type": "tasklists"
+      },
+      "tasklistId": 1035,
+      "updatedAt": "2026-10-01T11:51:43Z",
+      "updatedBy": 1010,
+      "userPermissions": {
+        "canAddSubtasks": true,
+        "canComplete": true,
+        "canEdit": true,
+        "canLogTime": true,
+        "canViewEstTime": true
+      }
+    },
+    {
+      "accumulatedEstimatedMinutes": 0,
+      "assigneeCompanies": [],
+      "assigneeCompanyIds": null,
+      "assigneeJobRoleIds": null,
+      "assigneeJobRoles": [],
+      "assigneeTeamIds": null,
+      "assigneeTeams": [],
+      "assigneeUserIds": [
+        1038
+      ],
+      "assigneeUsers": [
+        {
+          "id": 1038,
+          "type": "users"
+        }
+      ],
+      "assignees": [
+        {
+          "id": 1038,
+          "type": "users"
+        }
+      ],
+      "attachments": [],
+      "capacities": null,
+      "changeFollowers": [],
+      "commentFollowers": [],
+      "completeFollowers": [],
+      "createdAt": "2026-10-01T11:51:16Z",
+      "createdBy": 1010,
+      "createdByUserId": 1038,
+      "crmDealIds": null,
+      "dateUpdated": "2026-10-01T11:51:16Z",
+      "decimalDisplayOrder": 1988,
+      "deletedAt": null,
+      "deletedBy": null,
+      "description": "",
+      "descriptionContentType": "Descricao ficticia 1",
+      "displayOrder": 1988,
+      "dueDate": null,
+      "dueDateBase": null,
+      "dueDateFromMilestone": false,
+      "dueDateOffset": null,
+      "estimateMinutes": 0,
+      "hasDeskTickets": false,
+      "id": 1041,
+      "isArchived": false,
+      "isPrivate": 0,
+      "lockdown": null,
+      "name": "Nome ficticio 22",
+      "notify": false,
+      "parentTask": null,
+      "parentTaskId": 0,
+      "priority": null,
+      "progress": 0,
+      "proofs": null,
+      "sequence": null,
+      "sequenceId": null,
+      "startDate": null,
+      "startDateOffset": null,
+      "status": "new",
+      "tagIds": null,
+      "tags": null,
+      "tasklist": {
+        "id": 1035,
+        "meta": {
+          "name": "Nome ficticio 18",
+          "projectId": 1007
+        },
+        "type": "tasklists"
+      },
+      "tasklistId": 1035,
+      "updatedAt": "2026-10-01T12:03:24Z",
+      "updatedBy": 1010,
+      "userPermissions": {
+        "canAddSubtasks": true,
+        "canComplete": true,
+        "canEdit": true,
+        "canLogTime": true,
+        "canViewEstTime": true
+      }
+    }
+  ]
+}

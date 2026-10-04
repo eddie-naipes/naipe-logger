@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { FiList, FiRefreshCw, FiSearch, FiPlus, FiTrash2, FiSave, FiClock, FiEdit, FiFilter } from 'react-icons/fi';
 import TimeInputComponent from '../components/TimeInputComponent';
+import CommitSuggestButton from '../components/git/CommitSuggestButton';
 import {
     GetProjects,
     GetSavedTasks,
@@ -613,9 +614,14 @@ const Tasks = () => {
                                             </div>
 
                                             <div className="mb-3">
-                                                <label htmlFor={`entry-${index}-description`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                                    Descrição
-                                                </label>
+                                                <div className="flex items-center justify-between">
+                                                    <label htmlFor={`entry-${index}-description`} className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                        Descrição
+                                                    </label>
+                                                    <CommitSuggestButton
+                                                        onSuggest={(texto) => updateEntry(index, 'description', texto)}
+                                                    />
+                                                </div>
                                                 <input
                                                     id={`entry-${index}-description`}
                                                     type="text"

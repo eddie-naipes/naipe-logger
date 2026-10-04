@@ -515,15 +515,26 @@ func (t *TeamworkAPI) GetTimeEntryDetails(entryID int) (*TimeEntryReport, error)
 		return nil, fmt.Errorf("erro ao obter detalhes da entrada de tempo: %d %s", resp.StatusCode, resp.Status)
 	}
 
+	// A v3 responde na chave "timelog" (ver testdata/time_entry_detail.json);
+	// só "timeEntry" era lido e o detalhe voltava sempre vazio.
 	var response struct {
-		TimeEntry TimeEntryReport `json:"timeEntry"`
+		Timelog   *v3Timelog       `json:"timelog"`
+		TimeEntry *TimeEntryReport `json:"timeEntry"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
 	}
 
-	return &response.TimeEntry, nil
+	var entry TimeEntryReport
+	switch {
+	case response.Timelog != nil:
+		entry = response.Timelog.toReport()
+	case response.TimeEntry != nil:
+		entry = *response.TimeEntry
+	}
+	entry.Date = normalizeEntryDate(entry.Date)
+	return &entry, nil
 }
 
 func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {

@@ -13,7 +13,7 @@ wails dev                         # run the app with hot reload (needs Wails CLI
 wails build                       # production build -> build/bin/teamwork-logger(.exe/.app)
 
 # Same checks CI runs (.github/workflows/build.yml, job "verify"):
-gofmt -l backend/ main.go         # must print nothing
+gofmt -l backend/ main.go tools/  # must print nothing
 go vet ./...
 go test ./...
 go test -race ./...               # needs CGO_ENABLED=1 and gcc (Windows: MinGW, e.g. `scoop install mingw`)
@@ -60,6 +60,8 @@ go test ./backend/api -run TestDoRequestRepeteEm429 -v
 
 **Legacy install (`backend/legacy`).** Older installers ran as admin into Program Files and registered under HKLM `...\Uninstall\Naipe Logger` (no InstallLocation, unquoted `uninst.exe`) or `...\Uninstall\Naipe Sync SolutionsTeamwork Logger` (DisplayName "Teamwork Logger"). The current installer is per-user (HKCU). `legacy_windows.go` reads HKLM (64- and 32-bit views) via `golang.org/x/sys/windows/registry`; `legacy_other.go` is the stub for other OSes. Selection logic (`Select`) is OS-independent and tested with a fake `Registry`. `RunLegacyUninstaller` re-detects (the command never comes from JS) and runs it with `ShellExecute "runas"` (UAC). Check `GOOS=linux go vet ./...` and `GOOS=darwin go vet ./...` when touching OS-specific files.
 
+**Git integration (`backend/gitlog`, `config/gitlog.go`, `app_gitlog.go`).** Suggests an entry description from the user's commits of a day: for each configured repo it validates the path (`git rev-parse --is-inside-work-tree`) and runs `git log --branches --no-merges --fixed-strings --regexp-ignore-case --author=<email> --since/--until` (local-time day) via `exec.CommandContext` (args array, never a shell; `git` from PATH, 5s timeout per repo, `CREATE_NO_WINDOW` on Windows so no console flashes). The author email is `GitIntegration.AuthorEmail` or the repo's `git config user.email`, re-checked exactly in Go; commits whose author date falls outside the day are dropped. `BuildSuggestion` strips Conventional Commits prefixes of the usual types (`feat(api)!: x` -> `x`; other `Word: ...` prefixes stay), dedupes case-insensitively, joins with `"; "`, groups as `repo-a: x; y | repo-b: z` when several repos contribute, and caps at 250 runes with `…`. Invalid repos become `warnings`, not errors. Bindings: `GetGitSuggestion(date)`, `BuildGitSuggestion(commits)` (recomputes for the user's selection), `Get/SaveGitIntegration`, `SelectGitRepository` (`runtime.OpenDirectoryDialog` behind the `openDirectoryDialog` var). Frontend: `components/config/GitIntegrationSection.tsx` and the reusable `components/git/CommitSuggestButton.tsx` (`date?`, `onSuggest(text)`; hidden when disabled/no repos), used in `EditEntryModal` and `pages/Task.tsx`. Go tests build throwaway repos with `GIT_AUTHOR_DATE`/`GIT_COMMITTER_DATE` and isolate from the user's git config (`GIT_CONFIG_GLOBAL=os.DevNull`, `GIT_CONFIG_NOSYSTEM=1`); they skip when `git` is missing.
+
 **Shared disk helpers (`backend/internal/fsutil`).** `WriteFileAtomic`, `AppDir()` (`~/.teamwork-logger`) and the 0700/0600 permission constants.
 
 **Security (`backend/security`).** The API token lives only in the OS keyring (`go-keyring`). Invariants to preserve:
@@ -72,6 +74,8 @@ go test ./backend/api -run TestDoRequestRepeteEm429 -v
 ## Testing conventions
 
 Go tests use only the standard library; HTTP behaviour is tested with `httptest.NewServer` (see `retry_test.go`). Test names are descriptive Portuguese (`TestDoRequestNaoRepetePOSTEm500`).
+
+**Contract tests and API fixtures.** `backend/api/testdata/*.json` are REAL Teamwork responses, anonymized, served by `contract_test.go` (routes each endpoint the client uses to a fixture; page 1 = fixture, later pages = `{}`) to exercise the real client functions. Bugs slipped through before because hand-written mocks imitated formats the API doesn't use (total in `meta.page.totalItems` instead of `meta.page.count`, `assignedTo` ignored, numeric hours/minutes in `loggedtime.json`, detail under `timelog` not `timeEntry`) — **new mocks must start from these fixtures**, not from guesses. Regenerate with `go run ./tools/capturefixtures` (uses the app's config + keyring token; GET only, small `pageSize`, previous month for time data; never writes the token or headers). Anonymization is deny-by-default and deterministic: every string is replaced (names, e-mails, company, projects, tasks, lists, tags, descriptions, URLs/hosts, avatars) except dates/times, numeric strings and enum-like keys (`type`, `*status`, `*type`, ...); IDs (`id`, `*Id`, `*Ids`, `*By`, numeric map keys like `included.projects["123"]`) are remapped to fake values consistently across all files of a run; numbers, booleans, meta/pagination, timestamps and minutes are kept, as is the string-vs-number type of each field. A file still containing the user's name/e-mail/company/host is discarded. `-from <dir>` re-anonymizes existing files offline (after tightening the rules). Always grep the output for personal data before committing.
 
 Frontend tests (`*.test.ts(x)` next to the code) mock bindings with `vi.mock('@wailsjs/go/backend/App', …)` / `vi.mock('@wailsjs/runtime/runtime', …)` and `react-toastify`; see `hooks/usePlan.test.ts` and `hooks/useUpdate.test.ts`.
 

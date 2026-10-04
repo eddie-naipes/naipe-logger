@@ -1,0 +1,52 @@
+{
+  "person": {
+    "administrator": false,
+    "avatarUrl": "https://exemplo.invalid/recurso/1",
+    "canAccessPortfolio": true,
+    "canAddProjects": false,
+    "canManagePortfolio": false,
+    "company": {
+      "id": 1001,
+      "type": "companies"
+    },
+    "companyId": 1001,
+    "companyRoleId": 1002,
+    "createdAt": "2025-02-14T12:55:25Z",
+    "createdBy": {
+      "id": 1003,
+      "type": "users"
+    },
+    "deleted": false,
+    "email": "pessoa1@exemplo.invalid",
+    "emailAddress": "pessoa1@exemplo.invalid",
+    "firstName": "Nome ficticio 1",
+    "id": 1004,
+    "inOwnerCompany": true,
+    "installationId": 1005,
+    "isAdmin": false,
+    "isClientUser": false,
+    "isPlaceholderResource": false,
+    "isServiceAccount": false,
+    "lastLogin": "2026-07-23T12:57:29Z",
+    "lastName": "Nome ficticio 2",
+    "ldHash": "Texto ficticio 1",
+    "lengthOfDay": 8,
+    "phoneNumberMobile": "",
+    "siteOwner": false,
+    "timezone": "Texto ficticio 2",
+    "title": "",
+    "type": "account",
+    "updatedAt": "2025-04-30T12:00:40Z",
+    "updatedBy": {
+      "id": 1004,
+      "type": "users"
+    },
+    "userName": "Nome ficticio 3",
+    "userType": "account",
+    "workingHour": {
+      "id": 1006,
+      "type": "workingHours"
+    },
+    "workingHoursId": 1006
+  }
+}
