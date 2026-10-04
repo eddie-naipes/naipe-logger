@@ -13,6 +13,7 @@ import {
 import {
     ClearHolidayCache,
     GetBrazilianHolidays,
+    GetExtraNonWorkingDays,
     GetHolidayCacheStats,
     PreloadHolidays,
     RefreshHolidaysForYear
@@ -21,7 +22,9 @@ import {ptBR} from 'date-fns/locale';
 import {formatDateBR} from '../utils/dates';
 import Modal from './Modal';
 import {errMsg} from '../utils/errors';
-import type {Holiday, HolidayCacheStats} from '../types/backend';
+import type {ExtraNonWorkingDay, Holiday, HolidayCacheStats} from '../types/backend';
+import WorkCalendarSettings from './holidays/WorkCalendarSettings';
+import {nonWorkingDayLabel} from '../utils/nonWorkingDays';
 
 // Datas 'YYYY-MM-DD' ordenam corretamente como texto.
 const sortHolidays = (holidaysData: readonly Holiday[] | null | undefined): Holiday[] =>
@@ -38,6 +41,18 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
     const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
     const [holidays, setHolidays] = useState<Holiday[]>([]);
     const [preloading, setPreloading] = useState(false);
+    // Dias do calendário de trabalho (estaduais, municipais, pontes, férias)
+    // do ano carregado; null enquanto nenhum ano foi carregado.
+    const [extraDays, setExtraDays] = useState<ExtraNonWorkingDay[] | null>(null);
+
+    const loadExtraDays = async (year: number) => {
+        try {
+            setExtraDays((await GetExtraNonWorkingDays(year) ?? []) as ExtraNonWorkingDay[]);
+        } catch (error) {
+            console.error('Erro ao carregar calendário de trabalho:', error);
+            setExtraDays([]);
+        }
+    };
 
     const loadCacheStats = useCallback(async (): Promise<void> => {
         try {
@@ -70,6 +85,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
             const holidaysArray = sortHolidays(holidaysData);
 
             setHolidays(holidaysArray);
+            await loadExtraDays(year);
             toast.success(`${holidaysArray.length} feriados carregados para ${year}`);
         } catch (error) {
             console.error('Erro ao carregar feriados:', error);
@@ -159,6 +175,10 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                 </>
             }
         >
+            <WorkCalendarSettings onSaved={() => {
+                if (extraDays !== null) void loadExtraDays(selectedYear);
+            }}/>
+
             {/* Controles principais */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="space-y-4">
@@ -414,6 +434,30 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                     )}
                 </div>
             </div>
+
+            {extraDays && extraDays.length > 0 && (
+                <div className="mt-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                            <FiCalendar className="w-5 h-5 mr-2" aria-hidden="true"/>
+                            Calendário de trabalho em {selectedYear}
+                            <span className="ml-2 px-2 py-1 text-xs bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200 rounded-full">
+                                {extraDays.length} dias
+                            </span>
+                        </h3>
+                    </div>
+                    <ul className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto">
+                        {extraDays.map(day => (
+                            <li key={day.date} className="text-sm border border-gray-200 dark:border-gray-600 rounded p-2">
+                                <p className="font-medium text-gray-900 dark:text-white">{day.name}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">
+                                    {formatDate(day.date)} · {nonWorkingDayLabel(day.type)}
+                                </p>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </Modal>
     );
 };
