@@ -17,6 +17,8 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Relatórios em PDF**: exportação do relatório de horas do Teamwork por período
 - **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
 - **Logs em arquivo** para diagnóstico, com o token sempre mascarado
+- **Lembretes** por notificação do sistema: horas pendentes do dia e dias incompletos no fim do mês
+- **Cronômetro por tarefa** no cabeçalho, que vira lançamento ao parar
 - **Tema claro/escuro**
 
 ## 🔒 Segurança
@@ -208,12 +210,22 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 - Marcação de fins de semana e feriados
 - Clique num dia para carregá-lo no módulo de lançamento
 
+### 🔔 Lembretes
+
+Notificações nativas do sistema avisam no horário configurado (padrão 18:00, só em dias úteis, respeitando feriados) quando o dia ainda não fechou a jornada — "Faltam 2h 30min para fechar o dia", com o botão "Lançar agora" — e, nos últimos dias úteis do mês (padrão: os 2 últimos), listam os dias úteis incompletos ("3 dias pendentes: 02, 07, 15") com "Completar o mês". Cada lembrete sai no máximo uma vez por dia, mesmo reiniciando o app, e clicar nele traz a janela para frente na tela certa. Tudo é ajustável na seção **Lembretes** da Configuração, que também tem o botão "Testar lembrete" e avisa quando as notificações do sistema não estão disponíveis.
+
+### ⏱️ Cronômetro por tarefa
+
+O botão **Cronômetro** no cabeçalho inicia a contagem numa tarefa salva ou buscada no Teamwork; o widget mostra a tarefa e o tempo correndo, com pausar, retomar e parar. Ao parar, um diálogo mostra o lançamento previsto (um por dia, se passou da meia-noite, com o horário real de início) para revisar minutos e descrição antes de lançar — ou descartar. O cronômetro sobrevive a fechar o app, arredonda por minuto (ou em múltiplos de 15, configurável) e, se ficar rodando mais de 4 horas (configurável), uma notificação pergunta "Esqueceu o cronômetro ligado?" com "Parar e lançar" e "Continuar".
+
 ## 💾 Armazenamento Local
 
 ```
 ~/.teamwork-logger/
 ├── config.json              # host, userId, jornada diária, tarefas salvas, preferências (0600)
 ├── templates.json           # templates de trabalho (0600)
+├── reminders.json           # último dia em que cada lembrete foi enviado (0600)
+├── timer.json               # cronômetro em andamento, se houver (0600)
 ├── cache/
 │   └── holidays-<ano>.json  # feriados da BrasilAPI por ano (0600)
 └── logs/

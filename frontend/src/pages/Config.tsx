@@ -13,6 +13,8 @@ import {errMsg} from '../utils/errors';
 import TimeInputComponent from '../components/TimeInputComponent';
 import AboutSection from '../components/config/AboutSection';
 import DiagnosticsSection from '../components/config/DiagnosticsSection';
+import RemindersSection from '../components/config/RemindersSection';
+import TimerSettingsSection from '../components/config/TimerSettingsSection';
 import GitIntegrationSection from '../components/config/GitIntegrationSection';
 import {setMinutosPorDiaCache} from '../hooks/useMinutosPorDia';
 import {
@@ -377,6 +379,8 @@ const Config = ({ onConfigSaved }: ConfigProps) => {
                 </div>
             )}
 
+            <RemindersSection/>
+            <TimerSettingsSection/>
             <GitIntegrationSection/>
             <AboutSection/>
             <DiagnosticsSection/>

@@ -702,6 +702,20 @@ export namespace backend {
 		    return a;
 		}
 	}
+	export class NotificationStatus {
+	    available: boolean;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new NotificationStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.error = source["error"];
+	    }
+	}
 	export class UserProfile {
 	    id: number;
 	    firstName: string;
@@ -763,6 +777,40 @@ export namespace config {
 	        this.enabled = source["enabled"];
 	        this.repositories = source["repositories"];
 	        this.authorEmail = source["authorEmail"];
+	    }
+	}
+	export class ReminderSettings {
+	    enabled: boolean;
+	    dailyTime: string;
+	    workDaysOnly: boolean;
+	    monthEndEnabled: boolean;
+	    monthEndDays: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ReminderSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.dailyTime = source["dailyTime"];
+	        this.workDaysOnly = source["workDaysOnly"];
+	        this.monthEndEnabled = source["monthEndEnabled"];
+	        this.monthEndDays = source["monthEndDays"];
+	    }
+	}
+	export class TimerSettings {
+	    rounding: string;
+	    longRunningHours: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimerSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rounding = source["rounding"];
+	        this.longRunningHours = source["longRunningHours"];
 	    }
 	}
 
@@ -1019,6 +1067,149 @@ export namespace planning {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace timer {
+	
+	export class Entry {
+	    date: string;
+	    time: string;
+	    minutes: number;
+	    seconds: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Entry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.time = source["time"];
+	        this.minutes = source["minutes"];
+	        this.seconds = source["seconds"];
+	    }
+	}
+	export class Segment {
+	    start: string;
+	    end: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Segment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	    }
+	}
+	export class State {
+	    running: boolean;
+	    paused: boolean;
+	    taskId: number;
+	    taskName: string;
+	    projectName: string;
+	    description: string;
+	    billable: boolean;
+	    startedAt: string;
+	    firstStartedAt: string;
+	    accumulatedSeconds: number;
+	    elapsedSeconds: number;
+	    segments: Segment[];
+	    date: string;
+	    loggedDates: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.paused = source["paused"];
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectName = source["projectName"];
+	        this.description = source["description"];
+	        this.billable = source["billable"];
+	        this.startedAt = source["startedAt"];
+	        this.firstStartedAt = source["firstStartedAt"];
+	        this.accumulatedSeconds = source["accumulatedSeconds"];
+	        this.elapsedSeconds = source["elapsedSeconds"];
+	        this.segments = this.convertValues(source["segments"], Segment);
+	        this.date = source["date"];
+	        this.loggedDates = source["loggedDates"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class StopResult {
+	    logged: boolean;
+	    results: api.TimeLogResult[];
+	    state: State;
+	
+	    static createFrom(source: any = {}) {
+	        return new StopResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.logged = source["logged"];
+	        this.results = this.convertValues(source["results"], api.TimeLogResult);
+	        this.state = this.convertValues(source["state"], State);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TaskRef {
+	    taskId: number;
+	    taskName: string;
+	    projectName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TaskRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectName = source["projectName"];
+	    }
 	}
 
 }
