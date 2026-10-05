@@ -13,7 +13,8 @@ import {
     FiDownload,
     FiTrash2,
     FiTarget,
-    FiGrid
+    FiGrid,
+    FiBarChart2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
@@ -69,6 +70,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             to: '/templates',
             icon: <FiSave className="w-5 h-5" />,
             label: 'Templates',
+            requiresConfig: true
+        },
+        {
+            to: '/relatorios',
+            icon: <FiBarChart2 className="w-5 h-5" />,
+            label: 'Relatórios',
             requiresConfig: true
         },
         {

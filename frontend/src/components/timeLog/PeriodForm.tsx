@@ -1,22 +1,16 @@
 import {FiAlertCircle, FiCalendar, FiLoader, FiPlay} from 'react-icons/fi';
 import type {NonWorkingDaysMap} from '../../hooks/useNonWorkingDays';
 import type {DateRange} from '../../hooks/useTimeEntries';
-import type {NonWorkingDay} from '../../types/backend';
+import {describeNonWorkingDay} from '../../utils/nonWorkingDays';
 
 const inputClass = 'bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white';
-
-const describeNonWorkingDay = (day: NonWorkingDay): string => {
-    if (day.type === 'holiday') return `Feriado: ${day.name}`;
-    if (day.type === 'weekend') return 'Fim de semana';
-    return 'Dia não útil';
-};
 
 interface DateFieldProps {
     id: string;
     label: string;
     value: string;
     onChange: (value: string) => void;
-    nonWorkingDay: NonWorkingDay | undefined;
+    nonWorkingDay: NonWorkingDaysMap[string];
     min?: string | undefined;
 }
 

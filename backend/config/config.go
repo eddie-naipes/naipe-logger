@@ -57,6 +57,8 @@ type AppConfig struct {
 	Timer          TimerSettings    `json:"timer"`
 	// GitIntegration: ver gitlog.go.
 	GitIntegration GitIntegration `json:"gitIntegration"`
+	// Calendar: feriados estaduais/municipais, pontes e férias (calendar.go).
+	Calendar CalendarSettings `json:"calendar"`
 }
 
 type AppSettings struct {

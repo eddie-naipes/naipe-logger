@@ -6,8 +6,10 @@ import {update} from '../models';
 import {api} from '../models';
 import {timer} from '../models';
 import {config} from '../models';
+import {holidays} from '../models';
 import {legacy} from '../models';
 import {backend} from '../models';
+import {reports} from '../models';
 
 export function ApplyTemplate(arg1:string):Promise<void>;
 
@@ -43,6 +45,8 @@ export function DownloadCurrentMonthReport():Promise<string>;
 
 export function DownloadTimeReport(arg1:string,arg2:string):Promise<string>;
 
+export function ExportTimeReportCSV(arg1:string,arg2:string,arg3:boolean):Promise<string>;
+
 export function GetAllNonWorkingDays(arg1:number,arg2:number):Promise<Array<Record<string, any>>>;
 
 export function GetAppSettings():Promise<config.AppSettings>;
@@ -51,7 +55,11 @@ export function GetAppVersion():Promise<string>;
 
 export function GetBrazilianHolidays(arg1:number):Promise<Array<api.Holiday>>;
 
+export function GetBrazilianStates():Promise<Array<holidays.State>>;
+
 export function GetDashboardStats():Promise<Record<string, any>>;
+
+export function GetExtraNonWorkingDays(arg1:number):Promise<Array<holidays.DayInfo>>;
 
 export function GetGitIntegration():Promise<config.GitIntegration>;
 
@@ -89,6 +97,8 @@ export function GetTimeEntriesForPeriod(arg1:string,arg2:string):Promise<Array<a
 
 export function GetTimeEntriesForPeriodV2(arg1:string,arg2:string,arg3:boolean):Promise<Array<api.TimeEntryReport>>;
 
+export function GetTimeReportSummary(arg1:string,arg2:string):Promise<reports.Report>;
+
 export function GetTimeTotalsForPeriod(arg1:string,arg2:string):Promise<api.TimeTotal>;
 
 export function GetTimerSettings():Promise<config.TimerSettings>;
@@ -98,6 +108,8 @@ export function GetTimerState():Promise<timer.State>;
 export function GetUserProfile():Promise<backend.UserProfile>;
 
 export function GetWeekGrid(arg1:string):Promise<planning.WeekGrid>;
+
+export function GetWorkCalendarSettings():Promise<config.CalendarSettings>;
 
 export function GetWorkingDays(arg1:string,arg2:string):Promise<Array<string>>;
 
@@ -144,6 +156,8 @@ export function SaveTask(arg1:api.Task):Promise<void>;
 export function SaveTemplate(arg1:api.Template):Promise<void>;
 
 export function SaveTimerSettings(arg1:config.TimerSettings):Promise<void>;
+
+export function SaveWorkCalendarSettings(arg1:config.CalendarSettings):Promise<config.CalendarSettings>;
 
 export function SelectGitRepository():Promise<string>;
 

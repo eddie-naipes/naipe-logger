@@ -743,6 +743,22 @@ export namespace backend {
 
 export namespace config {
 	
+	export class Absence {
+	    start: string;
+	    end: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Absence(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.description = source["description"];
+	    }
+	}
 	export class AppSettings {
 	    darkMode: boolean;
 	    autoUpdate: boolean;
@@ -763,6 +779,61 @@ export namespace config {
 	        this.checkUpdatesOnStartup = source["checkUpdatesOnStartup"];
 	    }
 	}
+	export class CustomHoliday {
+	    date: string;
+	    recurring: boolean;
+	    name: string;
+	    type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CustomHoliday(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.recurring = source["recurring"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	    }
+	}
+	export class CalendarSettings {
+	    uf: string;
+	    disabledStateHolidays: string[];
+	    customHolidays: CustomHoliday[];
+	    absences: Absence[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CalendarSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uf = source["uf"];
+	        this.disabledStateHolidays = source["disabledStateHolidays"];
+	        this.customHolidays = this.convertValues(source["customHolidays"], CustomHoliday);
+	        this.absences = this.convertValues(source["absences"], Absence);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class GitIntegration {
 	    enabled: boolean;
 	    repositories: string[];
@@ -850,6 +921,79 @@ export namespace gitlog {
 	        this.suggestion = source["suggestion"];
 	        this.commits = this.convertValues(source["commits"], Commit);
 	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace holidays {
+	
+	export class DayInfo {
+	    date: string;
+	    type: string;
+	    name: string;
+	    description?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DayInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.type = source["type"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	    }
+	}
+	export class StateHoliday {
+	    monthDay: string;
+	    name: string;
+	    source: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new StateHoliday(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.monthDay = source["monthDay"];
+	        this.name = source["name"];
+	        this.source = source["source"];
+	    }
+	}
+	export class State {
+	    uf: string;
+	    name: string;
+	    holidays: StateHoliday[];
+	
+	    static createFrom(source: any = {}) {
+	        return new State(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uf = source["uf"];
+	        this.name = source["name"];
+	        this.holidays = this.convertValues(source["holidays"], StateHoliday);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1068,6 +1212,158 @@ export namespace planning {
 		    return a;
 		}
 	}
+
+}
+
+export namespace reports {
+	
+	export class DayTotal {
+	    date: string;
+	    minutes: number;
+	    billableMinutes: number;
+	    isWorkingDay: boolean;
+	    expectedMinutes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DayTotal(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.minutes = source["minutes"];
+	        this.billableMinutes = source["billableMinutes"];
+	        this.isWorkingDay = source["isWorkingDay"];
+	        this.expectedMinutes = source["expectedMinutes"];
+	    }
+	}
+	export class ProjectTotal {
+	    projectId: number;
+	    projectName: string;
+	    minutes: number;
+	    billableMinutes: number;
+	    entryCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectTotal(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectId = source["projectId"];
+	        this.projectName = source["projectName"];
+	        this.minutes = source["minutes"];
+	        this.billableMinutes = source["billableMinutes"];
+	        this.entryCount = source["entryCount"];
+	    }
+	}
+	export class WeekTotal {
+	    weekStart: string;
+	    weekEnd: string;
+	    minutes: number;
+	    billableMinutes: number;
+	    workingDays: number;
+	    expectedMinutes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WeekTotal(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.weekStart = source["weekStart"];
+	        this.weekEnd = source["weekEnd"];
+	        this.minutes = source["minutes"];
+	        this.billableMinutes = source["billableMinutes"];
+	        this.workingDays = source["workingDays"];
+	        this.expectedMinutes = source["expectedMinutes"];
+	    }
+	}
+	export class TaskTotal {
+	    taskId: number;
+	    taskName: string;
+	    projectId: number;
+	    projectName: string;
+	    minutes: number;
+	    billableMinutes: number;
+	    entryCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TaskTotal(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectId = source["projectId"];
+	        this.projectName = source["projectName"];
+	        this.minutes = source["minutes"];
+	        this.billableMinutes = source["billableMinutes"];
+	        this.entryCount = source["entryCount"];
+	    }
+	}
+	export class Report {
+	    startDate: string;
+	    endDate: string;
+	    totalMinutes: number;
+	    billableMinutes: number;
+	    nonBillableMinutes: number;
+	    entryCount: number;
+	    workingDays: number;
+	    minutesPerDay: number;
+	    expectedMinutes: number;
+	    balanceMinutes: number;
+	    daysWithEntries: number;
+	    workingDaysWithoutEntries: number;
+	    byProject: ProjectTotal[];
+	    byTask: TaskTotal[];
+	    byDay: DayTotal[];
+	    byWeek: WeekTotal[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Report(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.startDate = source["startDate"];
+	        this.endDate = source["endDate"];
+	        this.totalMinutes = source["totalMinutes"];
+	        this.billableMinutes = source["billableMinutes"];
+	        this.nonBillableMinutes = source["nonBillableMinutes"];
+	        this.entryCount = source["entryCount"];
+	        this.workingDays = source["workingDays"];
+	        this.minutesPerDay = source["minutesPerDay"];
+	        this.expectedMinutes = source["expectedMinutes"];
+	        this.balanceMinutes = source["balanceMinutes"];
+	        this.daysWithEntries = source["daysWithEntries"];
+	        this.workingDaysWithoutEntries = source["workingDaysWithoutEntries"];
+	        this.byProject = this.convertValues(source["byProject"], ProjectTotal);
+	        this.byTask = this.convertValues(source["byTask"], TaskTotal);
+	        this.byDay = this.convertValues(source["byDay"], DayTotal);
+	        this.byWeek = this.convertValues(source["byWeek"], WeekTotal);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 
 }
 

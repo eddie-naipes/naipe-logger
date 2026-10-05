@@ -276,6 +276,12 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 		return false
 	}
 
+	// Feriados estaduais/municipais, pontes e férias vêm da configuração
+	// local; consultados antes do nacional por não dependerem da rede.
+	if _, extra := t.extraNonWorkingDay(data); extra {
+		return false
+	}
+
 	isHoliday, _, err := t.IsHoliday(data)
 	if err != nil {
 		slog.Warn("Erro ao verificar feriado", "data", data.Format("2006-01-02"), "err", err)
@@ -440,7 +446,8 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 	return toMaps(days), nil
 }
 
-// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês.
+// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês,
+// mais os dias extras da configuração (ver appendExtraNonWorkingDays).
 func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 
@@ -489,7 +496,7 @@ func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, erro
 		}
 	}
 
-	return nonWorkingDays, nil
+	return t.appendExtraNonWorkingDays(nonWorkingDays, startDate, endDate), nil
 }
 
 func (t *TeamworkAPI) GetTimeEntryDetails(entryID int) (*TimeEntryReport, error) {
@@ -739,7 +746,7 @@ func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
 		Description:   entry.Description,
 		IsBillable:    entry.IsBillable,
 		IsBilled:      entry.IsBilled,
-		StartTime:     "",
+		StartTime:     v2StartTime(entry),
 		EndTime:       "",
 	}
 }

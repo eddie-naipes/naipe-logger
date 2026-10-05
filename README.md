@@ -14,7 +14,8 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Calendário mensal**: visualize as horas já lançadas e os dias não úteis
 - **Gerenciador de apontamentos**: liste, edite e exclua entradas de tempo de um período
 - **Feriados brasileiros**: obtidos da BrasilAPI, com cache em disco e fallback local (inclui feriados móveis via algoritmo de Gauss)
-- **Relatórios em PDF**: exportação do relatório de horas do Teamwork por período
+- **Relatórios no app**: totais, cobrável × não cobrável, horas por dia contra a jornada, rankings por projeto/tarefa e exportação em CSV (Excel pt-BR) ou PDF
+- **Calendário de trabalho**: feriados estaduais da sua UF, feriados municipais, pontes e férias entram no cálculo de dias úteis
 - **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
 - **Logs em arquivo** para diagnóstico, com o token sempre mascarado
 - **Lembretes** por notificação do sistema: horas pendentes do dia e dias incompletos no fim do mês
@@ -207,7 +208,7 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 ### 📅 Calendário Mensal
 
 - Horas lançadas por dia
-- Marcação de fins de semana e feriados
+- Marcação de fins de semana, feriados (nacionais, estaduais, municipais e pontes) e férias, com legenda
 - Clique num dia para carregá-lo no módulo de lançamento
 
 ### 🔔 Lembretes
@@ -217,6 +218,14 @@ Notificações nativas do sistema avisam no horário configurado (padrão 18:00,
 ### ⏱️ Cronômetro por tarefa
 
 O botão **Cronômetro** no cabeçalho inicia a contagem numa tarefa salva ou buscada no Teamwork; o widget mostra a tarefa e o tempo correndo, com pausar, retomar e parar. Ao parar, um diálogo mostra o lançamento previsto (um por dia, se passou da meia-noite, com o horário real de início) para revisar minutos e descrição antes de lançar — ou descartar. O cronômetro sobrevive a fechar o app, arredonda por minuto (ou em múltiplos de 15, configurável) e, se ficar rodando mais de 4 horas (configurável), uma notificação pergunta "Esqueceu o cronômetro ligado?" com "Parar e lançar" e "Continuar".
+
+### 📈 Relatórios
+
+A página **Relatórios** resume um período (este mês, mês passado, esta semana, últimos 30 dias ou datas personalizadas, até 366 dias): total lançado, cobrável × não cobrável, jornada esperada (dias úteis × jornada diária) e saldo, colunas de horas por dia com a jornada como linha de referência (dias úteis sem lançamento aparecem zerados), rankings por projeto e por tarefa, totais por semana e uma tabela por tarefa ordenável. Só entram os lançamentos não excluídos do usuário conectado. O **CSV** sai na mesma pasta do PDF (`~/TeamworkReports`), pronto para o Excel em português: separador `;`, UTF-8 com BOM, vírgula decimal e datas dd/mm/aaaa. Há duas versões — **detalhada** (data, projeto, tarefa, descrição, início, minutos, horas, cobrável) e **resumida** (por projeto/tarefa) — e textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmula.
+
+### 🗓️ Calendário de Trabalho (feriados estaduais, municipais, pontes e férias)
+
+No **Gerenciamento de Feriados** (botão no Dashboard), a seção *Calendário de trabalho* permite escolher a **UF**, cujos feriados estaduais de data fixa passam a valer (a tabela embutida é conservadora e cada feriado pode ser desmarcado), cadastrar **feriados municipais, pontes e outras folgas** (numa data ou repetindo todo ano) e **períodos de férias/ausência**. Esses dias deixam de ser úteis na distribuição de horas, no calendário mensal, no Dashboard e nos relatórios, e aparecem com tipo próprio (`state_holiday`, `municipal`, `bridge`, `custom`, `vacation`). A configuração fica em `config.json` (campo `calendar`); arquivos de versões anteriores continuam valendo, sem nenhum dia extra.
 
 ## 💾 Armazenamento Local
 
