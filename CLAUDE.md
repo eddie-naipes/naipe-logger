@@ -18,7 +18,7 @@ go vet ./backend/... ./tools/... .   # not ./... — Go doesn't skip node_module
 go test ./backend/... ./tools/... .
 go test -race ./backend/... ./tools/... .  # needs CGO_ENABLED=1 and gcc (Windows: MinGW, e.g. `scoop install mingw`)
 go mod tidy && git diff --exit-code go.mod go.sum
-cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm audit --audit-level=high
+cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high  # dev-only audit is a non-blocking warning in CI
 
 # Frontend (in frontend/)
 npm run typecheck                 # tsc --noEmit (strict, noUncheckedIndexedAccess)
