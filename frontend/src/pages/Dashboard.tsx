@@ -20,6 +20,7 @@ import ReportPeriodModal from './ReportPeriodModal';
 import MonthlyTimeCalendar from '../components/MonthlyTimeCalendar';
 import TimeEntryManager from '../components/TimeEntryManager';
 import HolidayManager from '../components/HolidayManager';
+import MonthCloseCard from '../components/audit/MonthCloseCard';
 import {
     DownloadCurrentMonthReport,
     DownloadTimeReport,
@@ -361,6 +362,8 @@ const Dashboard = () => {
             </div>
 
             <MonthlyTimeCalendar />
+
+            <MonthCloseCard />
 
             {error && (
                 <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 dark:bg-red-900/20 dark:border-red-700">

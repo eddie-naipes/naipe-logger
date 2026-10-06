@@ -644,6 +644,158 @@ export namespace api {
 
 }
 
+export namespace audit {
+	
+	export class Issue {
+	    key: string;
+	    type: string;
+	    severity: string;
+	    date: string;
+	    entryIds: number[];
+	    entries: api.TimeEntryReport[];
+	    message: string;
+	    action: string;
+	    deleteEntryIds?: number[];
+	    keepEntryId?: number;
+	    minutes?: number;
+	    missingMinutes?: number;
+	    reason?: string;
+	    ignored: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Issue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.type = source["type"];
+	        this.severity = source["severity"];
+	        this.date = source["date"];
+	        this.entryIds = source["entryIds"];
+	        this.entries = this.convertValues(source["entries"], api.TimeEntryReport);
+	        this.message = source["message"];
+	        this.action = source["action"];
+	        this.deleteEntryIds = source["deleteEntryIds"];
+	        this.keepEntryId = source["keepEntryId"];
+	        this.minutes = source["minutes"];
+	        this.missingMinutes = source["missingMinutes"];
+	        this.reason = source["reason"];
+	        this.ignored = source["ignored"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Summary {
+	    year: number;
+	    month: number;
+	    loggedMinutes: number;
+	    expectedMinutes: number;
+	    expectedToDateMinutes: number;
+	    loggedToDateMinutes: number;
+	    workingDays: number;
+	    workingDaysToDate: number;
+	    minutesPerDay: number;
+	    dailyLimitMinutes: number;
+	    entryCount: number;
+	    errorCount: number;
+	    warningCount: number;
+	    ignoredCount: number;
+	    ready: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Summary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.year = source["year"];
+	        this.month = source["month"];
+	        this.loggedMinutes = source["loggedMinutes"];
+	        this.expectedMinutes = source["expectedMinutes"];
+	        this.expectedToDateMinutes = source["expectedToDateMinutes"];
+	        this.loggedToDateMinutes = source["loggedToDateMinutes"];
+	        this.workingDays = source["workingDays"];
+	        this.workingDaysToDate = source["workingDaysToDate"];
+	        this.minutesPerDay = source["minutesPerDay"];
+	        this.dailyLimitMinutes = source["dailyLimitMinutes"];
+	        this.entryCount = source["entryCount"];
+	        this.errorCount = source["errorCount"];
+	        this.warningCount = source["warningCount"];
+	        this.ignoredCount = source["ignoredCount"];
+	        this.ready = source["ready"];
+	    }
+	}
+	export class TypeCount {
+	    type: string;
+	    severity: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TypeCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.severity = source["severity"];
+	        this.count = source["count"];
+	    }
+	}
+	export class Result {
+	    issues: Issue[];
+	    counts: TypeCount[];
+	    summary: Summary;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.issues = this.convertValues(source["issues"], Issue);
+	        this.counts = this.convertValues(source["counts"], TypeCount);
+	        this.summary = this.convertValues(source["summary"], Summary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+
+}
+
 export namespace backend {
 	
 	export class FillGapsRequest {
@@ -777,6 +929,22 @@ export namespace config {
 	        this.startMinimized = source["startMinimized"];
 	        this.language = source["language"];
 	        this.checkUpdatesOnStartup = source["checkUpdatesOnStartup"];
+	    }
+	}
+	export class AuditSettings {
+	    dailyLimitMinutes: number;
+	    genericDescriptions: string[];
+	    ignoredIssues: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AuditSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dailyLimitMinutes = source["dailyLimitMinutes"];
+	        this.genericDescriptions = source["genericDescriptions"];
+	        this.ignoredIssues = source["ignoredIssues"];
 	    }
 	}
 	export class CustomHoliday {

@@ -59,6 +59,8 @@ type AppConfig struct {
 	GitIntegration GitIntegration `json:"gitIntegration"`
 	// Calendar: feriados estaduais/municipais, pontes e férias (calendar.go).
 	Calendar CalendarSettings `json:"calendar"`
+	// Audit: fechamento do mês (audit.go).
+	Audit AuditSettings `json:"audit"`
 }
 
 type AppSettings struct {
@@ -112,6 +114,7 @@ func defaultAppConfig() *AppConfig {
 		Reminders:      DefaultReminderSettings(),
 		Timer:          DefaultTimerSettings(),
 		GitIntegration: defaultGitIntegration(),
+		Audit:          DefaultAuditSettings(),
 	}
 }
 
