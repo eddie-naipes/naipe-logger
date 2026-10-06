@@ -12,6 +12,9 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
+        // Formulários que digitam com userEvent passam de 5 s (o padrão) com a
+        // máquina ou o runner do CI carregados, e falhavam de forma intermitente.
+        testTimeout: 15_000,
         setupFiles: ['./src/test/setup.ts'],
         // Fuso fixo do Brasil (UTC-3): os bugs de data que os testes cobrem só
         // aparecem fora do UTC.
