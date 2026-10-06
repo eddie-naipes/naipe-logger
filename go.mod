@@ -5,6 +5,8 @@ go 1.27
 toolchain go1.27.1
 
 require (
+	github.com/arran4/golang-ical v0.3.7
+	github.com/teambition/rrule-go v1.8.2
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.46.0

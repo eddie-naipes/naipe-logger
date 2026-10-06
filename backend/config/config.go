@@ -61,6 +61,8 @@ type AppConfig struct {
 	Calendar CalendarSettings `json:"calendar"`
 	// Audit: fechamento do mês (audit.go).
 	Audit AuditSettings `json:"audit"`
+	// Agenda: importação de reuniões (agenda.go), sem os links iCal.
+	Agenda AgendaSettings `json:"agenda"`
 }
 
 type AppSettings struct {
@@ -115,6 +117,7 @@ func defaultAppConfig() *AppConfig {
 		Timer:          DefaultTimerSettings(),
 		GitIntegration: defaultGitIntegration(),
 		Audit:          DefaultAuditSettings(),
+		Agenda:         defaultAgendaSettings(),
 	}
 }
 

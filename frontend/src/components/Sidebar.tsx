@@ -15,7 +15,8 @@ import {
     FiTarget,
     FiGrid,
     FiBarChart2,
-    FiCheckSquare
+    FiCheckSquare,
+    FiCalendar
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
@@ -65,6 +66,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             to: '/completar',
             icon: <FiTarget className="w-5 h-5" />,
             label: 'Completar Período',
+            requiresConfig: true
+        },
+        {
+            to: '/agenda',
+            icon: <FiCalendar className="w-5 h-5" />,
+            label: 'Agenda',
             requiresConfig: true
         },
         {
