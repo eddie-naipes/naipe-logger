@@ -86,6 +86,10 @@ export function GetAppVersion() {
   return window['go']['backend']['App']['GetAppVersion']();
 }
 
+export function GetAuditSettings() {
+  return window['go']['backend']['App']['GetAuditSettings']();
+}
+
 export function GetBrazilianHolidays(arg1) {
   return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
@@ -206,6 +210,10 @@ export function GetWorkingDays(arg1, arg2) {
   return window['go']['backend']['App']['GetWorkingDays'](arg1, arg2);
 }
 
+export function IgnoreAuditIssue(arg1) {
+  return window['go']['backend']['App']['IgnoreAuditIssue'](arg1);
+}
+
 export function IsConfigured() {
   return window['go']['backend']['App']['IsConfigured']();
 }
@@ -270,8 +278,16 @@ export function RunLegacyUninstaller() {
   return window['go']['backend']['App']['RunLegacyUninstaller']();
 }
 
+export function RunMonthAudit(arg1, arg2) {
+  return window['go']['backend']['App']['RunMonthAudit'](arg1, arg2);
+}
+
 export function SaveAppSettings(arg1) {
   return window['go']['backend']['App']['SaveAppSettings'](arg1);
+}
+
+export function SaveAuditSettings(arg1) {
+  return window['go']['backend']['App']['SaveAuditSettings'](arg1);
 }
 
 export function SaveGitIntegration(arg1) {
@@ -316,6 +332,10 @@ export function StartTimer(arg1, arg2, arg3) {
 
 export function StopTimer(arg1, arg2, arg3) {
   return window['go']['backend']['App']['StopTimer'](arg1, arg2, arg3);
+}
+
+export function UnignoreAuditIssue(arg1) {
+  return window['go']['backend']['App']['UnignoreAuditIssue'](arg1);
 }
 
 export function UpdateTimeEntry(arg1, arg2) {

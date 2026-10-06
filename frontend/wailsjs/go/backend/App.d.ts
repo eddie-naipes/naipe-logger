@@ -10,6 +10,7 @@ import {holidays} from '../models';
 import {legacy} from '../models';
 import {backend} from '../models';
 import {reports} from '../models';
+import {audit} from '../models';
 
 export function ApplyTemplate(arg1:string):Promise<void>;
 
@@ -52,6 +53,8 @@ export function GetAllNonWorkingDays(arg1:number,arg2:number):Promise<Array<Reco
 export function GetAppSettings():Promise<config.AppSettings>;
 
 export function GetAppVersion():Promise<string>;
+
+export function GetAuditSettings():Promise<config.AuditSettings>;
 
 export function GetBrazilianHolidays(arg1:number):Promise<Array<api.Holiday>>;
 
@@ -113,6 +116,8 @@ export function GetWorkCalendarSettings():Promise<config.CalendarSettings>;
 
 export function GetWorkingDays(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function IgnoreAuditIssue(arg1:string):Promise<void>;
+
 export function IsConfigured():Promise<boolean>;
 
 export function IsWorkDay(arg1:string):Promise<boolean>;
@@ -145,7 +150,11 @@ export function ResumeTimer():Promise<timer.State>;
 
 export function RunLegacyUninstaller():Promise<void>;
 
+export function RunMonthAudit(arg1:number,arg2:number):Promise<audit.Result>;
+
 export function SaveAppSettings(arg1:config.AppSettings):Promise<void>;
+
+export function SaveAuditSettings(arg1:config.AuditSettings):Promise<void>;
 
 export function SaveGitIntegration(arg1:config.GitIntegration):Promise<void>;
 
@@ -168,5 +177,7 @@ export function SetMinutosPorDia(arg1:number):Promise<void>;
 export function StartTimer(arg1:timer.TaskRef,arg2:string,arg3:boolean):Promise<timer.State>;
 
 export function StopTimer(arg1:boolean,arg2:string,arg3:Array<timer.Entry>):Promise<timer.StopResult>;
+
+export function UnignoreAuditIssue(arg1:string):Promise<void>;
 
 export function UpdateTimeEntry(arg1:number,arg2:api.TimeEntry):Promise<api.TimeLogResult>;
