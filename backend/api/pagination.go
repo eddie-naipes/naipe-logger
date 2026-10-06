@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -28,6 +29,27 @@ type pageMeta struct {
 			TotalItems int   `json:"totalItems"`
 		} `json:"page"`
 	} `json:"meta"`
+}
+
+// totalFromMeta lê o total de itens que a v3 informa em meta.page.count.
+// totalItems não existe na v3 (vinha sempre zero e zerava os cards do
+// dashboard); fica só como alternativa para respostas em outro formato.
+func totalFromMeta(body []byte) (int, error) {
+	var r struct {
+		Meta struct {
+			Page struct {
+				Count      *int `json:"count"`
+				TotalItems int  `json:"totalItems"`
+			} `json:"page"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return 0, fmt.Errorf("erro ao decodificar resposta: %v", err)
+	}
+	if r.Meta.Page.Count != nil {
+		return *r.Meta.Page.Count, nil
+	}
+	return r.Meta.Page.TotalItems, nil
 }
 
 // pageInfo resume uma página já decodificada para fetchPages decidir se segue.

@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {lazy, Suspense, useCallback, useEffect, useMemo, useState} from 'react';
 import {Route, Routes, useLocation, useNavigate} from 'react-router';
 import {toast, ToastContainer} from 'react-toastify';
 // O react-toastify 11 injeta o próprio CSS; não há mais import de ReactToastify.css.
@@ -10,17 +10,33 @@ import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
 import UpdateBanner from './components/UpdateBanner';
 import StartupNotices from './components/StartupNotices';
+import {TimeEntriesContext, type TimeEntriesSignal} from './contexts/TimeEntriesContext';
 
 import Dashboard from './pages/Dashboard';
-import Config from './pages/Config';
-import Tasks from './pages/Task';
-import TimeLog from './pages/TimeLog';
-import Templates from './pages/Templates';
-import NotFound from './pages/NotFound';
+
+// O Dashboard é a tela inicial e vem no pacote principal; as demais páginas
+// são carregadas na primeira visita, para o app abrir sem baixar relatórios,
+// grade semanal etc. (o pacote único passava de 500 kB).
+const Config = lazy(() => import('./pages/Config'));
+const Tasks = lazy(() => import('./pages/Task'));
+const TimeLog = lazy(() => import('./pages/TimeLog'));
+const Templates = lazy(() => import('./pages/Templates'));
+const CompletarPeriodo = lazy(() => import('./pages/CompletarPeriodo'));
+const Semana = lazy(() => import('./pages/Semana'));
+const Reports = lazy(() => import('./pages/Reports'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+const CarregandoPagina = () => (
+    <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+        <div className="animate-spin-slow w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full"/>
+        <span className="sr-only">Carregando página...</span>
+    </div>
+);
 
 import {ThemeContext} from './contexts/ThemeContext';
 import {UpdateContext} from './contexts/UpdateContext';
 import useUpdate from './hooks/useUpdate';
+import useReminderNavigation from './hooks/useReminderNavigation';
 import {errMsg} from './utils/errors';
 
 function App() {
@@ -34,6 +50,14 @@ function App() {
     // Lê a preferência só na inicialização: mudar o toggle na Config vale para
     // a próxima abertura do app.
     const updater = useUpdate({autoCheck: autoCheckUpdates});
+    useReminderNavigation();
+
+    const [timeEntriesVersion, setTimeEntriesVersion] = useState(0);
+    const notifyTimeEntriesChanged = useCallback(() => setTimeEntriesVersion(v => v + 1), []);
+    const timeEntriesSignal = useMemo<TimeEntriesSignal>(
+        () => ({version: timeEntriesVersion, notifyChanged: notifyTimeEntriesChanged}),
+        [timeEntriesVersion, notifyTimeEntriesChanged]
+    );
 
     // O frontend só recebe um booleano; o token vive no cofre do sistema.
     const checkIfConfigured = useCallback(async (): Promise<void> => {
@@ -116,6 +140,7 @@ function App() {
     return (
         <ThemeContext.Provider value={themeValue}>
             <UpdateContext.Provider value={updater}>
+                <TimeEntriesContext.Provider value={timeEntriesSignal}>
                 <div className="flex h-full bg-gray-50 dark:bg-gray-900">
                     {/* Sidebar */}
                     <Sidebar
@@ -135,14 +160,19 @@ function App() {
 
                         <main className="flex-1 overflow-y-auto p-4">
                             <ErrorBoundary resetKey={location.pathname}>
+                                <Suspense fallback={<CarregandoPagina/>}>
                                 <Routes>
                                     <Route path="/" element={<Dashboard/>}/>
                                     <Route path="/config" element={<Config onConfigSaved={() => void checkIfConfigured()}/>}/>
                                     <Route path="/tasks" element={<Tasks/>}/>
                                     <Route path="/timelog" element={<TimeLog/>}/>
                                     <Route path="/templates" element={<Templates/>}/>
+                                    <Route path="/completar" element={<CompletarPeriodo/>}/>
+                                    <Route path="/semana" element={<Semana/>}/>
+                                    <Route path="/relatorios" element={<Reports/>}/>
                                     <Route path="*" element={<NotFound/>}/>
                                 </Routes>
+                                </Suspense>
                             </ErrorBoundary>
                         </main>
                     </div>
@@ -163,6 +193,7 @@ function App() {
                     pauseOnHover
                     theme={darkMode ? 'dark' : 'light'}
                 />
+                </TimeEntriesContext.Provider>
             </UpdateContext.Provider>
         </ThemeContext.Provider>
     );

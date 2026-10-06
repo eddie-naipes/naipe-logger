@@ -78,7 +78,9 @@ func (d UpcomingDeadline) toMap() map[string]interface{} {
 	}
 }
 
-// NonWorkingDay é um fim de semana ou feriado do calendário mensal.
+// NonWorkingDay é um dia sem expediente do calendário mensal. Type é
+// "weekend", "holiday" (nacional) ou um dos tipos de extra_days.go
+// ("state_holiday", "municipal", "bridge", "custom", "vacation").
 // Description e IsOptional só fazem sentido para feriados.
 type NonWorkingDay struct {
 	Date        string `json:"date"`
@@ -94,14 +96,15 @@ const (
 )
 
 // toMap reproduz o formato antigo: fins de semana só com date/type/name e
-// feriados sempre com description e isOptional, mesmo vazios.
+// feriados (de qualquer tipo, inclusive férias) sempre com description e
+// isOptional, mesmo vazios.
 func (d NonWorkingDay) toMap() map[string]interface{} {
 	m := map[string]interface{}{
 		"date": d.Date,
 		"type": d.Type,
 		"name": d.Name,
 	}
-	if d.Type == nonWorkingDayHoliday {
+	if d.Type != nonWorkingDayWeekend {
 		m["description"] = d.Description
 		m["isOptional"] = d.IsOptional
 	}

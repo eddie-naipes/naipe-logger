@@ -50,9 +50,15 @@ type Manager struct {
 }
 
 type AppConfig struct {
-	TeamworkConfig api.Config  `json:"teamworkConfig"`
-	SavedTasks     []api.Task  `json:"savedTasks"`
-	AppSettings    AppSettings `json:"appSettings"`
+	TeamworkConfig api.Config       `json:"teamworkConfig"`
+	SavedTasks     []api.Task       `json:"savedTasks"`
+	AppSettings    AppSettings      `json:"appSettings"`
+	Reminders      ReminderSettings `json:"reminders"`
+	Timer          TimerSettings    `json:"timer"`
+	// GitIntegration: ver gitlog.go.
+	GitIntegration GitIntegration `json:"gitIntegration"`
+	// Calendar: feriados estaduais/municipais, pontes e férias (calendar.go).
+	Calendar CalendarSettings `json:"calendar"`
 }
 
 type AppSettings struct {
@@ -103,6 +109,9 @@ func defaultAppConfig() *AppConfig {
 			Language:              "pt-BR",
 			CheckUpdatesOnStartup: true,
 		},
+		Reminders:      DefaultReminderSettings(),
+		Timer:          DefaultTimerSettings(),
+		GitIntegration: defaultGitIntegration(),
 	}
 }
 

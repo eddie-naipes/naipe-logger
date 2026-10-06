@@ -14,9 +14,12 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Calendário mensal**: visualize as horas já lançadas e os dias não úteis
 - **Gerenciador de apontamentos**: liste, edite e exclua entradas de tempo de um período
 - **Feriados brasileiros**: obtidos da BrasilAPI, com cache em disco e fallback local (inclui feriados móveis via algoritmo de Gauss)
-- **Relatórios em PDF**: exportação do relatório de horas do Teamwork por período
+- **Relatórios no app**: totais, cobrável × não cobrável, horas por dia contra a jornada, rankings por projeto/tarefa e exportação em CSV (Excel pt-BR) ou PDF
+- **Calendário de trabalho**: feriados estaduais da sua UF, feriados municipais, pontes e férias entram no cálculo de dias úteis
 - **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
 - **Logs em arquivo** para diagnóstico, com o token sempre mascarado
+- **Lembretes** por notificação do sistema: horas pendentes do dia e dias incompletos no fim do mês
+- **Cronômetro por tarefa** no cabeçalho, que vira lançamento ao parar
 - **Tema claro/escuro**
 
 ## 🔒 Segurança
@@ -43,8 +46,8 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 
 ## 🚀 Tecnologias
 
-### Backend (Go 1.24)
-- **Wails v2.10.1** — aplicação desktop híbrida
+### Backend (Go 1.27)
+- **Wails v2.16.0** — aplicação desktop híbrida
 - **go-keyring** — cofre de credenciais do SO
 - **HTTP client** com connection pooling, timeouts e repetição com backoff exponencial
 - **Cache em memória** com TTL por tipo de dado; feriados também em disco
@@ -77,7 +80,8 @@ teamwork-logger/
 │   │   ├── retry.go        # Política de repetição (rate limit e falhas de rede)
 │   │   ├── time_entries.go # CRUD de apontamentos e distribuição
 │   │   ├── Holiday.go      # Feriados (BrasilAPI + fallback)
-│   │   └── types.go
+│   │   ├── types.go
+│   │   └── testdata/       # Respostas reais anonimizadas (testes de contrato)
 │   ├── config/
 │   │   └── config.go       # Persistência de config, tarefas e templates
 │   ├── security/
@@ -85,6 +89,7 @@ teamwork-logger/
 │   ├── logging/            # slog, arquivo rotativo e mascaramento de segredos
 │   ├── update/             # Verificação/download de releases do GitHub
 │   ├── legacy/             # Detecção da instalação antiga (Windows/HKLM)
+│   ├── gitlog/             # Sugestão de descrição a partir do git log do dia
 │   ├── internal/fsutil/    # Gravação atômica e pasta ~/.teamwork-logger
 │   ├── app.go              # Ciclo de vida, conexão e fronteira do token
 │   └── app_*.go            # Bindings expostos ao frontend, por domínio
@@ -101,6 +106,7 @@ teamwork-logger/
 │   │   └── contexts/       # ThemeContext, UpdateContext
 │   ├── wailsjs/            # Bindings gerados pelo Wails (alias @wailsjs)
 │   └── index.html
+├── tools/capturefixtures/  # Captura (só GET) e anonimiza as fixtures da API
 └── main.go
 ```
 
@@ -149,6 +155,14 @@ Fechar o aplicativo cancela o que estiver em voo: as requisições carregam o co
 >
 > O aviso de duplicata não bloqueia o envio: lançamentos são **somados**, não substituídos.
 
+### 🎯 Completar Período
+
+Escolha um mês (por padrão, do dia 1 até hoje; marque "mês inteiro" para incluir os dias que ainda não chegaram) e um template ou um conjunto de tarefas salvas. O aplicativo lê quanto já foi lançado em cada dia útil e monta um plano que lança **só o que falta** para atingir a jornada diária configurada: as entradas são usadas na ordem do template, a última é encurtada para não passar da jornada, dias completos ficam de fora e os dias da semana de cada tarefa são respeitados. Déficits menores que a granularidade escolhida (padrão 15 min) não geram lançamento. Como a API não informa o horário dos lançamentos existentes, o início das novas entradas é estimado a partir do primeiro horário do template mais o que já foi lançado no dia. Um resumo por dia mostra lançado, faltante e a lançar; o envio usa o mesmo fluxo do Lançamento de Horas (verificação de duplicatas, reenviar falhas e desfazer).
+
+### 🗓️ Semana
+
+Grade tarefa × dia (segunda a sexta, com opção de mostrar sábado e domingo), com navegação entre semanas, totais por dia e por tarefa, dias abaixo da jornada em destaque e fins de semana/feriados em cinza. As linhas são as tarefas com lançamento na semana mais as tarefas salvas. Digitar um valor **maior** numa célula cria um lançamento só com a diferença (descrição, horário e billable vêm da tarefa salva e podem ser ajustados); para **reduzir**, a célula abre a lista dos seus lançamentos para editar ou apagar um a um — nada é apagado automaticamente. **Copiar semana anterior** monta um plano com os lançamentos da semana passada no mesmo dia da semana (pulando dias não úteis), revisável e enviado com verificação de duplicatas, reenvio de falhas e desfazer.
+
 ### 📋 Gerenciamento de Tarefas
 
 ![Gerenciamento de Tarefas](frontend/src/assets/manager-task.png)
@@ -178,6 +192,7 @@ Templates são salvos em `templates.json`. Não há versionamento nem exportaç�
 - Logout, que remove o token do cofre do sistema
 - **Sobre / Atualizações**: versão atual, botão "Verificar atualizações" e a opção "Verificar atualizações ao iniciar"
 - **Diagnóstico**: caminho do arquivo de log e atalho para abrir a pasta
+- **Integração com Git**: repositórios locais (e e-mail do autor, opcional) cujos commits do dia viram sugestão de descrição. O botão "Sugerir pelos commits" aparece na edição de lançamentos e nas entradas das tarefas salvas; ele lista os commits do dia (sem merges, só os seus) para você escolher quais entram. Os assuntos são juntados por "; " sem os prefixos Conventional Commits (`feat:`, `fix(api):`...), sem repetições, agrupados por repositório quando há mais de um e limitados a 250 caracteres. Requer o `git` no PATH; nada é escrito nos repositórios.
 
 Quando há versão nova, um aviso no topo da janela mostra as novidades da release e oferece "Atualizar agora" (Windows, com barra de progresso) ou "Abrir página da versão"; dá para dispensá-lo até a próxima abertura. Na inicialização o app também avisa se a configuração estava corrompida (listando os backups) e, no Windows, se há uma instalação antiga para remover.
 
@@ -193,8 +208,24 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 ### 📅 Calendário Mensal
 
 - Horas lançadas por dia
-- Marcação de fins de semana e feriados
+- Marcação de fins de semana, feriados (nacionais, estaduais, municipais e pontes) e férias, com legenda
 - Clique num dia para carregá-lo no módulo de lançamento
+
+### 🔔 Lembretes
+
+Notificações nativas do sistema avisam no horário configurado (padrão 18:00, só em dias úteis, respeitando feriados) quando o dia ainda não fechou a jornada — "Faltam 2h 30min para fechar o dia", com o botão "Lançar agora" — e, nos últimos dias úteis do mês (padrão: os 2 últimos), listam os dias úteis incompletos ("3 dias pendentes: 02, 07, 15") com "Completar o mês". Cada lembrete sai no máximo uma vez por dia, mesmo reiniciando o app, e clicar nele traz a janela para frente na tela certa. Tudo é ajustável na seção **Lembretes** da Configuração, que também tem o botão "Testar lembrete" e avisa quando as notificações do sistema não estão disponíveis.
+
+### ⏱️ Cronômetro por tarefa
+
+O botão **Cronômetro** no cabeçalho inicia a contagem numa tarefa salva ou buscada no Teamwork; o widget mostra a tarefa e o tempo correndo, com pausar, retomar e parar. Ao parar, um diálogo mostra o lançamento previsto (um por dia, se passou da meia-noite, com o horário real de início) para revisar minutos e descrição antes de lançar — ou descartar. O cronômetro sobrevive a fechar o app, arredonda por minuto (ou em múltiplos de 15, configurável) e, se ficar rodando mais de 4 horas (configurável), uma notificação pergunta "Esqueceu o cronômetro ligado?" com "Parar e lançar" e "Continuar".
+
+### 📈 Relatórios
+
+A página **Relatórios** resume um período (este mês, mês passado, esta semana, últimos 30 dias ou datas personalizadas, até 366 dias): total lançado, cobrável × não cobrável, jornada esperada (dias úteis × jornada diária) e saldo, colunas de horas por dia com a jornada como linha de referência (dias úteis sem lançamento aparecem zerados), rankings por projeto e por tarefa, totais por semana e uma tabela por tarefa ordenável. Só entram os lançamentos não excluídos do usuário conectado. O **CSV** sai na mesma pasta do PDF (`~/TeamworkReports`), pronto para o Excel em português: separador `;`, UTF-8 com BOM, vírgula decimal e datas dd/mm/aaaa. Há duas versões — **detalhada** (data, projeto, tarefa, descrição, início, minutos, horas, cobrável) e **resumida** (por projeto/tarefa) — e textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmula.
+
+### 🗓️ Calendário de Trabalho (feriados estaduais, municipais, pontes e férias)
+
+No **Gerenciamento de Feriados** (botão no Dashboard), a seção *Calendário de trabalho* permite escolher a **UF**, cujos feriados estaduais de data fixa passam a valer (a tabela embutida é conservadora e cada feriado pode ser desmarcado), cadastrar **feriados municipais, pontes e outras folgas** (numa data ou repetindo todo ano) e **períodos de férias/ausência**. Esses dias deixam de ser úteis na distribuição de horas, no calendário mensal, no Dashboard e nos relatórios, e aparecem com tipo próprio (`state_holiday`, `municipal`, `bridge`, `custom`, `vacation`). A configuração fica em `config.json` (campo `calendar`); arquivos de versões anteriores continuam valendo, sem nenhum dia extra.
 
 ## 💾 Armazenamento Local
 
@@ -202,6 +233,8 @@ A exclusão em lote roda no backend (`DeleteMultipleTimeEntries`), com 3 exclus�
 ~/.teamwork-logger/
 ├── config.json              # host, userId, jornada diária, tarefas salvas, preferências (0600)
 ├── templates.json           # templates de trabalho (0600)
+├── reminders.json           # último dia em que cada lembrete foi enviado (0600)
+├── timer.json               # cronômetro em andamento, se houver (0600)
 ├── cache/
 │   └── holidays-<ano>.json  # feriados da BrasilAPI por ano (0600)
 └── logs/
@@ -238,9 +271,9 @@ O aplicativo registra eventos e erros em `~/.teamwork-logger/logs/app.log` (form
 ## 🔧 Desenvolvimento
 
 ### Requisitos
-- Go 1.24+
+- Go 1.27+ (o `toolchain` do go.mod baixa a versão certa automaticamente)
 - Node.js 22+ (o Vite 7 não roda no Node 18)
-- [Wails CLI v2.10.1](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.1`
+- [Wails CLI v2.16.0](https://wails.io/docs/gettingstarted/installation): `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0`
 - Windows, para gerar o instalador: [NSIS](https://nsis.sourceforge.io/Download) com `makensis` no `PATH`
 - Linux (Ubuntu 22.04+/Debian 12+): `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev`, e a build tag `webkit2_41` em todo `wails dev`/`wails build`
 
@@ -263,7 +296,7 @@ Ao mudar um binding em `backend/app*.go`, rode `wails generate module` e comite 
 ### Testes e verificações
 
 ```bash
-gofmt -l backend/ main.go   # deve não listar nada
+gofmt -l backend/ main.go tools/   # deve não listar nada
 go vet ./...
 go test ./...
 go test -race ./...         # requer CGO_ENABLED=1 e gcc (no Windows: MinGW, ex. `scoop install mingw`)

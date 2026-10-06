@@ -11,7 +11,10 @@ import {
     FiMoon,
     FiLoader,
     FiDownload,
-    FiTrash2
+    FiTrash2,
+    FiTarget,
+    FiGrid,
+    FiBarChart2
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
@@ -52,9 +55,27 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             requiresConfig: true
         },
         {
+            to: '/semana',
+            icon: <FiGrid className="w-5 h-5" />,
+            label: 'Semana',
+            requiresConfig: true
+        },
+        {
+            to: '/completar',
+            icon: <FiTarget className="w-5 h-5" />,
+            label: 'Completar Período',
+            requiresConfig: true
+        },
+        {
             to: '/templates',
             icon: <FiSave className="w-5 h-5" />,
             label: 'Templates',
+            requiresConfig: true
+        },
+        {
+            to: '/relatorios',
+            icon: <FiBarChart2 className="w-5 h-5" />,
+            label: 'Relatórios',
             requiresConfig: true
         },
         {

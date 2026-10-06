@@ -6,6 +6,14 @@ export function ApplyTemplate(arg1) {
   return window['go']['backend']['App']['ApplyTemplate'](arg1);
 }
 
+export function BuildCopyPreviousWeekPlan(arg1) {
+  return window['go']['backend']['App']['BuildCopyPreviousWeekPlan'](arg1);
+}
+
+export function BuildGitSuggestion(arg1) {
+  return window['go']['backend']['App']['BuildGitSuggestion'](arg1);
+}
+
 export function CheckForUpdate() {
   return window['go']['backend']['App']['CheckForUpdate']();
 }
@@ -46,6 +54,10 @@ export function DeleteTemplate(arg1) {
   return window['go']['backend']['App']['DeleteTemplate'](arg1);
 }
 
+export function DiscardTimer() {
+  return window['go']['backend']['App']['DiscardTimer']();
+}
+
 export function DownloadAndInstallUpdate() {
   return window['go']['backend']['App']['DownloadAndInstallUpdate']();
 }
@@ -56,6 +68,10 @@ export function DownloadCurrentMonthReport() {
 
 export function DownloadTimeReport(arg1, arg2) {
   return window['go']['backend']['App']['DownloadTimeReport'](arg1, arg2);
+}
+
+export function ExportTimeReportCSV(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['ExportTimeReportCSV'](arg1, arg2, arg3);
 }
 
 export function GetAllNonWorkingDays(arg1, arg2) {
@@ -74,8 +90,24 @@ export function GetBrazilianHolidays(arg1) {
   return window['go']['backend']['App']['GetBrazilianHolidays'](arg1);
 }
 
+export function GetBrazilianStates() {
+  return window['go']['backend']['App']['GetBrazilianStates']();
+}
+
 export function GetDashboardStats() {
   return window['go']['backend']['App']['GetDashboardStats']();
+}
+
+export function GetExtraNonWorkingDays(arg1) {
+  return window['go']['backend']['App']['GetExtraNonWorkingDays'](arg1);
+}
+
+export function GetGitIntegration() {
+  return window['go']['backend']['App']['GetGitIntegration']();
+}
+
+export function GetGitSuggestion(arg1) {
+  return window['go']['backend']['App']['GetGitSuggestion'](arg1);
 }
 
 export function GetHolidayCacheStats() {
@@ -94,6 +126,10 @@ export function GetLogsPath() {
   return window['go']['backend']['App']['GetLogsPath']();
 }
 
+export function GetNotificationStatus() {
+  return window['go']['backend']['App']['GetNotificationStatus']();
+}
+
 export function GetProjects() {
   return window['go']['backend']['App']['GetProjects']();
 }
@@ -104,6 +140,10 @@ export function GetPublicConfig() {
 
 export function GetRecentActivities() {
   return window['go']['backend']['App']['GetRecentActivities']();
+}
+
+export function GetReminderSettings() {
+  return window['go']['backend']['App']['GetReminderSettings']();
 }
 
 export function GetSavedTasks() {
@@ -134,12 +174,32 @@ export function GetTimeEntriesForPeriodV2(arg1, arg2, arg3) {
   return window['go']['backend']['App']['GetTimeEntriesForPeriodV2'](arg1, arg2, arg3);
 }
 
+export function GetTimeReportSummary(arg1, arg2) {
+  return window['go']['backend']['App']['GetTimeReportSummary'](arg1, arg2);
+}
+
 export function GetTimeTotalsForPeriod(arg1, arg2) {
   return window['go']['backend']['App']['GetTimeTotalsForPeriod'](arg1, arg2);
 }
 
+export function GetTimerSettings() {
+  return window['go']['backend']['App']['GetTimerSettings']();
+}
+
+export function GetTimerState() {
+  return window['go']['backend']['App']['GetTimerState']();
+}
+
 export function GetUserProfile() {
   return window['go']['backend']['App']['GetUserProfile']();
+}
+
+export function GetWeekGrid(arg1) {
+  return window['go']['backend']['App']['GetWeekGrid'](arg1);
+}
+
+export function GetWorkCalendarSettings() {
+  return window['go']['backend']['App']['GetWorkCalendarSettings']();
 }
 
 export function GetWorkingDays(arg1, arg2) {
@@ -178,8 +238,20 @@ export function OpenReleasePage() {
   return window['go']['backend']['App']['OpenReleasePage']();
 }
 
+export function PauseTimer() {
+  return window['go']['backend']['App']['PauseTimer']();
+}
+
+export function PlanFillGaps(arg1) {
+  return window['go']['backend']['App']['PlanFillGaps'](arg1);
+}
+
 export function PreloadHolidays() {
   return window['go']['backend']['App']['PreloadHolidays']();
+}
+
+export function PreviewTimerStop() {
+  return window['go']['backend']['App']['PreviewTimerStop']();
 }
 
 export function RefreshHolidaysForYear(arg1) {
@@ -190,12 +262,24 @@ export function RemoveTask(arg1) {
   return window['go']['backend']['App']['RemoveTask'](arg1);
 }
 
+export function ResumeTimer() {
+  return window['go']['backend']['App']['ResumeTimer']();
+}
+
 export function RunLegacyUninstaller() {
   return window['go']['backend']['App']['RunLegacyUninstaller']();
 }
 
 export function SaveAppSettings(arg1) {
   return window['go']['backend']['App']['SaveAppSettings'](arg1);
+}
+
+export function SaveGitIntegration(arg1) {
+  return window['go']['backend']['App']['SaveGitIntegration'](arg1);
+}
+
+export function SaveReminderSettings(arg1) {
+  return window['go']['backend']['App']['SaveReminderSettings'](arg1);
 }
 
 export function SaveTask(arg1) {
@@ -206,8 +290,32 @@ export function SaveTemplate(arg1) {
   return window['go']['backend']['App']['SaveTemplate'](arg1);
 }
 
+export function SaveTimerSettings(arg1) {
+  return window['go']['backend']['App']['SaveTimerSettings'](arg1);
+}
+
+export function SaveWorkCalendarSettings(arg1) {
+  return window['go']['backend']['App']['SaveWorkCalendarSettings'](arg1);
+}
+
+export function SelectGitRepository() {
+  return window['go']['backend']['App']['SelectGitRepository']();
+}
+
+export function SendTestReminder() {
+  return window['go']['backend']['App']['SendTestReminder']();
+}
+
 export function SetMinutosPorDia(arg1) {
   return window['go']['backend']['App']['SetMinutosPorDia'](arg1);
+}
+
+export function StartTimer(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['StartTimer'](arg1, arg2, arg3);
+}
+
+export function StopTimer(arg1, arg2, arg3) {
+  return window['go']['backend']['App']['StopTimer'](arg1, arg2, arg3);
 }
 
 export function UpdateTimeEntry(arg1, arg2) {

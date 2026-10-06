@@ -13,6 +13,7 @@ import usePlan from '../hooks/usePlan';
 import useBatchSubmit from '../hooks/useBatchSubmit';
 import {IsWorkDay} from '@wailsjs/go/backend/App';
 import {formatDateBR, todayYMD} from '../utils/dates';
+import {describeNonWorkingDay} from '../utils/nonWorkingDays';
 import type {DateRange} from '../hooks/useTimeEntries';
 
 const formatDate = (dateString: string) =>
@@ -68,6 +69,8 @@ const TimeLog = () => {
                 toast.warning(`${formattedDate} é um feriado: ${nonWorkingDay.name}. Não é possível lançar horas em feriados.`);
             } else if (nonWorkingDay.type === 'weekend') {
                 toast.warning(`${formattedDate} é um fim de semana. Não é possível lançar horas em fins de semana.`);
+            } else {
+                toast.warning(`${formattedDate} não é dia útil (${describeNonWorkingDay(nonWorkingDay)}). Não é possível lançar horas.`);
             }
             return;
         }

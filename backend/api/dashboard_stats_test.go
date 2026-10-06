@@ -32,9 +32,12 @@ func TestGetDashboardStatsUsaTotaisDoTeamwork(t *testing.T) {
 			atomic.AddInt32(&listagens, 1)
 			fmt.Fprint(w, `{"timeEntries":[]}`)
 		case "/projects/api/v3/tasks.json":
-			fmt.Fprint(w, `{"tasks":[],"meta":{"page":{"totalItems":7}}}`)
+			if r.URL.Query().Get("responsiblePartyIds") != "42" {
+				t.Errorf("responsiblePartyIds = %q, esperava 42 (assignedTo é ignorado pela v3)", r.URL.Query().Get("responsiblePartyIds"))
+			}
+			fmt.Fprint(w, `{"tasks":[],"meta":{"page":{"count":7,"hasMore":true}}}`)
 		case "/projects/api/v3/projects.json":
-			fmt.Fprint(w, `{"projects":[],"meta":{"page":{"totalItems":3}}}`)
+			fmt.Fprint(w, `{"projects":[],"meta":{"page":{"count":3,"hasMore":false}}}`)
 		default:
 			t.Errorf("caminho inesperado %q", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -56,7 +59,7 @@ func TestGetDashboardStatsUsaTotaisDoTeamwork(t *testing.T) {
 		t.Errorf("tarefasPendentes = %v, esperava 7", stats["tarefasPendentes"])
 	}
 	if stats["projetos"] != 3 {
-		t.Errorf("projetos = %v, esperava 3 (de meta.page.totalItems)", stats["projetos"])
+		t.Errorf("projetos = %v, esperava 3 (de meta.page.count)", stats["projetos"])
 	}
 	if got := atomic.LoadInt32(&totais); got != 2 {
 		t.Errorf("time/total.json chamado %d vezes, esperava 2 (mês atual e anterior)", got)

@@ -4,6 +4,7 @@ import {FiEdit, FiLoader, FiSave} from 'react-icons/fi';
 import {ptBR} from 'date-fns/locale';
 import {UpdateTimeEntry} from '@wailsjs/go/backend/App';
 import Modal from '../Modal';
+import CommitSuggestButton from '../git/CommitSuggestButton';
 import TimeInputComponent from '../TimeInputComponent';
 import {formatDateBR} from '../../utils/dates';
 import {errMsg} from '../../utils/errors';
@@ -214,7 +215,14 @@ const EditEntryModal = ({entry, onClose, onSaved}: EditEntryModalProps) => {
                         </div>
 
                         <div>
-                            <label htmlFor="edit-entry-description" className={labelClass}>Descrição *</label>
+                            <div className="flex items-center justify-between">
+                                <label htmlFor="edit-entry-description" className={labelClass}>Descrição *</label>
+                                <CommitSuggestButton
+                                    date={form.date}
+                                    onSuggest={(texto) => setField('description', texto)}
+                                    disabled={updating}
+                                />
+                            </div>
                             <textarea
                                 id="edit-entry-description"
                                 value={form.description}

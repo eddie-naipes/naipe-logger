@@ -10,9 +10,9 @@ on:
 # Versões fixas: `@latest` tornava o build irreprodutível e dependente do que
 # estivesse publicado no dia. WAILS_VERSION deve acompanhar go.mod.
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.27'
   NODE_VERSION: '22'
-  WAILS_VERSION: 'v2.10.1'
+  WAILS_VERSION: 'v2.16.0'
 
 permissions:
   contents: read
@@ -40,18 +40,20 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l backend/ main.go)
+          unformatted=$(gofmt -l backend/ main.go tools/)
           if [ -n "$unformatted" ]; then
             echo "Arquivos fora do padrão gofmt:"
             echo "$unformatted"
             exit 1
           fi
 
+      # Pacotes listados em vez de ./...: o Go não ignora node_modules, e uma
+      # dependência do frontend (flatted) traz um pacote Go próprio.
       - name: go vet
-        run: go vet ./...
+        run: go vet ./backend/... ./tools/... .
 
       - name: go test
-        run: go test -race ./...
+        run: go test -race ./backend/... ./tools/... .
 
       - name: Verificar go.mod atualizado
         run: |
@@ -76,9 +78,19 @@ jobs:
         working-directory: frontend
         run: npm test
 
-      - name: npm audit
+      # Bloqueia só o que vai para o app distribuído. As ferramentas de build
+      # (Tailwind 3 e dependências) têm alertas sem correção fora de um major;
+      # aparecem como aviso até a migração, sem esconder nada.
+      - name: npm audit (dependências do app)
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: npm audit (ferramentas de build, informativo)
+        working-directory: frontend
+        run: |
+          if ! npm audit --audit-level=high; then
+            echo "::warning title=npm audit::Há vulnerabilidades altas em dependências de desenvolvimento (não vão para o app distribuído)."
+          fi
 
   build-windows:
     needs: verify

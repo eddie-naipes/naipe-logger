@@ -12,6 +12,7 @@ import type {DateRange} from '../hooks/useTimeEntries';
 import type {DeleteTimeEntryResult, TimeEntryReport} from '../types/backend';
 import {errMsg} from '../utils/errors';
 import {failedDeleteIds} from '../utils/retry';
+import {useTimeEntriesSignal} from '../contexts/TimeEntriesContext';
 
 const FILTROS_INICIAIS: EntryFiltersState = {
     projectName: '',
@@ -59,6 +60,7 @@ interface TimeEntryManagerProps {
 // toasts de sucesso/falha já são mostrados aqui.
 const TimeEntryManager = ({isOpen, onClose, onEntriesChanged}: TimeEntryManagerProps) => {
     const {entries, loading, dateRange, setDateRange, showDeleted, setShowDeleted, reload} = useTimeEntries(isOpen);
+    const {notifyChanged} = useTimeEntriesSignal();
     const [filters, setFilters] = useState<EntryFiltersState>(FILTROS_INICIAIS);
     const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
     const [deleting, setDeleting] = useState(false);
@@ -176,6 +178,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesChanged}: TimeEntryManagerP
             await reloadEntries();
             setDeleteResults(failureCount > 0 ? results : []);
 
+            if (successCount > 0) notifyChanged();
             if (onEntriesChanged) {
                 onEntriesChanged({type: 'delete', succeeded: successCount, failed: failureCount});
             }
@@ -214,6 +217,7 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesChanged}: TimeEntryManagerP
     const handleEntrySaved = async () => {
         setEditingEntry(null);
         await reloadEntries();
+        notifyChanged();
         if (onEntriesChanged) {
             onEntriesChanged({type: 'update', succeeded: 1, failed: 0});
         }

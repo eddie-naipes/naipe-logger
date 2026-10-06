@@ -276,6 +276,12 @@ func (t *TeamworkAPI) IsWorkDay(data time.Time) bool {
 		return false
 	}
 
+	// Feriados estaduais/municipais, pontes e férias vêm da configuração
+	// local; consultados antes do nacional por não dependerem da rede.
+	if _, extra := t.extraNonWorkingDay(data); extra {
+		return false
+	}
+
 	isHoliday, _, err := t.IsHoliday(data)
 	if err != nil {
 		slog.Warn("Erro ao verificar feriado", "data", data.Format("2006-01-02"), "err", err)
@@ -440,7 +446,8 @@ func (t *TeamworkAPI) GetAllNonWorkingDays(year, month int) ([]map[string]interf
 	return toMaps(days), nil
 }
 
-// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês.
+// ListNonWorkingDays lista fins de semana e feriados (em dia útil) do mês,
+// mais os dias extras da configuração (ver appendExtraNonWorkingDays).
 func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.Local)
 
@@ -489,7 +496,7 @@ func (t *TeamworkAPI) ListNonWorkingDays(year, month int) ([]NonWorkingDay, erro
 		}
 	}
 
-	return nonWorkingDays, nil
+	return t.appendExtraNonWorkingDays(nonWorkingDays, startDate, endDate), nil
 }
 
 func (t *TeamworkAPI) GetTimeEntryDetails(entryID int) (*TimeEntryReport, error) {
@@ -515,15 +522,26 @@ func (t *TeamworkAPI) GetTimeEntryDetails(entryID int) (*TimeEntryReport, error)
 		return nil, fmt.Errorf("erro ao obter detalhes da entrada de tempo: %d %s", resp.StatusCode, resp.Status)
 	}
 
+	// A v3 responde na chave "timelog" (ver testdata/time_entry_detail.json);
+	// só "timeEntry" era lido e o detalhe voltava sempre vazio.
 	var response struct {
-		TimeEntry TimeEntryReport `json:"timeEntry"`
+		Timelog   *v3Timelog       `json:"timelog"`
+		TimeEntry *TimeEntryReport `json:"timeEntry"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("erro ao decodificar resposta: %v", err)
 	}
 
-	return &response.TimeEntry, nil
+	var entry TimeEntryReport
+	switch {
+	case response.Timelog != nil:
+		entry = response.Timelog.toReport()
+	case response.TimeEntry != nil:
+		entry = *response.TimeEntry
+	}
+	entry.Date = normalizeEntryDate(entry.Date)
+	return &entry, nil
 }
 
 func (t *TeamworkAPI) DeleteTimeEntry(entryID int) error {
@@ -728,7 +746,7 @@ func (t *TeamworkAPI) v2EntryToReport(entry v2TimeEntry) TimeEntryReport {
 		Description:   entry.Description,
 		IsBillable:    entry.IsBillable,
 		IsBilled:      entry.IsBilled,
-		StartTime:     "",
+		StartTime:     v2StartTime(entry),
 		EndTime:       "",
 	}
 }

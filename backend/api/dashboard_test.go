@@ -117,3 +117,44 @@ func TestPrazosRespeitamLimite(t *testing.T) {
 		t.Errorf("devolveu %d tarefas, esperava o limite de %d", len(got), upcomingDeadlinesLimit)
 	}
 }
+
+// O card promete as tarefas atribuídas ao usuário; GetTasks devolve todas as
+// visíveis. Uma equipe com o mesmo ID não pode passar por usuário.
+func TestPrazosSomenteDasTarefasAtribuidasAoUsuario(t *testing.T) {
+	tasks := []TeamworkTask{
+		{ID: 1, Assignees: []TaskAssignee{{ID: 42, Type: "users"}}},
+		{ID: 2, Assignees: []TaskAssignee{{ID: 7, Type: "users"}}},
+		{ID: 3},
+		{ID: 4, Assignees: []TaskAssignee{{ID: 7, Type: "users"}, {ID: 42, Type: "users"}}},
+		{ID: 5, Assignees: []TaskAssignee{{ID: 42, Type: "teams"}}},
+	}
+
+	got := somenteAtribuidas(tasks, 42)
+
+	wantIDs := []int{1, 4}
+	if len(got) != len(wantIDs) {
+		t.Fatalf("devolveu %d tarefas (%v), esperava %v", len(got), got, wantIDs)
+	}
+	for i, wantID := range wantIDs {
+		if got[i].ID != wantID {
+			t.Errorf("posição %d: id = %d, esperava %d", i, got[i].ID, wantID)
+		}
+	}
+}
+
+func TestTotalFromMetaLeCountDaV3(t *testing.T) {
+	casos := map[string]int{
+		`{"meta":{"page":{"count":1333,"hasMore":true}}}`: 1333,
+		`{"meta":{"page":{"count":0,"hasMore":false}}}`:   0,
+		`{"meta":{"page":{"totalItems":5}}}`:              5,
+	}
+	for body, esperado := range casos {
+		got, err := totalFromMeta([]byte(body))
+		if err != nil || got != esperado {
+			t.Errorf("totalFromMeta(%s) = %d, %v; esperava %d", body, got, err, esperado)
+		}
+	}
+	if _, err := totalFromMeta([]byte("não é json")); err == nil {
+		t.Error("JSON inválido deveria devolver erro")
+	}
+}

@@ -5,6 +5,7 @@ import {type DayConflict, paraBinding, type TimeLogResult, type WorkDay} from '.
 import {errMsg} from '../utils/errors';
 import {buildRetryWorkDays} from '../utils/retry';
 import {buildConflictWarning} from './usePlan';
+import {useTimeEntriesSignal} from '../contexts/TimeEntriesContext';
 
 // Resultado do lote com uma chave estável para a lista do React.
 export type KeyedTimeLogResult = TimeLogResult & {_key: number};
@@ -39,6 +40,7 @@ const useBatchSubmit = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isRetrying, setIsRetrying] = useState(false);
     const [isUndoing, setIsUndoing] = useState(false);
+    const {notifyChanged} = useTimeEntriesSignal();
 
     // Chave estável para cada resultado: (data, tarefa) se repete quando a
     // mesma tarefa tem várias entradas no dia, e o índice muda ao reenviar.
@@ -104,6 +106,7 @@ const useBatchSubmit = ({
             const failures = batchResults.length - successes;
 
             if (successes > 0) {
+                notifyChanged();
                 await checkConflicts(workDays);
             }
 
@@ -158,6 +161,7 @@ const useBatchSubmit = ({
             const aindaFalha = retryResults.length - novosSucessos;
 
             if (novosSucessos > 0) {
+                notifyChanged();
                 await checkConflicts(workDays);
                 setTimeout(() => refreshCalendar(), 1000);
             }
@@ -198,6 +202,7 @@ const useBatchSubmit = ({
 
             const removed = undoResults.filter(r => r.success).length;
             const failed = undoResults.length - removed;
+            if (removed > 0) notifyChanged();
 
             if (failed === 0) {
                 toast.success(`${removed} lançamento(s) desfeito(s).`);

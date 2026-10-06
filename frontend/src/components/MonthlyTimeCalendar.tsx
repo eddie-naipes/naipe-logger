@@ -1,4 +1,4 @@
-import {type Ref, useEffect, useImperativeHandle, useMemo, useState} from 'react';
+import {type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState} from 'react';
 import {
     FiAlertCircle,
     FiCalendar,
@@ -22,9 +22,11 @@ import useMinutosPorDia from '../hooks/useMinutosPorDia';
 import {toYMD, utcTimestampToYMD} from '../utils/dates';
 import {errMsg} from '../utils/errors';
 import {DIAS_ABREV, formatHoursMinutes} from '../utils/time';
+import {describeNonWorkingDay, isVacation} from '../utils/nonWorkingDays';
 import type {CalendarDayTuple, LoggedTimeResponse, NonWorkingDay} from '../types/backend';
+import {useOnTimeEntriesChanged} from '../contexts/TimeEntriesContext';
 
-type DayStatus = 'complete' | 'incomplete' | 'missing' | 'holiday' | 'weekend';
+type DayStatus = 'complete' | 'incomplete' | 'missing' | 'holiday' | 'vacation' | 'weekend';
 
 // Tempo registrado num dia, venha da API de calendário ou das entradas.
 interface CalendarEntry {
@@ -65,6 +67,7 @@ const STATUS_LABEL: Record<DayStatus, string> = {
     incomplete: 'Incompleto',
     missing: 'Sem registros',
     holiday: 'Feriado',
+    vacation: 'Férias/ausência',
     weekend: 'Fim de semana'
 };
 
@@ -83,6 +86,8 @@ const getDayStatusClass = (status: DayStatus | null): string => {
             return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700';
         case 'holiday':
             return 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border-purple-300 dark:border-purple-700';
+        case 'vacation':
+            return 'bg-sky-100 dark:bg-sky-900/30 text-sky-800 dark:text-sky-300 border-sky-300 dark:border-sky-700';
         case 'weekend':
             return 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-300 dark:border-gray-700';
         default:
@@ -189,6 +194,9 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
         refresh: () => setReloadToken(t => t + 1)
     }), []);
 
+    // Lançamentos criados ou apagados em qualquer tela recarregam o mês exibido.
+    useOnTimeEntriesChanged(useCallback(() => setReloadToken(t => t + 1), []));
+
     useEffect(() => {
         // Ao trocar de mês rápido, a resposta do mês anterior pode chegar por
         // último; o flag descarta respostas de efeitos já substituídos.
@@ -215,7 +223,9 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
             if (holidaysResult.status === 'fulfilled') {
                 // O binding devolve map genérico; o formato é o de api.NonWorkingDay.
                 const dias = (holidaysResult.value ?? []) as NonWorkingDay[];
-                setHolidays(dias.filter(day => day.type === 'holiday'));
+                // Tudo que não é fim de semana: feriados nacionais, estaduais,
+                // municipais, pontes e férias configurados pelo usuário.
+                setHolidays(dias.filter(day => day.type !== 'weekend'));
             } else {
                 console.error('Erro ao carregar feriados:', holidaysResult.reason);
                 setHolidays([]);
@@ -258,7 +268,8 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
 
     const getDayStatus = (day: Date, dayStr: string): DayStatus => {
         if (isWeekend(day)) return 'weekend';
-        if (holidaysByDate.has(dayStr)) return 'holiday';
+        const naoUtil = holidaysByDate.get(dayStr);
+        if (naoUtil) return isVacation(naoUtil) ? 'vacation' : 'holiday';
 
         const minutes = minutesByDate.get(dayStr) || 0;
         if (minutes === 0) return 'missing';
@@ -272,7 +283,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
         const dayStr = toYMD(day);
         const holiday = holidaysByDate.get(dayStr);
         if (holiday) {
-            toast.info(`Feriado: ${holiday.name}. Não é possível lançar horas em feriados.`);
+            toast.info(`${describeNonWorkingDay(holiday)}. Não é possível lançar horas neste dia.`);
             return;
         }
 
@@ -311,7 +322,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
 
         const descricao = [
             format(day, "EEEE, d 'de' MMMM", {locale: ptBR}),
-            holiday ? `Feriado: ${holiday.name}` : STATUS_LABEL[status],
+            holiday ? describeNonWorkingDay(holiday) : STATUS_LABEL[status],
             !weekend && !holiday ? `${hours} horas registradas` : null
         ].filter(Boolean).join('. ');
 
@@ -326,7 +337,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
                 </span>
 
                 {holiday && (
-                    <span className="text-xs text-purple-700 dark:text-purple-300 mt-auto overflow-hidden text-ellipsis" aria-hidden="true">
+                    <span className={`text-xs mt-auto overflow-hidden text-ellipsis ${isVacation(holiday) ? 'text-sky-700 dark:text-sky-300' : 'text-purple-700 dark:text-purple-300'}`} aria-hidden="true">
                         <FiCalendar className="inline mr-1 w-3 h-3"/>
                         <span className="whitespace-nowrap overflow-hidden text-ellipsis">
                             {holiday.name}
@@ -446,7 +457,11 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
                 </div>
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-purple-500 dark:bg-purple-400 rounded-full mr-1"></div>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">Feriado</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Feriado/ponte</span>
+                </div>
+                <div className="flex items-center">
+                    <div className="w-3 h-3 bg-sky-500 dark:bg-sky-400 rounded-full mr-1"></div>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Férias/ausência</span>
                 </div>
                 <div className="flex items-center">
                     <div className="w-3 h-3 bg-gray-400 dark:bg-gray-500 rounded-full mr-1"></div>

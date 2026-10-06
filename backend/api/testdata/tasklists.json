@@ -1,0 +1,94 @@
+{
+  "included": {},
+  "meta": {
+    "page": {
+      "count": 44,
+      "hasMore": true,
+      "pageOffset": 0,
+      "pageSize": 3
+    }
+  },
+  "tasklists": [
+    {
+      "createdAt": "2026-06-30T20:59:19Z",
+      "defaultTask": null,
+      "defaultTaskId": null,
+      "description": "",
+      "displayOrder": 8,
+      "icon": null,
+      "id": 1035,
+      "isBillable": null,
+      "isPinned": false,
+      "isPrivate": false,
+      "lockdown": null,
+      "lockdownId": null,
+      "milestone": null,
+      "milestoneId": null,
+      "name": "Nome ficticio 18",
+      "project": {
+        "id": 1007,
+        "type": "projects"
+      },
+      "projectId": 1007,
+      "status": "new",
+      "tasklistBudget": null,
+      "updatedAt": "2026-10-01T15:36:41Z"
+    },
+    {
+      "createdAt": "2021-11-03T11:02:26Z",
+      "defaultTask": {
+        "id": 1036,
+        "type": "tasks"
+      },
+      "defaultTaskId": 1036,
+      "description": "",
+      "displayOrder": 10,
+      "icon": null,
+      "id": 1037,
+      "isBillable": null,
+      "isPinned": true,
+      "isPrivate": false,
+      "lockdown": null,
+      "lockdownId": null,
+      "milestone": null,
+      "milestoneId": null,
+      "name": "Nome ficticio 19",
+      "project": {
+        "id": 1007,
+        "type": "projects"
+      },
+      "projectId": 1007,
+      "status": "reopened",
+      "tasklistBudget": null,
+      "updatedAt": "2024-12-02T12:19:03Z"
+    },
+    {
+      "createdAt": "2021-11-03T10:58:28Z",
+      "defaultTask": {
+        "id": 1012,
+        "type": "tasks"
+      },
+      "defaultTaskId": 1012,
+      "description": "",
+      "displayOrder": 20,
+      "icon": null,
+      "id": 1011,
+      "isBillable": null,
+      "isPinned": true,
+      "isPrivate": false,
+      "lockdown": null,
+      "lockdownId": null,
+      "milestone": null,
+      "milestoneId": null,
+      "name": "Nome ficticio 6",
+      "project": {
+        "id": 1007,
+        "type": "projects"
+      },
+      "projectId": 1007,
+      "status": "reopened",
+      "tasklistBudget": null,
+      "updatedAt": "2025-04-04T20:50:13Z"
+    }
+  ]
+}

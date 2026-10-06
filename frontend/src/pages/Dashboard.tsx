@@ -24,26 +24,22 @@ import {
     DownloadCurrentMonthReport,
     DownloadTimeReport,
     GetDashboardStats,
-    GetProjects,
     GetRecentActivities,
-    GetTasksByProject,
     GetTasksWithUpcomingDeadlines,
     GetTimeTotalsForPeriod,
     OpenDirectoryPath
 } from '@wailsjs/go/backend/App';
 import useMinutosPorDia from '../hooks/useMinutosPorDia';
+import { useOnTimeEntriesChanged } from '../contexts/TimeEntriesContext';
 import { formatDateBR, toYMD } from '../utils/dates';
 import { errMsg } from '../utils/errors';
 import { formatHoursMinutes } from '../utils/time';
 import type {
     DashboardStats,
-    Project,
     RecentActivity,
-    TeamworkTask,
     TimeTotal,
     UpcomingDeadline
 } from '../types/backend';
-import type { EntriesChange } from '../components/TimeEntryManager';
 
 interface StatCardProps {
     title: string;
@@ -154,8 +150,6 @@ const Dashboard = () => {
     const [isExporting, setIsExporting] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(() => new Date());
-    const [projectsData, setProjectsData] = useState<Project[]>([]);
-    const [tasksData, setTasksData] = useState<TeamworkTask[]>([]);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
     const [isHolidayManagerOpen, setIsHolidayManagerOpen] = useState(false);
@@ -170,29 +164,6 @@ const Dashboard = () => {
         return () => {
             mountedRef.current = false;
         };
-    }, []);
-
-    const loadProjectsAndTasks = useCallback(async (isCurrent: () => boolean): Promise<void> => {
-        try {
-            const projects: Project[] = (await GetProjects()) ?? [];
-            if (!isCurrent()) return;
-            setProjectsData(projects);
-
-            const primeiro = projects[0];
-            if (primeiro) {
-                const tasks: TeamworkTask[] = (await GetTasksByProject(primeiro.id)) ?? [];
-                if (!isCurrent()) return;
-                setTasksData(tasks);
-
-                setDashboardData(prevData => ({
-                    ...prevData,
-                    projetos: projects.length,
-                    tarefasPendentes: tasks.length
-                }));
-            }
-        } catch (error) {
-            console.error("Erro ao carregar projetos e tarefas:", error);
-        }
     }, []);
 
     // loadDashboard devolve true quando as estatísticas principais carregaram,
@@ -250,36 +221,36 @@ const Dashboard = () => {
                 horasLogadas = minutosDoMes / 60;
             }
 
-            const projetos = dashboardStats.projetos ?? 0;
-            const tarefasPendentes = dashboardStats.tarefasPendentes ?? 0;
-
+            // Zero é um valor válido (nenhuma tarefa atribuída): o backend loga
+            // quando a contagem falha, e o card mostra o que a API informou.
             setDashboardData(prevData => ({
                 ...prevData,
                 ...dashboardStats,
                 horasLogadas: horasLogadas,
-                projetos: (projetos === 0 && prevData.projetos > 0) ? prevData.projetos : projetos,
-                tarefasPendentes: (tarefasPendentes === 0 && prevData.tarefasPendentes > 0) ? prevData.tarefasPendentes : tarefasPendentes
+                projetos: dashboardStats.projetos ?? 0,
+                tarefasPendentes: dashboardStats.tarefasPendentes ?? 0
             }));
 
             setRecentActivities(recentActivitiesData);
             setUpcomingTasks(upcomingTasksData);
             setLastUpdate(new Date());
-
-            if (projetos === 0 || tarefasPendentes === 0) {
-                await loadProjectsAndTasks(isCurrent);
-            }
             return true;
         } catch (error) {
             console.error("Erro ao carregar dashboard:", error);
             if (!isCurrent()) return false;
             setError("Não foi possível carregar os dados do dashboard: " + errMsg(error) + ". Verifique sua conexão com o Teamwork.");
-
-            await loadProjectsAndTasks(isCurrent);
             return false;
         } finally {
             if (isCurrent()) setIsLoading(false);
         }
-    }, [loadProjectsAndTasks]);
+    }, []);
+
+    // Lançamentos criados, editados ou apagados em qualquer tela (inclusive o
+    // gerenciador aberto pela Sidebar) recarregam os cards; o calendário
+    // escuta o mesmo sinal.
+    useOnTimeEntriesChanged(useCallback(() => {
+        void loadDashboard();
+    }, [loadDashboard]));
 
     // loadDashboard é estável (useCallback sem dependências que mudem), então
     // o efeito roda só na montagem; recargas vêm das ações do usuário.
@@ -416,14 +387,14 @@ const Dashboard = () => {
                 <StatCard
                     title="Tarefas Pendentes"
                     icon={<FiList className="w-6 h-6 text-white" />}
-                    value={dashboardData.tarefasPendentes || tasksData.length}
+                    value={dashboardData.tarefasPendentes}
                     description="Tarefas ativas"
                     className="bg-amber-500"
                 />
                 <StatCard
                     title="Projetos Ativos"
                     icon={<FiFileText className="w-6 h-6 text-white" />}
-                    value={dashboardData.projetos || projectsData.length}
+                    value={dashboardData.projetos}
                     description="Projetos com atividade"
                     className="bg-purple-500"
                 />
@@ -602,13 +573,6 @@ const Dashboard = () => {
             <TimeEntryManager
                 isOpen={isTimeManagerOpen}
                 onClose={handleTimeManagerClose}
-                onEntriesChanged={({ succeeded }: EntriesChange) => {
-                    // O gerenciador já informa sucesso/falha da operação; aqui só
-                    // recarregamos os números quando algo realmente mudou.
-                    if (succeeded > 0) {
-                        void loadDashboard();
-                    }
-                }}
             />
 
             <HolidayManager

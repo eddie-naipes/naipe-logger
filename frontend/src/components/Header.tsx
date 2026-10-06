@@ -1,4 +1,5 @@
 import { FiMenu, FiAlertCircle } from 'react-icons/fi';
+import TimerWidget from './timer/TimerWidget';
 
 interface HeaderProps {
     onMenuClick: () => void;
@@ -28,6 +29,8 @@ const Header = ({ onMenuClick, isConfigured }: HeaderProps) => {
 
                 {/* Espaço flexível */}
                 <div className="flex-grow"></div>
+
+                {isConfigured && <TimerWidget />}
 
                 {/* Alerta de configuração */}
                 {!isConfigured && (
