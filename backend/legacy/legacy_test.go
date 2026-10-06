@@ -118,8 +118,8 @@ func TestWindowsDirIndependeDoSO(t *testing.T) {
 	casos := map[string]string{
 		`C:\Program Files\Naipe Logger\uninst.exe`:       `C:\Program Files\Naipe Logger`,
 		`C:/Program Files/Teamwork Logger/uninstall.exe`: `C:/Program Files/Teamwork Logger`,
-		`C:\uninstall.exe`:                               `C:\`,
-		`uninstall.exe`:                                  "",
+		`C:\uninstall.exe`: `C:\`,
+		`uninstall.exe`:    "",
 	}
 	for entrada, esperado := range casos {
 		if got := windowsDir(entrada); got != esperado {

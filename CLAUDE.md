@@ -13,7 +13,7 @@ wails dev                         # run the app with hot reload (needs Wails CLI
 wails build                       # production build -> build/bin/teamwork-logger(.exe/.app)
 
 # Same checks CI runs (.github/workflows/build.yml, job "verify"):
-gofmt -l backend/ main.go tools/  # must print nothing
+"$(go env GOROOT)/bin/gofmt" -l backend/ main.go tools/  # must print nothing; use the toolchain's gofmt — a system gofmt from an older Go aligns differently than CI
 go vet ./backend/... ./tools/... .   # not ./... — Go doesn't skip node_modules (flatted ships a Go package)
 go test ./backend/... ./tools/... .
 go test -race ./backend/... ./tools/... .  # needs CGO_ENABLED=1 and gcc (Windows: MinGW, e.g. `scoop install mingw`)
