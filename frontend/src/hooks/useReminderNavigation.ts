@@ -11,7 +11,7 @@ export interface ReminderOpenEvent {
 }
 
 // Rotas que um lembrete pode abrir; qualquer outra é ignorada.
-const ROTAS_PERMITIDAS = new Set(['/timelog', '/completar']);
+const ROTAS_PERMITIDAS = new Set(['/timelog', '/completar', '/fechamento']);
 
 // Ouve os cliques nas notificações de lembrete (o backend já trouxe a janela
 // para frente) e navega para a tela indicada, levando a data no state.

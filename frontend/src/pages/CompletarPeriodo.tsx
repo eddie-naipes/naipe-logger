@@ -2,6 +2,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {toast} from 'react-toastify';
 import {FiAlertCircle, FiLoader, FiPlay, FiTarget} from 'react-icons/fi';
 import {ptBR} from 'date-fns/locale';
+import {useLocation} from 'react-router';
 import {GetSavedTasks, GetTemplates, PlanFillGaps} from '@wailsjs/go/backend/App';
 import TaskSelector from '../components/timeLog/TaskSelector';
 import PlanPreview from '../components/timeLog/PlanPreview';
@@ -13,7 +14,7 @@ import {type Dados, paraBinding, type Task} from '../types/backend';
 import type {backend} from '@wailsjs/go/models';
 import {formatDateBR, todayYMD} from '../utils/dates';
 import {errMsg} from '../utils/errors';
-import {currentMonth, type Period, periodForMonth} from '../utils/fillGaps';
+import {currentMonth, monthFromNavigationState, type Period, periodForMonth} from '../utils/fillGaps';
 import {MINUTOS_POR_DIA_PADRAO} from '../utils/time';
 
 const formatDate = (dateString: string) =>
@@ -31,12 +32,14 @@ const GRANULARIDADES = [5, 10, 15, 30, 60] as const;
 // para atingir a jornada, a partir de um template ou de tarefas salvas. O envio
 // reaproveita o fluxo do TimeLog (conflitos, reenviar falhas, desfazer).
 const CompletarPeriodo = () => {
+    const location = useLocation();
     const [savedTasks, setSavedTasks] = useState<Task[]>([]);
     const [templateNames, setTemplateNames] = useState<string[]>([]);
     const [origem, setOrigem] = useState<Origem>('template');
     const [templateName, setTemplateName] = useState('');
     const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
-    const [month, setMonth] = useState(() => currentMonth());
+    // O mês pode vir de outra tela (Fechamento do mês) ou de um lembrete.
+    const [month, setMonth] = useState(() => monthFromNavigationState(location.state) ?? currentMonth());
     const [wholeMonth, setWholeMonth] = useState(false);
     const [granularity, setGranularity] = useState(15);
     const [days, setDays] = useState<DaySummary[]>([]);

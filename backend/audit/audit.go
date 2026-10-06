@@ -120,10 +120,12 @@ type Summary struct {
 	WorkingDays         int `json:"workingDays"`
 	WorkingDaysToDate   int `json:"workingDaysToDate"`
 	MinutesPerDay       int `json:"minutesPerDay"`
-	EntryCount          int `json:"entryCount"`
-	ErrorCount          int `json:"errorCount"`
-	WarningCount        int `json:"warningCount"`
-	IgnoredCount        int `json:"ignoredCount"`
+	// DailyLimitMinutes é o limite diário usado (0 = verificação desligada).
+	DailyLimitMinutes int `json:"dailyLimitMinutes"`
+	EntryCount        int `json:"entryCount"`
+	ErrorCount        int `json:"errorCount"`
+	WarningCount      int `json:"warningCount"`
+	IgnoredCount      int `json:"ignoredCount"`
 	// Ready = nenhum erro pendente (avisos não impedem a entrega).
 	Ready bool `json:"ready"`
 }
@@ -581,11 +583,12 @@ func countByType(issues []Issue) []TypeCount {
 
 func summarize(in Input, entries []api.TimeEntryReport, working map[string]bool, issues []Issue) Summary {
 	s := Summary{
-		Year:          in.Year,
-		Month:         in.Month,
-		MinutesPerDay: in.MinutesPerDay,
-		EntryCount:    len(entries),
-		WorkingDays:   len(working),
+		Year:              in.Year,
+		Month:             in.Month,
+		MinutesPerDay:     in.MinutesPerDay,
+		DailyLimitMinutes: max(in.DailyLimitMinutes, 0),
+		EntryCount:        len(entries),
+		WorkingDays:       len(working),
 	}
 	for d := range working {
 		if in.Today == "" || d <= in.Today {

@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {currentMonth, periodForMonth} from './fillGaps';
+import {currentMonth, monthFromNavigationState, periodForMonth} from './fillGaps';
 
 describe('periodForMonth', () => {
     it('mês atual vai do dia 1 até hoje', () => {
@@ -28,5 +28,19 @@ describe('periodForMonth', () => {
 describe('currentMonth', () => {
     it('formata no fuso local', () => {
         expect(currentMonth(new Date(2025, 8, 30, 23, 30))).toBe('2025-09');
+    });
+});
+
+describe('monthFromNavigationState', () => {
+    it('aceita {month} e {reminderDate}', () => {
+        expect(monthFromNavigationState({month: '2026-09'})).toBe('2026-09');
+        expect(monthFromNavigationState({reminderDate: '2026-09-30'})).toBe('2026-09');
+    });
+
+    it('ignora state ausente ou em outro formato', () => {
+        expect(monthFromNavigationState(null)).toBeNull();
+        expect(monthFromNavigationState('2026-09')).toBeNull();
+        expect(monthFromNavigationState({month: '09/2026'})).toBeNull();
+        expect(monthFromNavigationState({reminderDate: 42})).toBeNull();
     });
 });
