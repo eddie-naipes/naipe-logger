@@ -96,10 +96,11 @@ func (a *App) initFeatures() {
 		}
 		if a.features.reminders == nil {
 			a.features.reminders = reminders.New(reminders.Options{
-				Settings:  a.reminderSettings,
-				Source:    a.reminderSource,
-				Sender:    senderFunc(a.send),
-				StatePath: remindersPath,
+				Settings:   a.reminderSettings,
+				Source:     a.reminderSource,
+				Sender:     senderFunc(a.send),
+				StatePath:  remindersPath,
+				AuditCount: a.monthAuditPendingCount,
 			})
 		}
 		if a.features.timer == nil {
@@ -207,7 +208,7 @@ func (a *App) handleNotificationResponse(resp notify.Response) {
 	switch resp.Kind() {
 	case reminders.Kind:
 		route := resp.String("route")
-		if route != reminders.RouteComplete {
+		if route != reminders.RouteComplete && route != reminders.RouteMonthClose {
 			route = reminders.RouteTimeLog
 		}
 		bringWindowToFront(ctx)
