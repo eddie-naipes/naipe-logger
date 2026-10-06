@@ -40,18 +40,20 @@ jobs:
 
       - name: gofmt
         run: |
-          unformatted=$(gofmt -l backend/ main.go)
+          unformatted=$(gofmt -l backend/ main.go tools/)
           if [ -n "$unformatted" ]; then
             echo "Arquivos fora do padrão gofmt:"
             echo "$unformatted"
             exit 1
           fi
 
+      # Pacotes listados em vez de ./...: o Go não ignora node_modules, e uma
+      # dependência do frontend (flatted) traz um pacote Go próprio.
       - name: go vet
-        run: go vet ./...
+        run: go vet ./backend/... ./tools/... .
 
       - name: go test
-        run: go test -race ./...
+        run: go test -race ./backend/... ./tools/... .
 
       - name: Verificar go.mod atualizado
         run: |
