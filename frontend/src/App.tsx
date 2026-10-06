@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {lazy, Suspense, useCallback, useEffect, useMemo, useState} from 'react';
 import {Route, Routes, useLocation, useNavigate} from 'react-router';
 import {toast, ToastContainer} from 'react-toastify';
 // O react-toastify 11 injeta o próprio CSS; não há mais import de ReactToastify.css.
@@ -13,14 +13,25 @@ import StartupNotices from './components/StartupNotices';
 import {TimeEntriesContext, type TimeEntriesSignal} from './contexts/TimeEntriesContext';
 
 import Dashboard from './pages/Dashboard';
-import Config from './pages/Config';
-import Tasks from './pages/Task';
-import TimeLog from './pages/TimeLog';
-import Templates from './pages/Templates';
-import CompletarPeriodo from './pages/CompletarPeriodo';
-import Semana from './pages/Semana';
-import Reports from './pages/Reports';
-import NotFound from './pages/NotFound';
+
+// O Dashboard é a tela inicial e vem no pacote principal; as demais páginas
+// são carregadas na primeira visita, para o app abrir sem baixar relatórios,
+// grade semanal etc. (o pacote único passava de 500 kB).
+const Config = lazy(() => import('./pages/Config'));
+const Tasks = lazy(() => import('./pages/Task'));
+const TimeLog = lazy(() => import('./pages/TimeLog'));
+const Templates = lazy(() => import('./pages/Templates'));
+const CompletarPeriodo = lazy(() => import('./pages/CompletarPeriodo'));
+const Semana = lazy(() => import('./pages/Semana'));
+const Reports = lazy(() => import('./pages/Reports'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+const CarregandoPagina = () => (
+    <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
+        <div className="animate-spin-slow w-10 h-10 border-4 border-primary-600 border-t-transparent rounded-full"/>
+        <span className="sr-only">Carregando página...</span>
+    </div>
+);
 
 import {ThemeContext} from './contexts/ThemeContext';
 import {UpdateContext} from './contexts/UpdateContext';
@@ -149,6 +160,7 @@ function App() {
 
                         <main className="flex-1 overflow-y-auto p-4">
                             <ErrorBoundary resetKey={location.pathname}>
+                                <Suspense fallback={<CarregandoPagina/>}>
                                 <Routes>
                                     <Route path="/" element={<Dashboard/>}/>
                                     <Route path="/config" element={<Config onConfigSaved={() => void checkIfConfigured()}/>}/>
@@ -160,6 +172,7 @@ function App() {
                                     <Route path="/relatorios" element={<Reports/>}/>
                                     <Route path="*" element={<NotFound/>}/>
                                 </Routes>
+                                </Suspense>
                             </ErrorBoundary>
                         </main>
                     </div>
