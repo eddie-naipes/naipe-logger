@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"logTime-go/backend"
+	"logTime-go/backend/autostart"
 	"logTime-go/backend/logging"
 )
 
@@ -49,6 +50,14 @@ func main() {
 
 	slog.Info("Aplicação iniciada", "versao", version)
 
+	// Aberto pelo item "iniciar com o sistema": começa minimizado (na barra de
+	// tarefas), com lembretes e cronômetro rodando. StartHidden não serve: o
+	// app não tem ícone na bandeja e a janela ficaria inalcançável.
+	startState := options.Normal
+	if autostart.HasMinimizedFlag(os.Args[1:]) {
+		startState = options.Minimised
+	}
+
 	if err := wails.Run(&options.App{
 		Title:  "Teamwork Time Logger",
 		Width:  1024,
@@ -57,6 +66,7 @@ func main() {
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		WindowStartState: startState,
 		OnStartup:        app.Startup,
 		OnShutdown:       app.Shutdown,
 		Bind: []interface{}{
