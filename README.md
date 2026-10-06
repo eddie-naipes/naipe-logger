@@ -15,6 +15,7 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Gerenciador de apontamentos**: liste, edite e exclua entradas de tempo de um período
 - **Feriados brasileiros**: obtidos da BrasilAPI, com cache em disco e fallback local (inclui feriados móveis via algoritmo de Gauss)
 - **Relatórios no app**: totais, cobrável × não cobrável, horas por dia contra a jornada, rankings por projeto/tarefa e exportação em CSV (Excel pt-BR) ou PDF
+- **Fechamento do mês**: aponta dias incompletos, descrições vazias/genéricas, duplicatas, lançamentos em dia não útil, dias acima do limite e lançamentos sem tarefa, com correção a um clique
 - **Calendário de trabalho**: feriados estaduais da sua UF, feriados municipais, pontes e férias entram no cálculo de dias úteis
 - **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
 - **Logs em arquivo** para diagnóstico, com o token sempre mascarado
@@ -222,6 +223,10 @@ O botão **Cronômetro** no cabeçalho inicia a contagem numa tarefa salva ou bu
 ### 📈 Relatórios
 
 A página **Relatórios** resume um período (este mês, mês passado, esta semana, últimos 30 dias ou datas personalizadas, até 366 dias): total lançado, cobrável × não cobrável, jornada esperada (dias úteis × jornada diária) e saldo, colunas de horas por dia com a jornada como linha de referência (dias úteis sem lançamento aparecem zerados), rankings por projeto e por tarefa, totais por semana e uma tabela por tarefa ordenável. Só entram os lançamentos não excluídos do usuário conectado. O **CSV** sai na mesma pasta do PDF (`~/TeamworkReports`), pronto para o Excel em português: separador `;`, UTF-8 com BOM, vírgula decimal e datas dd/mm/aaaa. Há duas versões — **detalhada** (data, projeto, tarefa, descrição, início, minutos, horas, cobrável) e **resumida** (por projeto/tarefa) — e textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmula.
+
+### ✅ Fechamento do Mês
+
+Antes de entregar o mês, a página **Fechamento** audita os seus lançamentos e lista o que está errado, agrupado por tipo e com a correção a um clique: dias úteis (até hoje) abaixo da jornada (abre o "Completar período" no mês), lançamentos sem descrição ou com descrição genérica (igual ao nome da tarefa ou numa lista configurável), possíveis duplicatas (mesma tarefa, dia, tempo e descrição — apaga as cópias mantendo a mais antiga, após confirmação), lançamentos em fim de semana, feriado, ponte ou férias (editar a data ou apagar), dias acima do limite diário (padrão 10h) e lançamentos sem tarefa. Cada problema pode ser ignorado (e reexibido depois). O mês fica "Pronto para entregar" quando não há erros; o Dashboard mostra a contagem e o lembrete de fim de mês cita os problemas e abre esta página. O limite diário e as descrições genéricas são configurados na própria página.
 
 ### 🗓️ Calendário de Trabalho (feriados estaduais, municipais, pontes e férias)
 
