@@ -712,6 +712,7 @@ export namespace audit {
 	    workingDays: number;
 	    workingDaysToDate: number;
 	    minutesPerDay: number;
+	    dailyLimitMinutes: number;
 	    entryCount: number;
 	    errorCount: number;
 	    warningCount: number;
@@ -733,6 +734,7 @@ export namespace audit {
 	        this.workingDays = source["workingDays"];
 	        this.workingDaysToDate = source["workingDaysToDate"];
 	        this.minutesPerDay = source["minutesPerDay"];
+	        this.dailyLimitMinutes = source["dailyLimitMinutes"];
 	        this.entryCount = source["entryCount"];
 	        this.errorCount = source["errorCount"];
 	        this.warningCount = source["warningCount"];
