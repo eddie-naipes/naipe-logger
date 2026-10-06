@@ -9,8 +9,8 @@ import (
 type registroFalso map[string]string
 
 func (r registroFalso) GetString(n string) (string, bool, error) { v, ok := r[n]; return v, ok, nil }
-func (r registroFalso) SetString(n, v string) error             { r[n] = v; return nil }
-func (r registroFalso) Delete(n string) error                   { delete(r, n); return nil }
+func (r registroFalso) SetString(n, v string) error              { r[n] = v; return nil }
+func (r registroFalso) Delete(n string) error                    { delete(r, n); return nil }
 
 func trocarAutostart(t *testing.T, reg registroFalso) {
 	t.Helper()
