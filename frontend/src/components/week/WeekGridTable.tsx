@@ -68,7 +68,7 @@ const CellInput = ({minutes, label, disabled, onCommit}: CellInputProps) => {
             onChange={e => setDraft(e.target.value)}
             onBlur={commit}
             onKeyDown={onKeyDown}
-            className="w-16 text-center tabular-nums text-sm rounded border border-transparent bg-transparent px-1 py-1 hover:border-gray-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:bg-white dark:text-white dark:hover:border-gray-600 dark:focus:bg-gray-700 disabled:cursor-not-allowed"
+            className="w-16 text-center tabular-nums text-sm rounded-sm border border-transparent bg-transparent px-1 py-1 hover:border-gray-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 focus:bg-white dark:text-white dark:hover:border-gray-600 dark:focus:bg-gray-700 disabled:cursor-not-allowed"
         />
     );
 };
@@ -123,7 +123,7 @@ const WeekGridTable = ({
                                 >
                                     <div>{DIAS_ABREV[(i + 1) % 7]} {formatDateBR(data, 'dd/MM')}</div>
                                     {naoUtil?.type === 'holiday' && (
-                                        <div className="text-xs font-normal text-red-600 dark:text-red-400 truncate max-w-[6rem] mx-auto" title={naoUtil.name}>
+                                        <div className="text-xs font-normal text-red-600 dark:text-red-400 truncate max-w-24 mx-auto" title={naoUtil.name}>
                                             {naoUtil.name}
                                         </div>
                                     )}
@@ -165,7 +165,7 @@ const WeekGridTable = ({
                                                     onClick={() => onOpenCell(row, i)}
                                                     aria-label={`Ver lançamentos de ${rotulo}`}
                                                     title="Ver, editar ou apagar lançamentos"
-                                                    className="p-1 rounded text-gray-400 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                    className="p-1 rounded-sm text-gray-400 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-gray-700"
                                                 >
                                                     <FiList className="w-3.5 h-3.5" aria-hidden="true"/>
                                                 </button>

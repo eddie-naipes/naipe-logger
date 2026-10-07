@@ -29,9 +29,9 @@ const DailyChart = ({days}: DailyChartProps) => {
     return (
         <figure className="m-0">
             <div className="flex items-center gap-4 mb-3 text-xs text-gray-600 dark:text-gray-400" aria-hidden="true">
-                <span className="flex items-center"><span className={`inline-block w-3 h-3 rounded-sm mr-1 ${SERIE_1}`}/>Horas lançadas</span>
+                <span className="flex items-center"><span className={`inline-block w-3 h-3 rounded-xs mr-1 ${SERIE_1}`}/>Horas lançadas</span>
                 <span className="flex items-center"><span className={`inline-block w-4 h-0.5 mr-1 ${REFERENCIA}`}/>Jornada esperada</span>
-                <span className="flex items-center"><span className="inline-block w-3 h-3 rounded-sm mr-1 bg-gray-100 dark:bg-gray-700/60"/>Dia não útil</span>
+                <span className="flex items-center"><span className="inline-block w-3 h-3 rounded-xs mr-1 bg-gray-100 dark:bg-gray-700/60"/>Dia não útil</span>
             </div>
 
             <div className="flex">
@@ -63,7 +63,7 @@ const DailyChart = ({days}: DailyChartProps) => {
                                         onMouseLeave={() => setAtivo(a => (a === d.date ? null : a))}
                                         onFocus={() => setAtivo(d.date)}
                                         onBlur={() => setAtivo(a => (a === d.date ? null : a))}
-                                        className={`relative block w-full h-full cursor-default outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${d.isWorkingDay ? '' : 'bg-gray-100 dark:bg-gray-700/60'} ${ativo === d.date ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
+                                        className={`relative block w-full h-full cursor-default outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 ${d.isWorkingDay ? '' : 'bg-gray-100 dark:bg-gray-700/60'} ${ativo === d.date ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
                                     >
                                         {d.minutes > 0 && (
                                             <div

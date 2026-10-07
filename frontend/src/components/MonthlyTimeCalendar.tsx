@@ -328,7 +328,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
 
         const className = `relative p-2 border text-left ${statusClass} ${isToday ? 'ring-2 ring-primary-500 dark:ring-primary-400' : ''}
                 ${isSelected ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''}
-                ${!weekend && !holiday ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600`;
+                ${!weekend && !holiday ? 'cursor-pointer hover:shadow-md' : ''} rounded-md h-20 flex flex-col w-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-600`;
 
         const conteudo = (
             <>
@@ -426,7 +426,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
                     <button
                         type="button"
                         onClick={() => setCurrentMonth(startOfMonth(new Date()))}
-                        className="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                        className="px-2 py-1 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-sm"
                     >
                         Hoje
                     </button>
@@ -478,7 +478,7 @@ const MonthlyTimeCalendar = ({onDayClick, ref}: MonthlyTimeCalendarProps) => {
             {error && !loading && (
                 <div role="alert" className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mb-4">
                     <div className="flex items-start">
-                        <FiAlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 flex-shrink-0" aria-hidden="true"/>
+                        <FiAlertCircle className="h-5 w-5 text-red-500 dark:text-red-400 shrink-0" aria-hidden="true"/>
                         <div className="ml-3 flex-1">
                             <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
                             <button

@@ -127,7 +127,7 @@ const CommitSuggestButton = ({date, onSuggest, disabled = false}: CommitSuggestB
                 isOpen={aberto}
                 onClose={() => setAberto(false)}
                 size="lg"
-                zIndex="z-[70]"
+                zIndex="z-70"
                 title="Descrição pelos commits"
                 icon={<FiGitCommit className="w-5 h-5 mr-2" aria-hidden="true"/>}
                 footer={
@@ -223,7 +223,7 @@ const CommitSuggestButton = ({date, onSuggest, disabled = false}: CommitSuggestB
                     {previa && (
                         <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-3">
                             <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Prévia ({previa.length} caracteres)</p>
-                            <p className="text-gray-900 dark:text-white break-words">{previa}</p>
+                            <p className="text-gray-900 dark:text-white wrap-break-word">{previa}</p>
                         </div>
                     )}
                 </div>

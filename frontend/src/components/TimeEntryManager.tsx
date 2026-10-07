@@ -306,9 +306,9 @@ const TimeEntryManager = ({isOpen, onClose, onEntriesChanged}: TimeEntryManagerP
 
                 {hiddenSelectedCount > 0 && (
                     <div role="status"
-                         className="mb-4 flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded text-sm text-amber-800 dark:text-amber-300">
+                         className="mb-4 flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-sm text-sm text-amber-800 dark:text-amber-300">
                         <span className="flex items-center">
-                            <FiAlertCircle className="w-4 h-4 mr-2 flex-shrink-0" aria-hidden="true"/>
+                            <FiAlertCircle className="w-4 h-4 mr-2 shrink-0" aria-hidden="true"/>
                             {hiddenSelectedCount} entrada(s) selecionada(s) estão ocultas pelos filtros e não
                             serão deletadas.
                         </span>

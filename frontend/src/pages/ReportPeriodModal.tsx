@@ -56,7 +56,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
         }
     };
 
-    const inputClass = 'pl-10 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white';
+    const inputClass = 'pl-10 block w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white';
 
     return (
         <Modal
@@ -73,7 +73,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
                                className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Data Inicial
                         </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="mt-1 relative rounded-md shadow-xs">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <FiCalendar className="text-gray-400" aria-hidden="true"/>
                             </div>
@@ -93,7 +93,7 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
                                className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             Data Final
                         </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="mt-1 relative rounded-md shadow-xs">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <FiCalendar className="text-gray-400" aria-hidden="true"/>
                             </div>
@@ -118,8 +118,8 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
 
                     {error && (
                         <div role="alert"
-                             className="flex items-start p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded">
-                            <FiAlertCircle className="w-4 h-4 mt-0.5 mr-2 text-red-500 flex-shrink-0"
+                             className="flex items-start p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-sm">
+                            <FiAlertCircle className="w-4 h-4 mt-0.5 mr-2 text-red-500 shrink-0"
                                            aria-hidden="true"/>
                             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
                         </div>
@@ -131,14 +131,14 @@ const ReportPeriodModal = ({isOpen, onClose, onExport}: ReportPeriodModalProps) 
                         type="button"
                         onClick={fechar}
                         disabled={isExporting}
-                        className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
+                        className="px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50"
                     >
                         Cancelar
                     </button>
                     <button
                         type="submit"
                         disabled={isExporting || invalidRange}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-70 disabled:cursor-not-allowed dark:bg-primary-700 dark:hover:bg-primary-800"
+                        className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-70 disabled:cursor-not-allowed dark:bg-primary-700 dark:hover:bg-primary-800"
                     >
                         {isExporting ? (
                             <>

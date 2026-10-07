@@ -23,8 +23,8 @@ const UpdateBanner = () => {
             className="border-b border-primary-200 bg-primary-50 px-4 py-3 text-sm dark:border-primary-900 dark:bg-primary-900/20"
         >
             <div className="flex flex-wrap items-center gap-3">
-                <FiGift className="h-5 w-5 flex-shrink-0 text-primary-600 dark:text-primary-400" aria-hidden="true"/>
-                <p className="flex-1 min-w-[12rem] text-gray-800 dark:text-gray-200">
+                <FiGift className="h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" aria-hidden="true"/>
+                <p className="flex-1 min-w-48 text-gray-800 dark:text-gray-200">
                     Nova versão <strong>{info.latestVersion}</strong> disponível
                     {info.currentVersion && <> (você usa a {info.currentVersion})</>}.
                     {notes && (
@@ -111,7 +111,7 @@ const UpdateBanner = () => {
             )}
 
             {showNotes && notes && (
-                <pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-primary-100 bg-white p-3 font-sans text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                <pre className="mt-3 max-h-48 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-primary-100 bg-white p-3 font-sans text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                     {notes}
                 </pre>
             )}

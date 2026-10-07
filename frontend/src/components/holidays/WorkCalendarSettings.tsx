@@ -179,7 +179,7 @@ const WorkCalendarSettings = ({onSaved}: WorkCalendarSettingsProps) => {
                                         <label className="inline-flex items-start text-sm text-gray-800 dark:text-gray-200">
                                             <input
                                                 type="checkbox"
-                                                className="mt-0.5 mr-2 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                                className="mt-0.5 mr-2 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
                                                 checked={!desligados.has(h.monthDay)}
                                                 onChange={() => toggleEstadual(h.monthDay)}
                                             />
@@ -193,7 +193,7 @@ const WorkCalendarSettings = ({onSaved}: WorkCalendarSettingsProps) => {
                             </ul>
                         )}
                         <p className="mt-2 flex items-start text-xs text-gray-500 dark:text-gray-400">
-                            <FiInfo className="w-3.5 h-3.5 mr-1 mt-0.5 flex-shrink-0" aria-hidden="true"/>
+                            <FiInfo className="w-3.5 h-3.5 mr-1 mt-0.5 shrink-0" aria-hidden="true"/>
                             A lista embutida é conservadora (só feriados estaduais de data fixa amplamente conhecidos).
                             Desmarque o que sua empresa não folga e cadastre abaixo o que faltar.
                         </p>
@@ -223,7 +223,7 @@ const WorkCalendarSettings = ({onSaved}: WorkCalendarSettingsProps) => {
                                     type="button"
                                     onClick={() => update({customHolidays: settings.customHolidays.filter((_, j) => j !== i)})}
                                     aria-label={`Remover ${h.name}`}
-                                    className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded"
+                                    className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded-sm"
                                 >
                                     <FiTrash2 className="w-4 h-4" aria-hidden="true"/>
                                 </button>
@@ -253,7 +253,7 @@ const WorkCalendarSettings = ({onSaved}: WorkCalendarSettingsProps) => {
                     </div>
                     <div className="md:col-span-2 flex items-center pb-2">
                         <input id="feriadoRecorrente" type="checkbox" checked={novoFeriado.recurring}
-                               className="mr-2 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                               className="mr-2 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"
                                onChange={(e) => setNovoFeriado(f => ({...f, recurring: e.target.checked}))}/>
                         <label htmlFor="feriadoRecorrente" className="text-xs text-gray-700 dark:text-gray-300">Repete todo ano</label>
                     </div>
@@ -289,7 +289,7 @@ const WorkCalendarSettings = ({onSaved}: WorkCalendarSettingsProps) => {
                                     type="button"
                                     onClick={() => update({absences: settings.absences.filter((_, j) => j !== i)})}
                                     aria-label={`Remover ausência de ${formatDateBR(a.start)} a ${formatDateBR(a.end)}`}
-                                    className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded"
+                                    className="p-1 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/30 rounded-sm"
                                 >
                                     <FiTrash2 className="w-4 h-4" aria-hidden="true"/>
                                 </button>

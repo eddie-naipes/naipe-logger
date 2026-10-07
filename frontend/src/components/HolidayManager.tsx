@@ -282,21 +282,21 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div className="bg-white dark:bg-gray-800 p-3 rounded">
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-sm">
                             <p className="text-sm text-gray-500 dark:text-gray-400">Anos em Cache</p>
                             <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
                                 {cacheStats.cached_years}
                             </p>
                         </div>
 
-                        <div className="bg-white dark:bg-gray-800 p-3 rounded">
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-sm">
                             <p className="text-sm text-gray-500 dark:text-gray-400">Anos Disponíveis</p>
                             <p className="text-sm text-gray-900 dark:text-white">
                                 {cacheStats.years?.join(', ') || 'Nenhum'}
                             </p>
                         </div>
 
-                        <div className="bg-white dark:bg-gray-800 p-3 rounded">
+                        <div className="bg-white dark:bg-gray-800 p-3 rounded-sm">
                             <p className="text-sm text-gray-500 dark:text-gray-400">Total de Feriados</p>
                             <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                                 {Object.values(cacheStats.cache_details || {}).reduce((total, details) =>
@@ -326,7 +326,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                                         <td className="py-2 px-3 font-medium">{year}</td>
                                         <td className="py-2 px-3">{details.holidays_count}</td>
                                         <td className="py-2 px-3">
-                                                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
+                                                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-sm">
                                                     {details.sources?.join(', ') || 'N/A'}
                                                 </span>
                                         </td>
@@ -398,7 +398,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                                             {holiday.name}
                                         </h4>
                                         {holiday.isOptional && (
-                                            <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
+                                            <span className="text-xs bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded-sm">
                                                 Opcional
                                             </span>
                                         )}
@@ -448,7 +448,7 @@ const HolidayManager = ({ isOpen, onClose }: HolidayManagerProps) => {
                     </div>
                     <ul className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-72 overflow-y-auto">
                         {extraDays.map(day => (
-                            <li key={day.date} className="text-sm border border-gray-200 dark:border-gray-600 rounded p-2">
+                            <li key={day.date} className="text-sm border border-gray-200 dark:border-gray-600 rounded-sm p-2">
                                 <p className="font-medium text-gray-900 dark:text-white">{day.name}</p>
                                 <p className="text-xs text-gray-600 dark:text-gray-400">
                                     {formatDate(day.date)} · {nonWorkingDayLabel(day.type)}

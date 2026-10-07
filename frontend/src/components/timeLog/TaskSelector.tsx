@@ -57,14 +57,14 @@ const TaskSelector = ({savedTasks, selectedTasks, onToggle, onToggleAll}: TaskSe
                                 }`}
                             >
                                 <div className="flex items-start">
-                                    <div className="flex-shrink-0">
+                                    <div className="shrink-0">
                                         <input
                                             id={inputId}
                                             type="checkbox"
                                             checked={selected}
                                             onChange={() => onToggle(task.taskId)}
                                             aria-label={`Incluir tarefa ${task.taskName} no plano`}
-                                            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 dark:focus:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                            className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 dark:focus:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                         />
                                     </div>
                                     <label htmlFor={inputId} className="ml-3 cursor-pointer">

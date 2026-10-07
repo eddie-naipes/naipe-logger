@@ -98,7 +98,7 @@ const StartupNotices = () => {
                     {backups.map(arquivo => (
                         <li
                             key={arquivo}
-                            className="text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded"
+                            className="text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded-sm"
                         >
                             {arquivo}
                         </li>
@@ -139,7 +139,7 @@ const StartupNotices = () => {
                     Há uma versão antiga do aplicativo{legacy.displayName && <> (<strong>{legacy.displayName}</strong>)</>}{' '}
                     instalada em:
                 </p>
-                <p className="mt-2 text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded">
+                <p className="mt-2 text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded-sm">
                     {legacy.installLocation || 'local não informado'}
                 </p>
                 <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
@@ -151,7 +151,7 @@ const StartupNotices = () => {
                         type="checkbox"
                         checked={dontAskAgain}
                         onChange={(e) => setDontAskAgain(e.target.checked)}
-                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+                        className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
                     />
                     Não perguntar novamente
                 </label>

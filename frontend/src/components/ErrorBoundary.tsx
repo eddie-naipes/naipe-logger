@@ -59,7 +59,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
                         Ocorreu um erro inesperado ao exibir esta tela. Seus lançamentos já enviados
                         não foram afetados. Recarregue o aplicativo para continuar.
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mb-6 break-words">
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mb-6 wrap-break-word">
                         {detalhe}
                     </p>
                     <button

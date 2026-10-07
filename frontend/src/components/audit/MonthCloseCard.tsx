@@ -23,7 +23,7 @@ const MonthCloseCard = () => {
 
     return (
         <Link to="/fechamento"
-              className="card !p-4 mb-6 flex items-center justify-between gap-3 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
+              className="card p-4! mb-6 flex items-center justify-between gap-3 hover:border-primary-400 dark:hover:border-primary-500 transition-colors"
               aria-label={`Fechamento do mês: ${texto}`}>
             <div className="flex items-center gap-3">
                 {summary === null && !failed && <FiLoader className="w-6 h-6 animate-spin text-primary-600" aria-hidden="true"/>}

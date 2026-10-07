@@ -50,7 +50,7 @@ const ResultsPanel = ({
                         >
                             <div className="flex items-start">
                                 <div
-                                    className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
+                                    className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center ${
                                         result.success
                                             ? 'bg-green-100 text-green-600 dark:bg-green-800 dark:text-green-200'
                                             : 'bg-red-100 text-red-600 dark:bg-red-800 dark:text-red-200'
@@ -82,12 +82,12 @@ const ResultsPanel = ({
             <div className="mt-4 bg-gray-50 p-3 rounded-md dark:bg-gray-800">
                 <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Resumo</h3>
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-green-50 p-2 rounded dark:bg-green-900/20">
+                    <div className="bg-green-50 p-2 rounded-sm dark:bg-green-900/20">
                         <p className="text-xs text-green-800 dark:text-green-200">
                             <span className="font-medium">Sucessos:</span> {successCount}
                         </p>
                     </div>
-                    <div className="bg-red-50 p-2 rounded dark:bg-red-900/20">
+                    <div className="bg-red-50 p-2 rounded-sm dark:bg-red-900/20">
                         <p className="text-xs text-red-800 dark:text-red-200">
                             <span className="font-medium">Falhas:</span> {failedEntries.length}
                         </p>

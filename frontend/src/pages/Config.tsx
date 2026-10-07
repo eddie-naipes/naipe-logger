@@ -186,7 +186,7 @@ const Config = ({ onConfigSaved }: ConfigProps) => {
             {legacyPurged && (
                 <div className="card max-w-md mx-auto mb-4 border-l-4 border-amber-500">
                     <div className="flex items-start">
-                        <FiAlertTriangle className="mt-0.5 w-5 h-5 text-amber-500 mr-3 flex-shrink-0" />
+                        <FiAlertTriangle className="mt-0.5 w-5 h-5 text-amber-500 mr-3 shrink-0" />
                         <div>
                             <h3 className="text-md font-medium text-amber-800 dark:text-amber-400">
                                 Credencial antiga removida
@@ -311,7 +311,7 @@ const Config = ({ onConfigSaved }: ConfigProps) => {
 
                         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
                             <p className="text-sm text-blue-700 dark:text-blue-300 flex items-start">
-                                <FiExternalLink className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                                <FiExternalLink className="w-4 h-4 mr-2 mt-0.5 shrink-0" />
                                 <span>
                                     Gere um token no Teamwork em <strong>Perfil &rarr; Edit My Details &rarr; API &amp;
                                     Mobile</strong>. Sua senha não é usada nem armazenada por este aplicativo.

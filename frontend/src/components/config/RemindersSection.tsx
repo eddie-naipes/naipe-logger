@@ -68,8 +68,8 @@ const RemindersSection = () => {
             </p>
 
             {status && !status.available && (
-                <div className="flex items-start text-sm text-amber-800 bg-amber-50 dark:text-amber-200 dark:bg-amber-900/30 p-3 rounded mb-4" role="alert">
-                    <FiAlertTriangle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" aria-hidden="true"/>
+                <div className="flex items-start text-sm text-amber-800 bg-amber-50 dark:text-amber-200 dark:bg-amber-900/30 p-3 rounded-sm mb-4" role="alert">
+                    <FiAlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0" aria-hidden="true"/>
                     <span>
                         As notificações do sistema não estão disponíveis{status.error ? ` (${status.error})` : ''}.
                         Verifique as permissões de notificação do sistema e reinicie o app.

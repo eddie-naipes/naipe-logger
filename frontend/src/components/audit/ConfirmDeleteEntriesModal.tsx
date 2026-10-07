@@ -26,7 +26,7 @@ const Linha = ({entry}: {entry: TimeEntryReport}) => (
             {' · '}<span className="tabular-nums">{formatHoursMinutes(entry.minutes)}</span>
             {' · '}{entry.taskName || entry.projectName || 'Sem tarefa'}
         </p>
-        <p className="text-gray-600 dark:text-gray-400 break-words">{entry.description?.trim() || 'Sem descrição'}</p>
+        <p className="text-gray-600 dark:text-gray-400 wrap-break-word">{entry.description?.trim() || 'Sem descrição'}</p>
     </li>
 );
 
@@ -39,7 +39,7 @@ const ConfirmDeleteEntriesModal = ({request, deleting, onCancel, onConfirm}: Con
             isOpen
             onClose={onCancel}
             closeDisabled={deleting}
-            zIndex="z-[60]"
+            zIndex="z-60"
             title={n === 1 ? 'Apagar lançamento?' : `Apagar ${n} lançamentos?`}
             icon={<FiTrash2 className="w-5 h-5 mr-2 text-red-600" aria-hidden="true"/>}
             footer={
