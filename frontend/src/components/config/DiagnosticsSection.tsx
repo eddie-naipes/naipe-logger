@@ -37,7 +37,7 @@ const DiagnosticsSection = () => {
                 Os logs ajudam a investigar problemas. O token de API nunca é gravado neles.
             </p>
             {logsPath ? (
-                <p className="text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded mb-4">
+                <p className="text-xs font-mono break-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 p-2 rounded-sm mb-4">
                     {logsPath}
                 </p>
             ) : logsPath === '' && (

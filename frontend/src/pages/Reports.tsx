@@ -71,7 +71,7 @@ const Reports = () => {
             type="button"
             onClick={() => void exportar(tipo)}
             disabled={exportando !== null || Boolean(erroPeriodo)}
-            className="btn-secondary !px-3 !py-2 inline-flex items-center disabled:opacity-50"
+            className="btn-secondary px-3! py-2! inline-flex items-center disabled:opacity-50"
         >
             {exportando === tipo ? <FiLoader className="w-4 h-4 mr-2 animate-spin" aria-hidden="true"/> : icone}
             {rotulo}
@@ -92,7 +92,7 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className="card !p-4 space-y-2">
+            <div className="card p-4! space-y-2">
                 <PeriodSelector preset={preset} range={range} error={erroPeriodo}
                                 onChange={(p, r) => {
                                     setPreset(p);
@@ -106,8 +106,8 @@ const Reports = () => {
             </div>
 
             {error && (
-                <div role="alert" className="flex items-start p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded">
-                    <FiAlertCircle className="w-5 h-5 mr-2 text-red-500 flex-shrink-0" aria-hidden="true"/>
+                <div role="alert" className="flex items-start p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-sm">
+                    <FiAlertCircle className="w-5 h-5 mr-2 text-red-500 shrink-0" aria-hidden="true"/>
                     <div>
                         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
                         {!erroPeriodo && (
@@ -130,7 +130,7 @@ const Reports = () => {
                 <div className={`space-y-6 ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
                     <SummaryCards report={report}/>
 
-                    <section className="card !p-4" aria-labelledby="horas-por-dia">
+                    <section className="card p-4!" aria-labelledby="horas-por-dia">
                         <h2 id="horas-por-dia" className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
                             Horas por dia
                         </h2>
@@ -146,7 +146,7 @@ const Reports = () => {
                     </div>
 
                     {(report.byWeek ?? []).length > 1 && (
-                        <section className="card !p-4" aria-labelledby="por-semana">
+                        <section className="card p-4!" aria-labelledby="por-semana">
                             <h2 id="por-semana" className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Por semana</h2>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
@@ -173,7 +173,7 @@ const Reports = () => {
                         </section>
                     )}
 
-                    <section className="card !p-4" aria-labelledby="por-tarefa">
+                    <section className="card p-4!" aria-labelledby="por-tarefa">
                         <h2 id="por-tarefa" className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Detalhe por tarefa</h2>
                         <TaskTable tasks={report.byTask ?? []} totalMinutes={report.totalMinutes}/>
                     </section>

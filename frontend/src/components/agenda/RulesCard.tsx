@@ -109,18 +109,18 @@ const RulesCard = ({settings, savedTasks, onChange, onSaved}: RulesCardProps) =>
                         <div className="flex justify-end gap-1">
                             <button type="button" onClick={() => moveRule(i, -1)} disabled={i === 0}
                                     aria-label={`Subir a regra ${i + 1}`}
-                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
+                                    className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
                                 <FiArrowUp className="w-4 h-4" aria-hidden="true"/>
                             </button>
                             <button type="button" onClick={() => moveRule(i, 1)} disabled={i === settings.rules.length - 1}
                                     aria-label={`Descer a regra ${i + 1}`}
-                                    className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
+                                    className="p-1.5 rounded-sm hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
                                 <FiArrowDown className="w-4 h-4" aria-hidden="true"/>
                             </button>
                             <button type="button"
                                     onClick={() => onChange({...settings, rules: settings.rules.filter((_, j) => j !== i)})}
                                     aria-label={`Remover a regra ${i + 1}`}
-                                    className="p-1.5 rounded text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
+                                    className="p-1.5 rounded-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20">
                                 <FiTrash2 className="w-4 h-4" aria-hidden="true"/>
                             </button>
                         </div>

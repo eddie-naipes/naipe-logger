@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Teamwork Time Logger: a Wails v2 desktop app (Go 1.27 backend + React 19/TypeScript strict/Vite/Tailwind frontend) that bulk-logs hours into Teamwork from saved tasks and templates. Go module name is `logTime-go`. The UI, code comments, test names, README and commit messages are all in **Portuguese (pt-BR)** — keep new code and user-facing strings in Portuguese.
+Teamwork Time Logger: a Wails v2 desktop app (Go 1.27 backend + React 19/TypeScript strict/Vite/Tailwind 4 frontend; Tailwind is configured CSS-first in `frontend/src/index.css` — there is no tailwind.config.js) that bulk-logs hours into Teamwork from saved tasks and templates. Go module name is `logTime-go`. The UI, code comments, test names, README and commit messages are all in **Portuguese (pt-BR)** — keep new code and user-facing strings in Portuguese.
 
 ## Commands
 
@@ -18,7 +18,7 @@ go vet ./backend/... ./tools/... .   # not ./... — Go doesn't skip node_module
 go test ./backend/... ./tools/... .
 go test -race ./backend/... ./tools/... .  # needs CGO_ENABLED=1 and gcc (Windows: MinGW, e.g. `scoop install mingw`)
 go mod tidy && git diff --exit-code go.mod go.sum
-cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm audit --omit=dev --audit-level=high  # dev-only audit is a non-blocking warning in CI
+cd frontend && npm ci && npm run typecheck && npm run lint && npm test && npm audit --audit-level=high
 
 # Frontend (in frontend/)
 npm run typecheck                 # tsc --noEmit (strict, noUncheckedIndexedAccess)
@@ -83,7 +83,7 @@ go test ./backend/api -run TestDoRequestRepeteEm429 -v
 - Tests touching the keyring must call `keyring.MockInit()` so they never hit the real vault (CI is headless).
 - Logging goes through slog + `logging.NewRedactingHandler`; the token must never appear in `app.log` (covered by `TestTokenNuncaApareceNoLog`).
 
-**Frontend (`frontend/src`).** TypeScript strict, no JS files. React Router 7 pages in `pages/` (Dashboard is eager; the others are `lazy()`-loaded in `App.tsx` behind a `Suspense` fallback), shared UI in `components/` (use `Modal.tsx` for every dialog; `ErrorBoundary` wraps the routes), stateful logic in `hooks/` (`usePlan`, `useBatchSubmit`, `useUpdate`, …), pure helpers in `utils/` (`errMsg` — Wails errors arrive as strings —, dates, time, retry), contexts in `contexts/` (`ThemeContext`, `UpdateContext`, and `TimeEntriesContext`: anything that creates/edits/deletes entries calls `notifyChanged()`, and views derived from entries (dashboard, calendar, week grid, reports) reload via `useOnTimeEntriesChanged`, debounced 1s so Teamwork reflects the change). Bindings are imported through the `@wailsjs` alias (`@wailsjs/go/backend/App`, `@wailsjs/runtime/runtime`; defined in both `tsconfig.json` and `vite.config.ts`). Binding contracts are typed by the generated `wailsjs/go/models.ts`; `types/backend.ts` re-exports them as plain data via `Dados<T>` (plus `paraBinding` to pass literals back) and hand-types only what Wails can't describe (`map[string]interface{}` results, anonymous structs, event payloads). Startup UI: `UpdateBanner` (driven by `useUpdate`/`UpdateContext`, release notes rendered as plain text — never as HTML) and `StartupNotices` (corrupted-config backups, legacy Windows install). The batch "retry only failed" and "undo batch" flows in TimeLog/TimeEntryManager rely on per-entry results and IDs returned by the backend — retries match by day+task and never resend an entry that succeeded.
+**Frontend (`frontend/src`).** TypeScript strict, no JS files. React Router 8 pages in `pages/` (Dashboard is eager; the others are `lazy()`-loaded in `App.tsx` behind a `Suspense` fallback), shared UI in `components/` (use `Modal.tsx` for every dialog; `ErrorBoundary` wraps the routes), stateful logic in `hooks/` (`usePlan`, `useBatchSubmit`, `useUpdate`, …), pure helpers in `utils/` (`errMsg` — Wails errors arrive as strings —, dates, time, retry), contexts in `contexts/` (`ThemeContext`, `UpdateContext`, and `TimeEntriesContext`: anything that creates/edits/deletes entries calls `notifyChanged()`, and views derived from entries (dashboard, calendar, week grid, reports) reload via `useOnTimeEntriesChanged`, debounced 1s so Teamwork reflects the change). Bindings are imported through the `@wailsjs` alias (`@wailsjs/go/backend/App`, `@wailsjs/runtime/runtime`; defined in both `tsconfig.json` and `vite.config.ts`). Binding contracts are typed by the generated `wailsjs/go/models.ts`; `types/backend.ts` re-exports them as plain data via `Dados<T>` (plus `paraBinding` to pass literals back) and hand-types only what Wails can't describe (`map[string]interface{}` results, anonymous structs, event payloads). Startup UI: `UpdateBanner` (driven by `useUpdate`/`UpdateContext`, release notes rendered as plain text — never as HTML) and `StartupNotices` (corrupted-config backups, legacy Windows install). The batch "retry only failed" and "undo batch" flows in TimeLog/TimeEntryManager rely on per-entry results and IDs returned by the backend — retries match by day+task and never resend an entry that succeeded.
 
 ## Testing conventions
 

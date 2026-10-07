@@ -40,13 +40,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "tailwindcss"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "flowbite"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      # Os tipos acompanham o Node usado de fato (NODE_VERSION do CI, hoje 22).
+      - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     groups:
       npm-minor-patch:

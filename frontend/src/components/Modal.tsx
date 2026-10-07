@@ -147,7 +147,7 @@ const Modal = ({
                 aria-labelledby={titleId}
                 tabIndex={-1}
                 data-modal-dialog=""
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${LARGURAS[size]} max-h-[90vh] flex flex-col focus:outline-none`}
+                className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full ${LARGURAS[size]} max-h-[90vh] flex flex-col focus:outline-hidden`}
             >
                 <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h2 id={titleId} className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">

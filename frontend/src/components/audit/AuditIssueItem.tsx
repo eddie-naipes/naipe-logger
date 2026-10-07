@@ -20,13 +20,13 @@ interface AuditIssueItemProps extends AuditIssueHandlers {
     busyKey: string | null;
 }
 
-const acaoClass = 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border focus:outline-none focus:ring-2 disabled:opacity-50';
+const acaoClass = 'inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg border focus:outline-hidden focus:ring-2 disabled:opacity-50';
 const acaoPrimaria = `${acaoClass} text-white bg-primary-600 border-primary-600 hover:bg-primary-700 focus:ring-primary-300 dark:focus:ring-primary-800`;
 const acaoNeutra = `${acaoClass} text-gray-700 bg-white border-gray-300 hover:bg-gray-100 focus:ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 dark:hover:bg-gray-700`;
 const acaoPerigo = `${acaoClass} text-red-700 bg-white border-red-300 hover:bg-red-50 focus:ring-red-200 dark:bg-gray-800 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/20`;
 
 const EntryLine = ({entry}: {entry: TimeEntryReport}) => (
-    <li className="text-xs text-gray-600 dark:text-gray-400 break-words">
+    <li className="text-xs text-gray-600 dark:text-gray-400 wrap-break-word">
         <span className="font-medium text-gray-800 dark:text-gray-200 tabular-nums">{formatHoursMinutes(entry.minutes)}</span>
         {' · '}{entry.taskName || entry.projectName || 'Sem tarefa'}
         {' · '}<span className="italic">{entry.description?.trim() || 'sem descrição'}</span>
@@ -61,7 +61,7 @@ const AuditIssueItem = ({issue, busyKey, ...h}: AuditIssueItemProps) => {
                 )}
             </div>
 
-            <div className="flex flex-wrap gap-2 flex-shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0">
                 {!issue.ignored && issue.action === 'complete_period' && (
                     <button type="button" className={acaoPrimaria} onClick={() => h.onCompletePeriod(issue)}>
                         <FiTarget className="w-3.5 h-3.5 mr-1" aria-hidden="true"/>Completar

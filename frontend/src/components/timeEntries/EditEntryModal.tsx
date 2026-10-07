@@ -99,7 +99,7 @@ const EditEntryModal = ({entry, onClose, onSaved}: EditEntryModalProps) => {
             isOpen={Boolean(entry)}
             onClose={onClose}
             size="lg"
-            zIndex="z-[60]"
+            zIndex="z-60"
             closeDisabled={updating}
             title="Editar Entrada de Tempo"
             icon={<FiEdit className="w-5 h-5 mr-2" aria-hidden="true"/>}
@@ -109,7 +109,7 @@ const EditEntryModal = ({entry, onClose, onSaved}: EditEntryModalProps) => {
                         type="button"
                         onClick={onClose}
                         disabled={updating}
-                        className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Cancelar
                     </button>
@@ -117,7 +117,7 @@ const EditEntryModal = ({entry, onClose, onSaved}: EditEntryModalProps) => {
                         type="button"
                         onClick={() => void save()}
                         disabled={!podeSalvar}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-primary-700 dark:hover:bg-primary-800 flex items-center"
+                        className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-primary-700 dark:hover:bg-primary-800 flex items-center"
                     >
                         {updating ? (
                             <>

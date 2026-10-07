@@ -35,8 +35,8 @@ const UserProfile = () => {
                 <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full animate-pulse"></div>
                     <div className="flex-1">
-                        <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded animate-pulse mb-1"></div>
-                        <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded animate-pulse w-2/3"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded-sm animate-pulse mb-1"></div>
+                        <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded-sm animate-pulse w-2/3"></div>
                     </div>
                 </div>
             </div>

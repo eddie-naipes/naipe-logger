@@ -162,8 +162,8 @@ const Fechamento = () => {
             </div>
 
             {error && (
-                <div role="alert" className="flex items-start p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded">
-                    <FiAlertCircle className="w-5 h-5 mr-2 text-red-500 flex-shrink-0" aria-hidden="true"/>
+                <div role="alert" className="flex items-start p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-sm">
+                    <FiAlertCircle className="w-5 h-5 mr-2 text-red-500 shrink-0" aria-hidden="true"/>
                     <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
                 </div>
             )}
@@ -175,7 +175,7 @@ const Fechamento = () => {
             )}
 
             {summary && (
-                <section className={`card !p-4 space-y-3 ${loading ? 'opacity-60' : ''}`} aria-busy={loading}
+                <section className={`card p-4! space-y-3 ${loading ? 'opacity-60' : ''}`} aria-busy={loading}
                          aria-labelledby="resumo-fechamento">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 id="resumo-fechamento" className="text-lg font-semibold text-gray-900 dark:text-white capitalize">
@@ -225,7 +225,7 @@ const Fechamento = () => {
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                         <label className="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300">
                             <input type="checkbox" checked={showIgnored} onChange={e => setShowIgnored(e.target.checked)}
-                                   className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"/>
+                                   className="w-4 h-4 rounded-sm border-gray-300 text-primary-600 focus:ring-primary-500"/>
                             Mostrar ignorados ({summary.ignoredCount})
                         </label>
                         <button type="button" onClick={() => setShowSettings(s => !s)} aria-expanded={showSettings}
@@ -257,7 +257,7 @@ const Fechamento = () => {
                 const ativos = g.issues.filter(i => !i.ignored).length;
                 const headingId = `grupo-${g.type}`;
                 return (
-                    <section key={g.type} className="card !p-4" aria-labelledby={headingId}>
+                    <section key={g.type} className="card p-4!" aria-labelledby={headingId}>
                         <h2 id={headingId} className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                             {info.title}
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.severity === 'error'

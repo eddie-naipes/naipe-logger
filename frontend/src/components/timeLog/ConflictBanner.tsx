@@ -32,7 +32,7 @@ const ConflictBanner = ({conflicts, isChecking, checkFailed, formatDate}: Confli
         {conflicts.length > 0 && (
             <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-500 rounded-lg" role="alert">
                 <div className="flex items-start">
-                    <FiAlertCircle className="w-5 h-5 mr-3 mt-0.5 text-amber-500 flex-shrink-0" aria-hidden="true"/>
+                    <FiAlertCircle className="w-5 h-5 mr-3 mt-0.5 text-amber-500 shrink-0" aria-hidden="true"/>
                     <div className="flex-1">
                         <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-300">
                             {conflicts.length} dia(s) já possuem lançamentos

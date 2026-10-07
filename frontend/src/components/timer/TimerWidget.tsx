@@ -5,7 +5,7 @@ import StartTimerModal from './StartTimerModal';
 import StopTimerModal from './StopTimerModal';
 import {elapsedSeconds, formatElapsed, isTimerActive} from './timerTypes';
 
-const iconButton = 'p-1.5 rounded-md text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50';
+const iconButton = 'p-1.5 rounded-md text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700 focus:outline-hidden focus:ring-2 focus:ring-primary-500 disabled:opacity-50';
 
 // Cronômetro no cabeçalho: tarefa e tempo correndo, com pausar/retomar/parar.
 // O tempo é calculado no cliente a partir de startedAt e do acumulado, e só
@@ -58,7 +58,7 @@ const TimerWidget = () => {
                 className={`w-2 h-2 rounded-full ${state.running ? 'bg-green-500 animate-pulse' : 'bg-amber-500'}`}
                 aria-hidden="true"
             />
-            <div className="flex flex-col leading-tight max-w-[14rem]">
+            <div className="flex flex-col leading-tight max-w-56">
                 <span className="text-sm font-medium text-gray-900 dark:text-white truncate" title={state.taskName}>
                     {state.taskName}
                 </span>

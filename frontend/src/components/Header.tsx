@@ -15,7 +15,7 @@ const Header = ({ onMenuClick, isConfigured }: HeaderProps) => {
                     type="button"
                     onClick={onMenuClick}
                     aria-label="Abrir ou fechar o menu"
-                    className="p-2 rounded-md lg:hidden focus:outline-none focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-600"
+                    className="p-2 rounded-md lg:hidden focus:outline-hidden focus:ring-2 focus:ring-primary-500 dark:focus:ring-primary-600"
                 >
                     <FiMenu className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                 </button>
@@ -28,7 +28,7 @@ const Header = ({ onMenuClick, isConfigured }: HeaderProps) => {
                 </div>
 
                 {/* Espaço flexível */}
-                <div className="flex-grow"></div>
+                <div className="grow"></div>
 
                 {isConfigured && <TimerWidget />}
 

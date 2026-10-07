@@ -126,7 +126,7 @@ const AboutSection = () => {
                     checked={checkOnStartup}
                     disabled={isSavingPref}
                     onChange={(e) => void handleToggle(e.target.checked)}
-                    className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:bg-gray-700 dark:border-gray-600 disabled:opacity-50"
+                    className="w-5 h-5 text-primary-600 bg-gray-100 border-gray-300 rounded-sm focus:ring-primary-500 dark:focus:ring-primary-600 dark:bg-gray-700 dark:border-gray-600 disabled:opacity-50"
                 />
             </label>
         </div>

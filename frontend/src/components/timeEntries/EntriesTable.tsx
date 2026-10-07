@@ -47,7 +47,7 @@ const EntriesTable = ({entries, selectedIds, allSelected, onToggleAll, onToggleE
                                 disabled={selectable.length === 0}
                                 onChange={onToggleAll}
                                 aria-label="Selecionar todas as entradas ativas visíveis"
-                                className="w-4 h-4 text-primary-600 rounded"
+                                className="w-4 h-4 text-primary-600 rounded-sm"
                             />
                         </th>
                         <th className={thClass}>Status</th>
@@ -85,7 +85,7 @@ const EntriesTable = ({entries, selectedIds, allSelected, onToggleAll, onToggleE
                                             checked={isSelected}
                                             onChange={() => onToggleEntry(entry.id)}
                                             aria-label={`Selecionar entrada de ${dataFormatada} em ${entry.taskName || 'tarefa sem nome'}`}
-                                            className="w-4 h-4 text-primary-600 rounded"
+                                            className="w-4 h-4 text-primary-600 rounded-sm"
                                         />
                                     )}
                                 </td>

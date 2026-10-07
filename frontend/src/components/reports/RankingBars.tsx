@@ -30,7 +30,7 @@ const RankingBars = ({title, items, totalMinutes, limit = 8}: RankingBarsProps) 
     const max = Math.max(1, ...linhas.map(l => l.minutes));
 
     return (
-        <section className="card !p-4" aria-label={title}>
+        <section className="card p-4!" aria-label={title}>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{title}</h3>
             {linhas.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum lançamento no período.</p>
@@ -43,7 +43,7 @@ const RankingBars = ({title, items, totalMinutes, limit = 8}: RankingBarsProps) 
                                     {item.label}
                                     {item.sublabel && <span className="text-gray-500 dark:text-gray-400"> · {item.sublabel}</span>}
                                 </span>
-                                <span className="flex-shrink-0 tabular-nums text-gray-700 dark:text-gray-300">
+                                <span className="shrink-0 tabular-nums text-gray-700 dark:text-gray-300">
                                     {formatMinutes(item.minutes)} <span className="text-gray-500 dark:text-gray-400">({percent(item.minutes, totalMinutes)}%)</span>
                                 </span>
                             </div>

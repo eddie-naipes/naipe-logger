@@ -15,7 +15,7 @@ const SummaryCards = ({report}: SummaryCardsProps) => {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="card !p-4">
+            <div className="card p-4!">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Total lançado</p>
                 <p className="text-4xl font-semibold text-gray-900 dark:text-white tabular-nums" data-testid="total-lancado">
                     {formatMinutes(report.totalMinutes)}
@@ -25,7 +25,7 @@ const SummaryCards = ({report}: SummaryCardsProps) => {
                 </p>
             </div>
 
-            <div className="card !p-4">
+            <div className="card p-4!">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Cobrável × não cobrável</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">{pctCobravel}% cobrável</p>
                 <div className="flex h-3 mt-2 gap-0.5" aria-hidden="true">
@@ -40,14 +40,14 @@ const SummaryCards = ({report}: SummaryCardsProps) => {
                     {report.totalMinutes === 0 && <div className="h-3 w-full rounded-[4px] bg-gray-100 dark:bg-gray-700"/>}
                 </div>
                 <ul className="mt-2 space-y-0.5 text-xs text-gray-700 dark:text-gray-300">
-                    <li className="flex items-center"><span className={`inline-block w-2.5 h-2.5 rounded-sm mr-1.5 ${SERIE_1}`} aria-hidden="true"/>
+                    <li className="flex items-center"><span className={`inline-block w-2.5 h-2.5 rounded-xs mr-1.5 ${SERIE_1}`} aria-hidden="true"/>
                         Cobrável: <span className="ml-1 tabular-nums">{formatMinutes(report.billableMinutes)}</span></li>
-                    <li className="flex items-center"><span className={`inline-block w-2.5 h-2.5 rounded-sm mr-1.5 ${SERIE_2}`} aria-hidden="true"/>
+                    <li className="flex items-center"><span className={`inline-block w-2.5 h-2.5 rounded-xs mr-1.5 ${SERIE_2}`} aria-hidden="true"/>
                         Não cobrável: <span className="ml-1 tabular-nums">{formatMinutes(report.nonBillableMinutes)}</span></li>
                 </ul>
             </div>
 
-            <div className="card !p-4">
+            <div className="card p-4!">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Jornada esperada</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">{formatMinutes(report.expectedMinutes)}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -60,7 +60,7 @@ const SummaryCards = ({report}: SummaryCardsProps) => {
                 )}
             </div>
 
-            <div className="card !p-4">
+            <div className="card p-4!">
                 <p className="text-sm text-gray-600 dark:text-gray-400">Saldo do período</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white tabular-nums">{formatSigned(report.balanceMinutes)}</p>
                 <p className={`text-xs mt-1 flex items-center ${saldoOk ? 'text-green-700 dark:text-green-400' : 'text-amber-700 dark:text-amber-400'}`}>

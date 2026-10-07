@@ -58,17 +58,17 @@ const CellEntriesModal = ({target, deletingId, onClose, onEdit, onDelete}: CellE
                                     {formatHoursMinutes(entry.minutes)}
                                     {entry.isBillable ? '' : ' • não contabilizável'}
                                 </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 break-words">
+                                <p className="text-sm text-gray-600 dark:text-gray-400 wrap-break-word">
                                     {entry.description || 'Sem descrição'}
                                 </p>
                             </div>
-                            <div className="flex gap-2 flex-shrink-0">
+                            <div className="flex gap-2 shrink-0">
                                 <button
                                     type="button"
                                     onClick={() => onEdit(entry)}
                                     disabled={deletingId !== null}
                                     aria-label={`Editar lançamento de ${formatHoursMinutes(entry.minutes)}`}
-                                    className="p-2 rounded text-gray-500 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+                                    className="p-2 rounded-sm text-gray-500 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
                                 >
                                     <FiEdit2 className="w-4 h-4" aria-hidden="true"/>
                                 </button>
@@ -77,7 +77,7 @@ const CellEntriesModal = ({target, deletingId, onClose, onEdit, onDelete}: CellE
                                     onClick={() => onDelete(entry)}
                                     disabled={deletingId !== null}
                                     aria-label={`Apagar lançamento de ${formatHoursMinutes(entry.minutes)}`}
-                                    className="p-2 rounded text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
+                                    className="p-2 rounded-sm text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50"
                                 >
                                     {deletingId === entry.id
                                         ? <FiLoader className="w-4 h-4 animate-spin" aria-hidden="true"/>

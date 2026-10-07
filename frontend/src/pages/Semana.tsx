@@ -263,7 +263,7 @@ const Semana = () => {
                     <button type="button" onClick={() => goToWeek(-7)} aria-label="Semana anterior" className="btn-secondary p-2">
                         <FiChevronLeft className="w-4 h-4" aria-hidden="true"/>
                     </button>
-                    <span className="min-w-[10rem] text-center text-sm font-medium text-gray-800 dark:text-gray-200" aria-live="polite">
+                    <span className="min-w-40 text-center text-sm font-medium text-gray-800 dark:text-gray-200" aria-live="polite">
                         {titulo}
                     </span>
                     <button type="button" onClick={() => goToWeek(7)} aria-label="Próxima semana" className="btn-secondary p-2">

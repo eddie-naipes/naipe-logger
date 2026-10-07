@@ -471,7 +471,7 @@ const Tasks = () => {
                                                     type="button"
                                                     onClick={() => handleSelectTask(task)}
                                                     aria-label={`Adicionar tarefa ${task.content || task.name || task.id} às favoritas`}
-                                                    className="ml-2 p-1 text-primary-600 hover:bg-primary-50 rounded dark:text-primary-500 dark:hover:bg-gray-700"
+                                                    className="ml-2 p-1 text-primary-600 hover:bg-primary-50 rounded-sm dark:text-primary-500 dark:hover:bg-gray-700"
                                                     title="Adicionar tarefa à lista de favoritas"
                                                 >
                                                     <FiPlus className="w-5 h-5" />
@@ -714,7 +714,7 @@ const Tasks = () => {
                                                             onClick={() => editSavedTask(task)}
                                                             aria-label={`Editar tarefa ${task.taskName}`}
                                                             title="Editar tarefa"
-                                                            className="p-1 text-primary-600 hover:bg-primary-50 rounded dark:text-primary-500 dark:hover:bg-gray-700"
+                                                            className="p-1 text-primary-600 hover:bg-primary-50 rounded-sm dark:text-primary-500 dark:hover:bg-gray-700"
                                                         >
                                                             <FiEdit className="w-5 h-5" />
                                                         </button>
@@ -723,7 +723,7 @@ const Tasks = () => {
                                                             onClick={() => void removeTask(task.taskId)}
                                                             aria-label={`Remover tarefa ${task.taskName}`}
                                                             title="Remover tarefa"
-                                                            className="p-1 text-red-500 hover:bg-red-50 rounded dark:text-red-400 dark:hover:bg-gray-700"
+                                                            className="p-1 text-red-500 hover:bg-red-50 rounded-sm dark:text-red-400 dark:hover:bg-gray-700"
                                                         >
                                                             <FiTrash2 className="w-5 h-5" />
                                                         </button>
