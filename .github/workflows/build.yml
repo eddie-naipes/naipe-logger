@@ -78,19 +78,9 @@ jobs:
         working-directory: frontend
         run: npm test
 
-      # Bloqueia só o que vai para o app distribuído. As ferramentas de build
-      # (Tailwind 3 e dependências) têm alertas sem correção fora de um major;
-      # aparecem como aviso até a migração, sem esconder nada.
-      - name: npm audit (dependências do app)
+      - name: npm audit
         working-directory: frontend
-        run: npm audit --omit=dev --audit-level=high
-
-      - name: npm audit (ferramentas de build, informativo)
-        working-directory: frontend
-        run: |
-          if ! npm audit --audit-level=high; then
-            echo "::warning title=npm audit::Há vulnerabilidades altas em dependências de desenvolvimento (não vão para o app distribuído)."
-          fi
+        run: npm audit --audit-level=high
 
   build-windows:
     needs: verify
@@ -376,7 +366,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Create Release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           name: Naipe Logger ${{ github.ref_name }}
           draft: false

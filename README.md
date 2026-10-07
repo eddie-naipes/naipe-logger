@@ -61,7 +61,7 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 
 ### Frontend (React 19 + TypeScript)
 - **TypeScript** em modo estrito, com os bindings tipados pelo código gerado pelo Wails
-- **React Router 7**, **TailwindCSS**, **React Icons (Feather)**
+- **React Router 8**, **Tailwind CSS 4** (configuração em CSS, `src/index.css`), **React Icons (Feather)**
 - **date-fns 4** com locale pt-BR
 - **React Toastify**, **clsx**
 - **Vite 7**, **Vitest** + Testing Library, **ESLint** (typescript-eslint)
