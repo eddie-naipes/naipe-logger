@@ -14,7 +14,9 @@ import {
     FiTrash2,
     FiTarget,
     FiGrid,
-    FiBarChart2
+    FiBarChart2,
+    FiCheckSquare,
+    FiCalendar
 } from 'react-icons/fi';
 import { toast } from 'react-toastify';
 import { ThemeContext } from '../contexts/ThemeContext';
@@ -67,6 +69,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             requiresConfig: true
         },
         {
+            to: '/agenda',
+            icon: <FiCalendar className="w-5 h-5" />,
+            label: 'Agenda',
+            requiresConfig: true
+        },
+        {
             to: '/templates',
             icon: <FiSave className="w-5 h-5" />,
             label: 'Templates',
@@ -76,6 +84,12 @@ const Sidebar = ({ isOpen, onClose, isConfigured }: SidebarProps) => {
             to: '/relatorios',
             icon: <FiBarChart2 className="w-5 h-5" />,
             label: 'Relatórios',
+            requiresConfig: true
+        },
+        {
+            to: '/fechamento',
+            icon: <FiCheckSquare className="w-5 h-5" />,
+            label: 'Fechamento',
             requiresConfig: true
         },
         {

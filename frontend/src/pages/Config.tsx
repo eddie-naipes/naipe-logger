@@ -16,6 +16,7 @@ import DiagnosticsSection from '../components/config/DiagnosticsSection';
 import RemindersSection from '../components/config/RemindersSection';
 import TimerSettingsSection from '../components/config/TimerSettingsSection';
 import GitIntegrationSection from '../components/config/GitIntegrationSection';
+import AutostartSection from '../components/config/AutostartSection';
 import {setMinutosPorDiaCache} from '../hooks/useMinutosPorDia';
 import {
     formatHoursMinutes,
@@ -379,6 +380,7 @@ const Config = ({ onConfigSaved }: ConfigProps) => {
                 </div>
             )}
 
+            <AutostartSection/>
             <RemindersSection/>
             <TimerSettingsSection/>
             <GitIntegrationSection/>

@@ -48,6 +48,8 @@ type App struct {
 	// calendar fornece feriados estaduais/municipais, pontes e férias a cada
 	// cliente (app_calendar.go); nil nos testes que montam App{}.
 	calendar *holidays.Provider
+	// agenda guarda o .ics da sessão e as reuniões já lançadas (app_agenda.go).
+	agenda agendaState
 }
 
 // Options reúne o que main.go descobre antes de criar a App.

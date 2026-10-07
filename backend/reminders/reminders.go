@@ -31,12 +31,17 @@ const (
 
 	CategoryDaily    = "lembrete-diario"
 	CategoryMonthEnd = "lembrete-fim-de-mes"
+	// CategoryMonthClose é o lembrete de fim de mês quando a auditoria do
+	// fechamento encontrou problemas: leva para /fechamento.
+	CategoryMonthClose = "lembrete-fechamento"
 
 	ActionLogNow        = "lancar-agora"
 	ActionCompleteMonth = "completar-mes"
+	ActionReviewMonth   = "revisar-mes"
 
-	RouteTimeLog  = "/timelog"
-	RouteComplete = "/completar"
+	RouteTimeLog    = "/timelog"
+	RouteComplete   = "/completar"
+	RouteMonthClose = "/fechamento"
 )
 
 // retryDelay é a espera antes de tentar de novo quando o Teamwork falha, para
@@ -48,6 +53,7 @@ func Categories() []notify.Category {
 	return []notify.Category{
 		{ID: CategoryDaily, Actions: []notify.Action{{ID: ActionLogNow, Title: "Lançar agora"}}},
 		{ID: CategoryMonthEnd, Actions: []notify.Action{{ID: ActionCompleteMonth, Title: "Completar o mês"}}},
+		{ID: CategoryMonthClose, Actions: []notify.Action{{ID: ActionReviewMonth, Title: "Revisar o mês"}}},
 	}
 }
 
@@ -71,6 +77,10 @@ type Options struct {
 	// StatePath é o arquivo que guarda o último lembrete enviado; "" mantém
 	// só em memória.
 	StatePath string
+	// AuditCount (opcional) devolve quantos problemas pendentes a auditoria
+	// do fechamento encontrou no mês. Com problemas, o lembrete de fim de mês
+	// cita a contagem e leva para /fechamento. Erro é tratado como zero.
+	AuditCount func(year, month int) (int, error)
 }
 
 // State registra o último dia (YYYY-MM-DD) em que cada lembrete foi avaliado,
@@ -193,10 +203,12 @@ func (s *Scheduler) Check() []string {
 	monthEndCoversToday := false
 	if inMonthEnd {
 		pending := pendingDays(now, minutes, jornada, source.IsWorkDay)
-		if len(pending) > 0 {
-			monthEndCoversToday = pending[len(pending)-1] == today
-			s.send(monthEndNotification(today, pending))
-			sent = append(sent, CategoryMonthEnd)
+		problems := s.auditCount(now)
+		if len(pending) > 0 || problems > 0 {
+			monthEndCoversToday = len(pending) > 0 && pending[len(pending)-1] == today
+			n := monthEndNotification(today, pending, problems)
+			s.send(n)
+			sent = append(sent, n.CategoryID)
 		}
 	}
 
@@ -254,22 +266,54 @@ func dailyNotification(today string, missing int) notify.Notification {
 	}
 }
 
-func monthEndNotification(today string, pending []string) notify.Notification {
-	dias := make([]string, len(pending))
-	for i, d := range pending {
-		dias[i] = d[len(d)-2:]
+// auditCount consulta a auditoria do fechamento, se configurada.
+func (s *Scheduler) auditCount(now time.Time) int {
+	if s.opts.AuditCount == nil {
+		return 0
 	}
-	label := "dias pendentes"
-	if len(pending) == 1 {
-		label = "dia pendente"
+	n, err := s.opts.AuditCount(now.Year(), int(now.Month()))
+	if err != nil {
+		slog.Warn("Lembretes: não foi possível auditar o mês", "err", err)
+		return 0
 	}
-	return notify.Notification{
+	return n
+}
+
+// monthEndNotification monta o lembrete de fim de mês. Sem problemas de
+// auditoria leva a "Completar período"; com problemas cita a contagem e leva
+// ao fechamento do mês (que também aponta os dias incompletos).
+func monthEndNotification(today string, pending []string, problems int) notify.Notification {
+	var parts []string
+	if len(pending) > 0 {
+		dias := make([]string, len(pending))
+		for i, d := range pending {
+			dias[i] = d[len(d)-2:]
+		}
+		label := "dias pendentes"
+		if len(pending) == 1 {
+			label = "dia pendente"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s: %s", len(pending), label, strings.Join(dias, ", ")))
+	}
+
+	n := notify.Notification{
 		ID:         "lembrete-fim-de-mes-" + today,
 		Title:      "Fim de mês: complete suas horas",
-		Body:       fmt.Sprintf("%d %s: %s", len(pending), label, strings.Join(dias, ", ")),
 		CategoryID: CategoryMonthEnd,
 		Data:       map[string]any{"kind": Kind, "route": RouteComplete, "date": today},
 	}
+	if problems > 0 {
+		label := "problemas"
+		if problems == 1 {
+			label = "problema"
+		}
+		parts = append(parts, fmt.Sprintf("%d %s no fechamento do mês", problems, label))
+		n.Title = "Fim de mês: revise o fechamento"
+		n.CategoryID = CategoryMonthClose
+		n.Data["route"] = RouteMonthClose
+	}
+	n.Body = strings.Join(parts, " · ")
+	return n
 }
 
 // pendingDays lista os dias úteis do mês até hoje (inclusive) com menos

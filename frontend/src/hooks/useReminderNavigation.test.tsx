@@ -40,6 +40,12 @@ describe('useReminderNavigation', () => {
         expect(screen.getByTestId('rota').textContent).toBe('/completar|{"reminderDate":"2026-09-30"}');
     });
 
+    it('abre o fechamento do mês', () => {
+        render(<MemoryRouter initialEntries={['/']}><Raiz/></MemoryRouter>);
+        act(() => ouvinte?.({route: '/fechamento', date: '2026-09-30'}));
+        expect(screen.getByTestId('rota').textContent).toBe('/fechamento|{"reminderDate":"2026-09-30"}');
+    });
+
     it('ignora rotas fora da lista', () => {
         render(<MemoryRouter initialEntries={['/']}><Raiz/></MemoryRouter>);
         act(() => ouvinte?.({route: '/config'}));

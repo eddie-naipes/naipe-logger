@@ -1,3 +1,100 @@
+export namespace agenda {
+	
+	export class ImportedRecord {
+	    key: string;
+	    date: string;
+	    taskId: number;
+	    entryId: number;
+	    importedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportedRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.date = source["date"];
+	        this.taskId = source["taskId"];
+	        this.entryId = source["entryId"];
+	        this.importedAt = source["importedAt"];
+	    }
+	}
+	export class TaskRef {
+	    taskId: number;
+	    taskName: string;
+	    projectId: number;
+	    projectName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TaskRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectId = source["projectId"];
+	        this.projectName = source["projectName"];
+	    }
+	}
+	export class PlanItem {
+	    key: string;
+	    source: string;
+	    title: string;
+	    date: string;
+	    startTime: string;
+	    endTime: string;
+	    minutes: number;
+	    status: string;
+	    reason: string;
+	    ruleIndex: number;
+	    task: TaskRef;
+	    description: string;
+	    billable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PlanItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.source = source["source"];
+	        this.title = source["title"];
+	        this.date = source["date"];
+	        this.startTime = source["startTime"];
+	        this.endTime = source["endTime"];
+	        this.minutes = source["minutes"];
+	        this.status = source["status"];
+	        this.reason = source["reason"];
+	        this.ruleIndex = source["ruleIndex"];
+	        this.task = this.convertValues(source["task"], TaskRef);
+	        this.description = source["description"];
+	        this.billable = source["billable"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace api {
 	
 	export class TaskConflict {
@@ -644,8 +741,229 @@ export namespace api {
 
 }
 
+export namespace audit {
+	
+	export class Issue {
+	    key: string;
+	    type: string;
+	    severity: string;
+	    date: string;
+	    entryIds: number[];
+	    entries: api.TimeEntryReport[];
+	    message: string;
+	    action: string;
+	    deleteEntryIds?: number[];
+	    keepEntryId?: number;
+	    minutes?: number;
+	    missingMinutes?: number;
+	    reason?: string;
+	    ignored: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Issue(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.type = source["type"];
+	        this.severity = source["severity"];
+	        this.date = source["date"];
+	        this.entryIds = source["entryIds"];
+	        this.entries = this.convertValues(source["entries"], api.TimeEntryReport);
+	        this.message = source["message"];
+	        this.action = source["action"];
+	        this.deleteEntryIds = source["deleteEntryIds"];
+	        this.keepEntryId = source["keepEntryId"];
+	        this.minutes = source["minutes"];
+	        this.missingMinutes = source["missingMinutes"];
+	        this.reason = source["reason"];
+	        this.ignored = source["ignored"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Summary {
+	    year: number;
+	    month: number;
+	    loggedMinutes: number;
+	    expectedMinutes: number;
+	    expectedToDateMinutes: number;
+	    loggedToDateMinutes: number;
+	    workingDays: number;
+	    workingDaysToDate: number;
+	    minutesPerDay: number;
+	    dailyLimitMinutes: number;
+	    entryCount: number;
+	    errorCount: number;
+	    warningCount: number;
+	    ignoredCount: number;
+	    ready: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Summary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.year = source["year"];
+	        this.month = source["month"];
+	        this.loggedMinutes = source["loggedMinutes"];
+	        this.expectedMinutes = source["expectedMinutes"];
+	        this.expectedToDateMinutes = source["expectedToDateMinutes"];
+	        this.loggedToDateMinutes = source["loggedToDateMinutes"];
+	        this.workingDays = source["workingDays"];
+	        this.workingDaysToDate = source["workingDaysToDate"];
+	        this.minutesPerDay = source["minutesPerDay"];
+	        this.dailyLimitMinutes = source["dailyLimitMinutes"];
+	        this.entryCount = source["entryCount"];
+	        this.errorCount = source["errorCount"];
+	        this.warningCount = source["warningCount"];
+	        this.ignoredCount = source["ignoredCount"];
+	        this.ready = source["ready"];
+	    }
+	}
+	export class TypeCount {
+	    type: string;
+	    severity: string;
+	    count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TypeCount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type = source["type"];
+	        this.severity = source["severity"];
+	        this.count = source["count"];
+	    }
+	}
+	export class Result {
+	    issues: Issue[];
+	    counts: TypeCount[];
+	    summary: Summary;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.issues = this.convertValues(source["issues"], Issue);
+	        this.counts = this.convertValues(source["counts"], TypeCount);
+	        this.summary = this.convertValues(source["summary"], Summary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+
+}
+
+export namespace autostart {
+	
+	export class Status {
+	    enabled: boolean;
+	    supported: boolean;
+	    reason: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.supported = source["supported"];
+	        this.reason = source["reason"];
+	    }
+	}
+
+}
+
 export namespace backend {
 	
+	export class AgendaFileInfo {
+	    name: string;
+	    events: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaFileInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.events = source["events"];
+	    }
+	}
+	export class AgendaPlan {
+	    items: agenda.PlanItem[];
+	    warnings: string[];
+	    sources: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaPlan(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], agenda.PlanItem);
+	        this.warnings = source["warnings"];
+	        this.sources = source["sources"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FillGapsRequest {
 	    start: string;
 	    end: string;
@@ -759,6 +1077,125 @@ export namespace config {
 	        this.description = source["description"];
 	    }
 	}
+	export class AgendaCalendar {
+	    id: string;
+	    name: string;
+	    maskedUrl: string;
+	    addedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaCalendar(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.maskedUrl = source["maskedUrl"];
+	        this.addedAt = source["addedAt"];
+	    }
+	}
+	export class AgendaTask {
+	    taskId: number;
+	    taskName: string;
+	    projectId: number;
+	    projectName: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaTask(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.taskId = source["taskId"];
+	        this.taskName = source["taskName"];
+	        this.projectId = source["projectId"];
+	        this.projectName = source["projectName"];
+	    }
+	}
+	export class AgendaRule {
+	    match: string;
+	    isRegex: boolean;
+	    task: AgendaTask;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.match = source["match"];
+	        this.isRegex = source["isRegex"];
+	        this.task = this.convertValues(source["task"], AgendaTask);
+	        this.description = source["description"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AgendaSettings {
+	    calendars: AgendaCalendar[];
+	    rules: AgendaRule[];
+	    defaultTask: AgendaTask;
+	    ignoreWords: string[];
+	    minMinutes: number;
+	    rounding: string;
+	    userEmail: string;
+	    billable: boolean;
+	    includeTransparent: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AgendaSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.calendars = this.convertValues(source["calendars"], AgendaCalendar);
+	        this.rules = this.convertValues(source["rules"], AgendaRule);
+	        this.defaultTask = this.convertValues(source["defaultTask"], AgendaTask);
+	        this.ignoreWords = source["ignoreWords"];
+	        this.minMinutes = source["minMinutes"];
+	        this.rounding = source["rounding"];
+	        this.userEmail = source["userEmail"];
+	        this.billable = source["billable"];
+	        this.includeTransparent = source["includeTransparent"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class AppSettings {
 	    darkMode: boolean;
 	    autoUpdate: boolean;
@@ -777,6 +1214,22 @@ export namespace config {
 	        this.startMinimized = source["startMinimized"];
 	        this.language = source["language"];
 	        this.checkUpdatesOnStartup = source["checkUpdatesOnStartup"];
+	    }
+	}
+	export class AuditSettings {
+	    dailyLimitMinutes: number;
+	    genericDescriptions: string[];
+	    ignoredIssues: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AuditSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dailyLimitMinutes = source["dailyLimitMinutes"];
+	        this.genericDescriptions = source["genericDescriptions"];
+	        this.ignoredIssues = source["ignoredIssues"];
 	    }
 	}
 	export class CustomHoliday {

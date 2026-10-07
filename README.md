@@ -15,11 +15,14 @@ O **Teamwork Time Logger** é uma aplicação desktop (Wails: Go + React) para l
 - **Gerenciador de apontamentos**: liste, edite e exclua entradas de tempo de um período
 - **Feriados brasileiros**: obtidos da BrasilAPI, com cache em disco e fallback local (inclui feriados móveis via algoritmo de Gauss)
 - **Relatórios no app**: totais, cobrável × não cobrável, horas por dia contra a jornada, rankings por projeto/tarefa e exportação em CSV (Excel pt-BR) ou PDF
+- **Fechamento do mês**: aponta dias incompletos, descrições vazias/genéricas, duplicatas, lançamentos em dia não útil, dias acima do limite e lançamentos sem tarefa, com correção a um clique
 - **Calendário de trabalho**: feriados estaduais da sua UF, feriados municipais, pontes e férias entram no cálculo de dias úteis
 - **Atualização automática** pelas GitHub Releases (instalação automática no Windows)
 - **Logs em arquivo** para diagnóstico, com o token sempre mascarado
 - **Lembretes** por notificação do sistema: horas pendentes do dia e dias incompletos no fim do mês
 - **Cronômetro por tarefa** no cabeçalho, que vira lançamento ao parar
+- **Importar reuniões da agenda** (link iCal privado do Google/Outlook ou arquivo .ics), com regras que mapeiam cada reunião para uma tarefa
+- **Iniciar com o sistema** (minimizado), para os lembretes valerem desde o login
 - **Tema claro/escuro**
 
 ## 🔒 Segurança
@@ -53,7 +56,8 @@ No Teamwork, acesse seu perfil → *Edit My Details* → aba *API & Mobile*. O c
 - **Cache em memória** com TTL por tipo de dado; feriados também em disco
 - **Goroutines com semáforo** para lançamentos concorrentes (limite de 3 simultâneos)
 - **log/slog** com arquivo rotativo próprio (sem dependências)
-- **golang.org/x/sys/windows/registry** para detectar instalações antigas
+- **golang.org/x/sys/windows/registry** para detectar instalações antigas e registrar o início com o sistema
+- **arran4/golang-ical** e **teambition/rrule-go** para ler agendas iCalendar e expandir recorrências
 
 ### Frontend (React 19 + TypeScript)
 - **TypeScript** em modo estrito, com os bindings tipados pelo código gerado pelo Wails
@@ -222,6 +226,20 @@ O botão **Cronômetro** no cabeçalho inicia a contagem numa tarefa salva ou bu
 ### 📈 Relatórios
 
 A página **Relatórios** resume um período (este mês, mês passado, esta semana, últimos 30 dias ou datas personalizadas, até 366 dias): total lançado, cobrável × não cobrável, jornada esperada (dias úteis × jornada diária) e saldo, colunas de horas por dia com a jornada como linha de referência (dias úteis sem lançamento aparecem zerados), rankings por projeto e por tarefa, totais por semana e uma tabela por tarefa ordenável. Só entram os lançamentos não excluídos do usuário conectado. O **CSV** sai na mesma pasta do PDF (`~/TeamworkReports`), pronto para o Excel em português: separador `;`, UTF-8 com BOM, vírgula decimal e datas dd/mm/aaaa. Há duas versões — **detalhada** (data, projeto, tarefa, descrição, início, minutos, horas, cobrável) e **resumida** (por projeto/tarefa) — e textos que começam com `=`, `+`, `-` ou `@` recebem um apóstrofo para não virarem fórmula.
+
+### ✅ Fechamento do Mês
+
+Antes de entregar o mês, a página **Fechamento** audita os seus lançamentos e lista o que está errado, agrupado por tipo e com a correção a um clique: dias úteis (até hoje) abaixo da jornada (abre o "Completar período" no mês), lançamentos sem descrição ou com descrição genérica (igual ao nome da tarefa ou numa lista configurável), possíveis duplicatas (mesma tarefa, dia, tempo e descrição — apaga as cópias mantendo a mais antiga, após confirmação), lançamentos em fim de semana, feriado, ponte ou férias (editar a data ou apagar), dias acima do limite diário (padrão 10h) e lançamentos sem tarefa. Cada problema pode ser ignorado (e reexibido depois). O mês fica "Pronto para entregar" quando não há erros; o Dashboard mostra a contagem e o lembrete de fim de mês cita os problemas e abre esta página. O limite diário e as descrições genéricas são configurados na própria página.
+
+### 📆 Agenda (importar reuniões)
+
+A página **Agenda** lê suas reuniões e as transforma em lançamentos com o horário real. Cadastre o **link iCal privado** (Google Agenda: *Configurações da agenda → Endereço secreto no formato iCal*; Outlook: *Calendários compartilhados → Publicar*, link `.ics`) — pode haver várias agendas — ou importe um **arquivo .ics** só para a sessão. O link dá leitura da agenda inteira, então é tratado como o token: fica no cofre de credenciais do sistema, nunca em `config.json`, nunca volta para a tela (só `host…final`), é mascarado no log, e o download exige HTTPS (com no máximo 3 redirecionamentos, todos HTTPS), tem tempo limite de 20 s e tamanho máximo de 10 MB.
+
+Escolha o período (hoje, ontem, esta semana ou datas, até 62 dias). Eventos recorrentes são expandidos (diários, semanais, mensais, com exceções e ocorrências remarcadas), convertidos para o fuso local (inclusive horário de verão do fuso do evento), e cada um aparece como **mapeado**, **sem regra**, **ignorado** (dia inteiro, cancelado, marcado como livre, convite recusado, palavra ignorada, curto demais, sobreposto — com o motivo) ou **já lançado**. Eventos sobrepostos no mesmo dia são cortados para lançar só o trecho livre, e cada evento fica limitado ao próprio dia. As **regras** (palavra-chave ou regex no título → tarefa, com descrição opcional; a primeira que casa vale), a tarefa padrão para eventos sem regra, as palavras ignoradas, a duração mínima, o arredondamento (exato ou 15 min), o seu e-mail (para detectar recusas) e o faturável padrão ficam na própria página; um evento sem regra pode receber a tarefa ali mesmo ou virar uma regra nova. A prévia, a verificação de duplicatas, o reenvio de falhas e o desfazer são os mesmos do Lançamento de Horas, e as reuniões lançadas ficam registradas em `~/.teamwork-logger/agenda-importados.json` para não serem importadas de novo (desfazer o lote as libera).
+
+### 🚀 Iniciar com o sistema
+
+Em **Configurações → Inicialização**, a opção **Iniciar com o sistema (minimizado)** abre o app minimizado na barra de tarefas quando você entra no computador — os lembretes e o cronômetro só funcionam com o app aberto. No Windows é um valor em `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (sem precisar de administrador); no macOS, um LaunchAgent em `~/Library/LaunchAgents`; no Linux, `~/.config/autostart/teamwork-logger.desktop`. A opção fica desabilitada em `wails dev`, cujo executável é temporário.
 
 ### 🗓️ Calendário de Trabalho (feriados estaduais, municipais, pontes e férias)
 

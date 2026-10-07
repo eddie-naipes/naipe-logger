@@ -24,6 +24,8 @@ const Templates = lazy(() => import('./pages/Templates'));
 const CompletarPeriodo = lazy(() => import('./pages/CompletarPeriodo'));
 const Semana = lazy(() => import('./pages/Semana'));
 const Reports = lazy(() => import('./pages/Reports'));
+const Fechamento = lazy(() => import('./pages/Fechamento'));
+const Agenda = lazy(() => import('./pages/Agenda'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const CarregandoPagina = () => (
@@ -170,6 +172,8 @@ function App() {
                                     <Route path="/completar" element={<CompletarPeriodo/>}/>
                                     <Route path="/semana" element={<Semana/>}/>
                                     <Route path="/relatorios" element={<Reports/>}/>
+                                    <Route path="/fechamento" element={<Fechamento/>}/>
+                                    <Route path="/agenda" element={<Agenda/>}/>
                                     <Route path="*" element={<NotFound/>}/>
                                 </Routes>
                                 </Suspense>

@@ -6,7 +6,7 @@
 // map[string]interface{} e campos que são structs anônimas no Go (o Wails os
 // tipa como `any`). Os nomes de campo seguem as tags `json` dos structs em
 // backend/api/*.go e backend/*.go.
-import type {api, config, holidays, legacy, reports, update} from '@wailsjs/go/models';
+import type {api, audit, config, holidays, legacy, reports, update} from '@wailsjs/go/models';
 
 // As classes geradas pelo Wails têm, além dos campos, o método convertValues.
 // Dados<T> fica só com os campos — é o que de fato trafega em JSON — para que o
@@ -54,6 +54,13 @@ export type ProjectTotal = Dados<reports.ProjectTotal>;
 export type TaskTotal = Dados<reports.TaskTotal>;
 export type DayTotal = Dados<reports.DayTotal>;
 export type WeekTotal = Dados<reports.WeekTotal>;
+
+// Fechamento do mês (backend/audit).
+export type AuditResult = Dados<audit.Result>;
+export type AuditIssue = Dados<audit.Issue>;
+export type AuditSummary = Dados<audit.Summary>;
+export type AuditTypeCount = Dados<audit.TypeCount>;
+export type AuditSettings = Dados<config.AuditSettings>;
 
 // Payload do evento "update:progress" (update.Progress no Go). total pode ser
 // 0 quando o servidor não informa o tamanho do download.
